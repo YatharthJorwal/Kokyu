@@ -87,6 +87,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-R-4 | Selecting an API model is the user's explicit consent to send that thread's text (including recalled memory snippets injected into the prompt). Images the user explicitly attaches MAY go to a vision-capable API model, with a visible badge on that message. | K1, K2 |
 | FR-R-5 | API failures (quota, auth, rate limit, timeout, provider error) MUST appear inline on the turn with *Retry* and *Switch model*. **No silent fallback** to another model. | K1 |
 | FR-R-6 | The API key MUST come from `.env` or `config/secrets.local.yaml`, never be logged, and be redacted in the audit log. | K1 |
+| FR-R-7 | **Egress policy (D-025):** content captured *ambiently* (camera, screen capture, OCR watch) MUST NOT reach a non-local model; if a turn needs it the user sees a message, never a silent reroute. Files and images the user explicitly *attaches* are untrusted for authorising actions but MAY go to the user's chosen API model, with a visible badge on that message. | K1 |
 
 ### 2.6 Voice (FR-V)
 
@@ -98,7 +99,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-V-4 | One audio **arbiter** MUST ensure only one voice plays at a time; later lines queue. | K2 |
 | FR-V-5 | **Barge-in:** speech from the user MUST cancel the current turn's audio and generation and tell the client to stop playback. | K2 |
 | FR-V-6 | STT MUST use faster-whisper (default `small`, **CPU**) behind a VAD. Inputs: push-to-talk (global hotkey, default F9), a mic toggle, and a hands-free **live voice** mode. | K2 |
-| FR-V-7 | If the TTS backend is unreachable the UI MUST show a clear banner and continue **text-only**. The `pyttsx3` fallback exists only as an opt-in dev setting (default off), because it breaks voice identity. | K0, K2 |
+| FR-V-7 | If the TTS backend is unreachable the UI MUST show a clear banner and continue **text-only**. The `pyttsx3` fallback exists only as an opt-in dev setting (default off), because it breaks voice identity. (Yuri's current default is the opposite; K0-11 flips it.) | K0, K2 |
 | FR-V-8 | Latency TARGETS (warm, local 9B Q4, TTS up): first token ≤ 1.5 s after send; first audio ≤ 2.5 s after the first sentence is complete; waifu switch ready (pre-warm done) ≤ 2 s. Calibrate in K2. | K2 |
 
 ### 2.7 Stage view (FR-ST)
@@ -111,7 +112,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-ST-4 | Overlay: live **captions** of her speech, the same input box docked at the bottom with a mic button, and a chat log that slides in from the side. | K2 |
 | FR-ST-5 | If the VRM is missing or invalid, the stage MUST show an instruction panel instead of a blank canvas. | K2 |
 | FR-ST-6 | TARGET: 60 fps at 1080p with one waifu while the LLM is idle; no worse than 30 fps while generating. Calibrate in K2. | K2 |
-| FR-ST-7 | Expression hooks (`happy`, `sad`, `angry`, `surprised`, `relaxed`) MUST exist on the avatar API even though emotion detection is out of scope for v1. | K2 |
+| FR-ST-7 | Expression hooks MUST exist on the avatar API. Yuri's existing emotion tags (`happy`, `angry`, `sad`, `teasing`, `surprised`, `neutral`) and expression life are kept; new emotion detection is out of scope for v1. | K2 |
 
 ### 2.8 Waifu creator (FR-CR)
 
@@ -158,6 +159,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-MEM-2 | Message and episode records MUST carry the **speaking waifu's name**, and episode summaries MUST name her ("Luna and the user talked about X"), so another waifu recalling it does not mistake it for her own experience. | K0 |
 | FR-MEM-3 | Memory-writer jobs run on a local helper model only (FR-R-3). Facts and episodes follow Yuri's memory v2 behaviour: supersede, never hard-delete, restorable, decay without disappearing. | K0 |
 | FR-MEM-4 | The user MUST be able to view, correct and delete remembered facts in Settings → Memory. | K1 |
+| FR-MEM-5 | **Temp Chat** (inherited from Yuri): a per-thread flag; while on, nothing is read from or written to persistent memory and the memory writer skips those turns. | K1 |
 
 ### 2.12 Settings (FR-SET)
 
@@ -272,7 +274,7 @@ Logs in `logs/` (kernel, backends), a per-turn **latency row** (model first toke
 
 ### 4.6 Portability (packaging-ready from day one)
 
-No absolute paths; all locations from `kasane/paths.py`; no assumption that a repo checkout or dev tools exist at runtime; config layering (defaults, then `config.yaml`, then env, then `settings.json`).
+No absolute paths; all locations from `KASANE/paths.py`; no assumption that a repo checkout or dev tools exist at runtime; config layering (defaults, then `config.yaml`, then env, then `settings.json`).
 
 ## 5. Error and empty states
 
@@ -297,8 +299,8 @@ Agent mode and VR (deferred, see `SCOPE.md` §12); mobile, web hosting, multi-us
 | Phase | Requirements delivered |
 |---|---|
 | T | TTS backend contract (`TTS-BACKEND.md`) |
-| K0 | FR-W-1..4, 6; FR-S-5; FR-R-1, 3; FR-V-1, 7 (adapter); FR-MEM-1..3 |
-| K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-2, 4..6; FR-MEM-4; FR-SET-1..3 |
+| K0 | FR-W-1..4, 6; FR-S-5; FR-R-3 (mapped to existing tests); FR-V-1, 7 (adapter); FR-MEM-1..3 |
+| K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3 |
 | K2 | FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-2..6, 8; FR-C-4 live |
 | K3 | FR-W-2 (UI), FR-W-5; FR-CR-1..8 |
 | K4 | FR-P-1..6 |

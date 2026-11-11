@@ -15,7 +15,7 @@ Binding rules for everyone (human or agent) working in this repo. A rule can cha
 - **R-06 One door.** All model calls go through `router.decide()` with a role. No feature talks to a provider directly.
 - **R-07 Local-only data.** Camera frames, mic audio, screen captures and memory-writer jobs are refused for non-local providers inside `decide()`, structurally.
 - **R-08 Thin clients.** The frontend renders kernel state and sends intents. No business logic, no model calls, no file access beyond what Tauri APIs are needed for.
-- **R-09 Typed protocol.** Every WebSocket message has a model in `kasane/protocol/` and a mirror in `src/net/`. Change both in the same commit and bump the version when the wire format breaks.
+- **R-09 Typed protocol.** Every WebSocket message has a model in `KASANE/protocol/` and a mirror in `src/net/`. Change both in the same commit and bump the version when the wire format breaks.
 - **R-10 No blocking.** Never block the kernel's asyncio loop (offload blocking work to threads or processes) or the render loop (no per-frame allocation, no synchronous I/O).
 - **R-11 VRAM-aware.** Anything that loads a model or allocates GPU memory goes through the VRAM manager. Do not add a resident GPU component without updating the budget in `ARCHITECTURE.md` §13.
 - **R-12 TTS contract only.** The kernel talks to the TTS backend only through the contract in `TTS-BACKEND.md`. Never depend on the GPT-SoVITS WebUI, its folder layout or its Python internals.
@@ -67,7 +67,7 @@ Binding rules for everyone (human or agent) working in this repo. A rule can cha
 
 ## 9. Windows and packaging readiness
 
-- **R-40 Paths.** Everything through `kasane/paths.py`. No absolute paths, no `os.getcwd()` assumptions, no reliance on a repo checkout at runtime.
+- **R-40 Paths.** Everything through `KASANE/paths.py`. No absolute paths, no `os.getcwd()` assumptions, no reliance on a repo checkout at runtime.
 - **R-41 No admin rights** required to run. Writes go to the app-data directory only.
 - **R-42 Bundled resources** (built-in scenes, the instruction template, default icons) are read through a resource resolver that works both from source and when packaged.
 - **R-43 Child processes** are started through the Job Object mechanism so none outlive the app.

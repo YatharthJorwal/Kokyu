@@ -16,7 +16,7 @@ Windows 10/11, PowerShell, RTX 3060 12 GB, i5-14400F, 32 GB RAM. NVIDIA driver a
 2. **Version:** the newest stable GPT-SoVITS release that supports **zero-shot voice cloning** (reference audio + its transcript, no fine-tuning). Record the version or commit hash.
 3. **Isolation:** its own virtual environment. Do not touch global Python.
 4. **Headless:** run the API server only (the project's `api_v2`-style entry point). No WebUI is started or installed as a dependency of the run path.
-5. **Binding:** `127.0.0.1` only, port configurable (the upstream API default is believed to be 9880: verify).
+5. **Binding:** `127.0.0.1` only, port configurable (Yuri's config already runs `api_v2.py -a 127.0.0.1 -p 9880 -c GPT_SoVITS/configs/tts_infer.yaml`; keep 9880 as the default).
 6. **GPU:** CUDA enabled; half precision if supported, to save VRAM.
 7. **Behaviour that Kōkyū depends on:**
    - Every request supplies its own `ref_audio_path`, `prompt_text` and `prompt_lang`; **no restart and no weight swap** between different clips.
@@ -30,9 +30,9 @@ Windows 10/11, PowerShell, RTX 3060 12 GB, i5-14400F, 32 GB RAM. NVIDIA driver a
 9. **Docs** in English, in the backend folder: `INSTALL.md` (exact steps to rebuild from scratch), `README.md` (how to start/stop/test), and the **actual list of request parameters** the installed API accepts.
 10. **Measure** VRAM idle and while synthesizing (for example with `nvidia-smi`) and report both numbers.
 
-## API shape Kōkyū expects (verify against the installed version)
+## API shape Kōkyū expects
 
-Believed `api_v2` interface: `POST /tts` (and `GET`) with fields:
+**Confirmed in use by Yuri's adapter** (from its code, not re-run here): `POST http://127.0.0.1:9880/tts` with `text`, `text_lang`, `ref_audio_path`, `prompt_text`, `prompt_lang` returns raw WAV, zero-shot from one reference clip. The other fields below are **not verified**; check them against the installed version. `api_v2` interface: `POST /tts` (and `GET`) with fields:
 
 | Field | Meaning |
 |---|---|

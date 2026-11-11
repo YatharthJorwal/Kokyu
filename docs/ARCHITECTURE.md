@@ -53,45 +53,45 @@ flowchart LR
 
 | Process | Owner | Started | Notes |
 |---|---|---|---|
-| Tauri main window | user | on launch | Chat, Stage, 3D views |
+| Tauri main window | user | on launch | Chat, Stage, 3D views (K0 keeps Yuri's small widget window; K1 builds the new one) |
 | Pet overlay window | Tauri | when a pet is brought out | One per monitor (D-014) |
-| Kernel (`kasane`) | Tauri (child, Windows Job Object) | with the app | `127.0.0.1:8780` |
-| TTS backend (GPT-SoVITS API) | kernel (child) | when voice is enabled | Folder set once in Settings; outside this repo |
-| `llama-server` | kernel (child) | when a llama.cpp model is selected | Unloaded before an Ollama big model loads |
-| Ollama | external service | by the user / Windows service | Kernel only talks HTTP to it |
+| Kernel (`KASANE/`, Python) | **Tauri** (child, Windows Job Object) | at launch, **in parallel with the TTS backend** | `127.0.0.1:8780` (D-027) |
+| TTS backend (GPT-SoVITS API) | **Tauri** (child) | at launch, in parallel | Folder configured once (`launcher.local.txt`, later Settings); outside this repo; default port 9880 |
+| `llama-server` | kernel (child) | when a llama.cpp model is selected | Unloaded before an Ollama large model loads |
+| Ollama | external service | by the user | The kernel only talks HTTP to it |
 
-**Startup order:** Tauri → kernel (health) → client connects → kernel starts the TTS backend lazily (first voice use or on waifu select) → models load on first use.
+**Startup (carried from Yuri, D-027):** Tauri starts the kernel and the TTS backend at the same time and waits for their ports; it sets `KOKYU_SHELL_STARTS_TTS=1` so the kernel never launches TTS itself. Run by hand without the shell, the kernel launches TTS itself, as Yuri's `tts.ensure_server()` does. Stale listeners on the two ports are cleared first. Models load on first use.
 
-**Shutdown:** tray Quit → `shutdown` to kernel → memory consolidation → kernel stops children → hard kill after about 5 s. Job Object guarantees no orphans if Tauri dies.
+**Shutdown:** tray Quit → `POST /shutdown` to the kernel → memory consolidation → kernel stops its children → hard kill after about 5 s. The Job Object (kill-on-close) guarantees no orphans if Tauri is killed.
 
-**Health:** kernel exposes `/health`; it polls backends and publishes `status` events that feed the Doctor panel (FR-SET-3).
+**Health:** the kernel will expose a health endpoint (new) and publish `status` events that feed the Doctor panel (FR-SET-3).
 
 ## 3. Repository layout (target)
 
+The kernel keeps Yuri's **flat module layout**: the `KASANE/` folder is put on `sys.path` and modules import each other by top-level name (`import llm`, `from audio import tts`). There is no importable `kasane` package (D-024).
+
 ```
-kasane/
-  app.py                 WebSocket server, connection handling
-  bus.py                 typed event bus (trust flag, bounded replay)
-  paths.py               ALL filesystem locations
-  config/                loader, schema, layering
-  protocol/              message models (pydantic), version constant
-  waifus/                pack model, loader, validator, registry, instruction template
-  threads/               SQLite store for threads/messages
-  conversation.py        turn loop, prompt assembly, waifu switching
-  router/                decide(), providers (ollama, llamacpp, airouter), catalog, spend, audit, redaction
-  models/                backends lifecycle, VRAM manager, capability registry (effort levels)
-  memory/                schema v2 store, writer, recall, decay, profile card
-  audio/                 arbiter, vad, stt, tts adapter, speech-safe text, latency rows
-  senses/                camera, screen, look-intent
-  scenes/                scene pack loader, director (placement, waypoints)
-  tests/
+KASANE/
+  app.py  bus.py  config.py  llm.py  settings.py  check.py  context_budget.py   (from Yuri)
+  paths.py               NEW (K0-05): ALL filesystem locations
+  waifus/                NEW (K0-07): pack model, loader, validator, registry, instruction template
+  prompting.py           NEW (K0-10): system prompt assembly
+  threads/               NEW (K1): SQLite thread store
+  conversation.py        NEW (K1): turn loop extracted from ws_endpoint
+  protocol/              NEW (K1): typed message models
+  router/                from Yuri; K1 adds the `chat` role and the egress policy (D-025)
+  models/                NEW (K1): backend lifecycle, VRAM manager, capability registry
+  memory/                from Yuri; K0 adds the speaker
+  audio/                 from Yuri; tts.py takes per-waifu voice parameters (K0-11)
+  senses/  tools/        from Yuri (Task Guide and OCR watch parked, D-029)
+  scenes/                NEW (K5): scene pack loader and director
+  tests/  conftest.py
 src/
-  app/                   React shell: sidebar, thread view, input row, popovers, settings, creator
-  engine/                imperative three.js: avatar loader, stage, lip-sync, pet baker, scene runtime
-  net/                   WebSocket client, typed protocol, store
+  (K0) Yuri's engine and widget UI as seeded
+  (K1+) app/ React chrome · engine/ imperative three.js · net/ typed WebSocket client
 src-tauri/               windows, tray, hotkeys, child processes, overlay hit-testing
 config/                  config.example.yaml, models.example.yaml, secrets.example.yaml
-scripts/                 seed_waifus.py, doctor, packaging
+scripts/                 dev.mjs, doctor.mjs, check.mjs (new), seed_waifus.py (new), packaging
 tests-fe/
 docs/
 ```
@@ -110,15 +110,17 @@ docs/
 
 ### 4.1 Prompt assembly
 
+Yuri's real shape (`docs/notes/yuri-inventory.md` §5): `history[0]` is the system prompt (inferred), and one **ephemeral system message** (forget/task/look hints, recalled memory, scene context) is spliced just before the last user message and is never stored in history.
+
 ```
-system  =  persona prompt (from the speaking waifu's prompt.md)
-        +  APP ADDENDUM   (identical for every waifu: speech rules, date/time, no capability claims)
-        +  RECALL BLOCK   (shared memory, budgeted; forbids inventing specifics beyond what is stored)
-history =  prior messages (speaker-tagged; other waifus' lines appear as context)
-user    =  current message (+ attachments)
+system    =  persona prompt (the speaking waifu's prompt.md)
+          +  APP ADDENDUM  (identical for every waifu)
+history   =  prior messages (speaker-tagged; other waifus' lines appear as context)
+ephemeral =  recall + hints + scene context   (spliced before the last user message, as in Yuri)
+user      =  current message (+ attachments)
 ```
 
-The addendum and recall block are the same for all waifus; only the first line differs. The invariance test (FR-W-3) diffs everything *except* the persona prompt and TTS parameters.
+The **app addendum** is the same for all waifus and carries: speech rules, the **emotion-tag convention** (the reply ends with `[happy|angry|sad|teasing|surprised|neutral]`, extracted by the existing helper), date and time, a no-capability-claims line, and the existing generic output cleanup (`apply_persona_pass`). Only the first line differs between waifus. The invariance test (FR-W-3) diffs everything *except* the persona prompt and TTS parameters.
 
 ### 4.2 Turn lifecycle
 
@@ -143,33 +145,47 @@ sequenceDiagram
   K->>K: persist message, schedule memory writer
 ```
 
-## 5. Protocol (draft)
+## 5. Protocol
 
-WebSocket at `ws://127.0.0.1:8780/ws`. JSON text frames: `{ "v": 1, "type": "...", "id": "...", "thread": "...", "data": {...} }`. Binary frames carry audio (mic in, TTS out) with a small header naming the stream. The version constant lives in `kasane/protocol/` and `src/net/`; a mismatch is a hard, visible error.
+WebSocket at `ws://127.0.0.1:8780/ws` (Yuri used 8765). Today it is **untyped JSON dicts with no version field** (`docs/notes/yuri-inventory.md` §4). Existing names are kept; nothing is renamed for its own sake.
 
-**K0 must inventory Yuri's existing WebSocket messages and bus events and map them to this table instead of inventing parallel ones** (K0-02).
+### 5.1 Existing messages (kept)
+
+| Direction | Types |
+|---|---|
+| Client → kernel | `user_text`, `user_file`, `user_audio`, `audio_frame`, `audio_end`, `stop`, `set_temp_mode`, `set_ocr_watch`, `set_api_model`, `get_log`, `clear_log`, `camera_frame`, `scene_state` |
+| Kernel → client | `speak` (`text`, `audio_b64`, `mime`; one per clause), `turn_end`, `transcript`, `speech_state`, `surface_status`, `settings`, `log`, `barge_in`, `request_camera_frame` |
+
+There are **no token events** and no thread, waifu or model concept.
+
+### 5.2 Added in K0
+
+| Direction | Type | Purpose |
+|---|---|---|
+| Client → kernel | `switch_waifu` `{id}` | Change the active waifu for subsequent turns |
+| Kernel → client | `waifu_state` `{active, waifus:[{id, name}]}` | Roster and active waifu |
+
+### 5.3 Target (K1): typed protocol
+
+Pydantic models in `KASANE/protocol/`, mirrored in `src/net/`; frames `{ "v": 1, "type", "id", "thread", "data" }`; a version mismatch is a hard, visible error. Additions beyond 5.1/5.2:
 
 | Direction | Type | Purpose |
 |---|---|---|
 | C→K | `hello` | Client identity (main, pet), protocol version |
-| C→K | `user_message` | Text plus attachment ids |
-| C→K | `stop` | Cancel the current turn |
-| C→K | `switch_waifu` | Set a thread's active waifu |
 | C→K | `set_model`, `set_effort` | Per-thread selection |
-| C→K | `mic_start`, `mic_stop`, audio frames | Push-to-talk / live voice |
 | C→K | `attach` | Register an uploaded file or camera frame |
-| C→K | `scene_enter`, `scene_set`, `scene_leave`, `scene_input` | 3D mode |
-| C→K | `pet_spawn`, `pet_dismiss`, `pet_click` | Pets |
-| C→K | `waifu_create`, `waifu_delete`, `waifu_validate_*` | Creator |
-| K→C | `state` | Thread, waifu, model, effort, voice status snapshot |
-| K→C | `turn_start`, `token`, `turn_end` | Streaming |
-| K→C | `audio_chunk`, `speech_end`, `stop_playback` | TTS output and barge-in |
-| K→C | `captions` | Text being spoken |
-| K→C | `expression`, `look_at` | Avatar hints |
+| C→K | `scene_enter`, `scene_set`, `scene_leave`, `scene_input` | 3D mode (K5) |
+| C→K | `pet_spawn`, `pet_dismiss`, `pet_click` | Pets (K4) |
+| C→K | `waifu_create`, `waifu_delete`, `waifu_validate_*` | Creator (K3) |
+| K→C | `state` | Thread, waifu, model, effort, voice-status snapshot |
+| K→C | `turn_start`, `token` | Streaming (FR-C-2) |
+| K→C | `captions`, `expression`, `look_at` | Avatar hints |
 | K→C | `model_loading`, `vram`, `spend` | Model chip and meters |
 | K→C | `error` | Typed errors (quota, auth, vram, tts_down, …) |
 | K→C | `scene_state` | Positions, anchors, who is speaking |
 | K→C | `doctor` | Health report |
+
+Binary frames carry audio when `speak` is replaced by chunked audio (K2).
 
 ## 6. Data and storage
 
@@ -202,13 +218,17 @@ Atomic (temp file then rename) for settings and packs; SQLite in WAL mode; waifu
 
 ### 7.1 Roles
 
+Yuri's roles are kept (`docs/notes/yuri-inventory.md` §6): `reflex`, `vision`, `classifier`, `embed` and `memory_writer` are `local_only` (a startup invariant); `mind` is the only cloud-eligible role and nothing calls it yet. Kōkyū adds a **`chat`** role in K1 that runs on the thread's user-selected `model_ref`, local or API; the selection is the consent (D-025). Until K1, chat turns keep using `reflex`.
+
 | Role | Used for | Where it may run |
 |---|---|---|
-| `chat` | The user-selected model for the thread | local or API |
+| `chat` (K1) | The user-selected model for the thread | local or API |
+| `reflex` | Yuri's current chat role (until K1) | local only |
+| `mind` | Yuri's cloud-eligible role; unused until agent mode | local or API |
 | `classifier` | Speaker choice (two-waifu scenes), look-intent | local only |
-| `memory_writer` | Distilling facts/episodes | local only |
+| `memory_writer` | Distilling facts and episodes | local only |
 | `embed` | Memory recall (`nomic-embed-text`) | local only |
-| `vision` | Camera and image attach | local by default; API only for explicitly attached images (FR-R-4) |
+| `vision` | Camera and image attach | local by default; API only for images the user explicitly attached (D-025) |
 
 ### 7.2 Capability registry
 
@@ -225,7 +245,7 @@ Atomic (temp file then rename) for settings and packs; SQLite in WAL mode; waifu
 
 ### 7.4 Providers
 
-`ollama` (native API), `llamacpp` (OpenAI-compatible), `airouter` (OpenAI-compatible SSE). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5).
+`ollama` (native API), `llamacpp` (OpenAI-compatible), `airouter` (OpenAI-compatible SSE). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). **Known gap:** Yuri's `OllamaNativeProvider.complete` ignores its `model` argument and uses the global `llm.CONFIG.llm.model`; K1 changes `llm.py` to take a model and an effort setting.
 
 ## 8. Voice pipeline
 
@@ -242,6 +262,8 @@ model tokens → sentence splitter → speech-safe normalizer → TTS adapter �
 ## 9. Clients
 
 ### 9.1 Main window
+
+Yuri's current UI is a **stage-first widget** (340×480 borderless, transparent, always-on-top window; avatar canvas, caption, input, mic, quick-action menu, log panel; inventory §11–12). K0 keeps it untouched apart from a temporary waifu dropdown. The sidebar, Chat view and normal app window arrive in K1; the stage code becomes the Stage view in K2.
 
 React renders chrome: sidebar, thread view, input row, popovers, settings, creator. A **store** (default Zustand, D-013) is fed by WebSocket events. The **engine** (`src/engine/`) is an imperative three.js module mounted into a canvas ref; React never drives per-frame state.
 
@@ -281,7 +303,7 @@ Scene pack (`scene.glb` + `scene.yaml`) loaded by the engine. The kernel's **sce
 
 ## 11. Packaging architecture (K7, designed now)
 
-- **Installer:** Tauri bundler produces an NSIS installer; the WebView2 bootstrapper is included.
+- **Installer:** Tauri bundler produces an NSIS installer (Yuri already sets the `nsis` target); the WebView2 bootstrapper is included. `security.csp` is currently `null` in the seeded config and must be locked down in K1.
 - **Kernel sidecar:** the Python kernel is frozen (PyInstaller or an embedded Python) and registered as a Tauri sidecar; the Job Object logic is unchanged.
 - **Not bundled:** model weights, Ollama, the GPT-SoVITS backend. A **first-run checklist** (the Doctor panel) detects each and links to instructions.
 - **Portable bundle:** zip containing the app, `setup.ps1` (creates the Python environment if the sidecar is not frozen, verifies prerequisites, runs the Doctor) and a README with setup instructions.

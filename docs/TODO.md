@@ -2,15 +2,15 @@
 
 Phased plan with gates. Work **top to bottom inside the current phase**, one item at a time. Tick items with the commit hash: `- [x] K0-03 … (a1b2c3d)`. Do not start the next phase until its gate passed **and** the user approved (R-32). Requirement IDs refer to `SPEC.md`.
 
-Last updated: 2026-11-11 (session 0, docs only).
+Last updated: 2026-11-11 (session 1, docs only: inventory and corrections).
 
 ## Phase overview
 
 | Phase | Goal | Status |
 |---|---|---|
-| Docs | Spec set, license, README | **Done** (session 0), awaiting first commit |
+| Docs | Spec set, license, README | **Done and pushed** (`704c05d`) |
 | **T** | Headless GPT-SoVITS backend by a CLI agent (parallel track) | Not started |
-| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance | **Next** |
+| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | **In progress:** K0-00 to K0-02 done; K0-03 onward awaits plan approval |
 | K1 | Chat shell, waifu switcher, model switcher, effort slider | Not started |
 | K2 | Stage view, voice, senses | Not started |
 | K3 | In-app waifu creator | Not started |
@@ -25,8 +25,8 @@ Last updated: 2026-11-11 (session 0, docs only).
 ## Docs (session 0)
 
 - [x] Scope v0.3, SPEC, ARCHITECTURE, RULES, DECISIONS, STATE, HANDOFF, TODO, TTS brief, README, LICENSE, `.gitignore`
-- [ ] DOC-1 User reviews the docs and corrects anything wrong (assumptions listed in `SCOPE.md` §13 and `HANDOFF.md`)
-- [ ] DOC-2 User makes the first commit to `main` (the repo is currently empty)
+- [x] DOC-1 User reviewed the docs (confirmed: shared memory, name Kōkyū, KASANE folder stays uppercase)
+- [x] DOC-2 First commit pushed to `main` (`704c05d`)
 
 ## Track T: TTS backend (parallel, separate agent) — brief: `TTS-BACKEND.md`
 
@@ -39,33 +39,37 @@ Last updated: 2026-11-11 (session 0, docs only).
 - [ ] T-7 Measure VRAM use while idle and while synthesizing; report to the user (feeds `ARCHITECTURE.md` §13)
 - **Gate T:** smoke test passes on this machine; parameters and VRAM numbers recorded in `STATE.md`.
 
-## Phase K0: Skeleton (starts after DOC-2)
+## Phase K0: Skeleton (rescoped in session 1, D-026)
 
-Goal: a running kernel and shell seeded from Yuri where a **waifu is a pack** and switching her changes only persona and voice.
+Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** and switching her changes only persona and voice. Everything marked "sandbox" can be verified by Claude (pytest, `test:fe`, `tsc`, `vite build`); everything touching Rust, a window, audio or a model needs the user (manual gate).
 
-- [ ] K0-00 Verify the environment: Node 18+, Rust stable, Python 3.11+, WebView2, `ollama list`; record in `STATE.md`
-- [ ] K0-01 Confirm the docs are committed; create branch `k0-skeleton`
-- [ ] K0-02 Read Yuri's `docs/` (SCOPE, ROUTING, PHASES, DECISIONS, handoff) and Luna's `CLAUDE.md`. Write `docs/notes/yuri-inventory.md`: where the heart animation, audio arbiter, router, bus events, WebSocket message names and speech-safe module live. Reconcile `ARCHITECTURE.md` §5 with the real protocol
-- [ ] K0-03 Copy Yuri (no `.git`, no docs, no user assets) at a chosen commit; record the hash in `DECISIONS.md` D-002 and `STATE.md`
-- [ ] K0-04 Rebrand and rename: `orchestrator/` → `kasane/`, product name Kōkyū, identifier `io.github.yatharthjorwal.kokyu` (D-021), window title, tray, default port 8780
-- [ ] K0-05 Add `kasane/paths.py` (dev `./data`, packaged `%APPDATA%\Kokyu`) and replace every hard-coded path
-- [ ] K0-06 Config schema v3: remove persona-specific model/tool keys; add `waifus`, `ui`, `tts.backend`; update `config.example.yaml`, add `models.example.yaml`
-- [ ] K0-07 Waifu pack: pydantic model for `waifu.yaml` (FR-W-1, 4, 6), loader, validator, registry with hot-reload, unit tests
-- [ ] K0-08 `scripts/seed_waifus.py`: import Luna and Yuri personas into packs (prompt text from their persona files; the user supplies VRM and ref-wav paths); create `docs/THIRD-PARTY.md` with the seeded dependencies
-- [ ] K0-09 Threads store (SQLite, `threads.db`) with `active_waifu_id`; `switch_waifu` event and divider message
-- [ ] K0-10 Prompt assembly (persona prompt + shared app addendum + recall block) with unit tests (ARCHITECTURE §4.1)
-- [ ] K0-11 TTS adapter to the contract: per-request ref clip/text/lang, pre-warm, backend-down error, tests against a fake server; `pyttsx3` as opt-in dev fallback (FR-V-1, 7)
-- [ ] K0-12 Memory: confirm it is not namespaced; message and episode summaries name the speaking waifu (FR-MEM-1..3); tests
-- [ ] K0-13 **Invariance tests** (FR-W-3, FR-S-5): two fixture waifus; identical router decision, effort, tool set and recall for the same input; only prompt and TTS parameters differ
-- [ ] K0-14 Router role scaffolding: `decide()` with roles and the local-only refusal (FR-R-1, 3) and tests
-- [ ] K0-15 Temporary waifu dropdown on the existing shell (the real UI is K1), with a debug HUD showing prompt id, voice params, model
-- [ ] K0-16 `npm run check` aggregate script; make `npm run check` and `pytest` green
-- [ ] K0-17 Update `STATE.md`, `HANDOFF.md`, `TODO.md`, `DECISIONS.md`; run the gate review
-- **Gate K0 (automated):** invariance tests green; switching Luna ↔ Yuri changes only prompt text and TTS parameters (asserted); `npm run check` + `pytest` green.
-- **Gate K0 (manual, needs Track T):** audibly different voices for the two waifus with no restart. If T is not done, record "voice not audibly verified" in `STATE.md`.
+- [x] K0-00 Environment: sandbox baseline verified (Yuri: 641 pytest, 65 frontend, tsc, vite build). **User machine still unverified:** run the command block in `HANDOFF.md` §5 and paste the output into `STATE.md` §2
+- [x] K0-01 Docs committed and pushed (`704c05d`)
+- [x] K0-02 Yuri and Luna inventory: `docs/notes/yuri-inventory.md`; `ARCHITECTURE.md` §2, 3, 4.1, 5, 7.1, 9.1, 11 corrected; D-024 to D-031 recorded
+- [ ] K0-03 Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded
+- [ ] K0-04 Rename and rebrand in small reviewed steps (no bulk replace): `orchestrator/` → `KASANE/` (`git mv`), `conftest.py`, scripts, Rust paths; product name Kokyu, identifier `io.github.yatharthjorwal.kokyu`, window title, tray text, `YURI_*` → `KOKYU_*`, log prefixes, npm package name; kernel port 8765 → 8780 in Python, Rust, `ws-client.ts`; no hard-coded ports left in Rust
+- [ ] K0-05 `KASANE/paths.py` (dev `./data`, packaged `%APPDATA%\Kokyu`); replace `repo_path("data/…")` and other hard-coded locations; tests
+- [ ] K0-06 Config v3: strip machine paths from the example, move the TTS reference clip and transcript out of config (they become waifu data), add `waifus.dir` and `kernel.port`, TTS block becomes `tts.backend` (URL plus optional launch); update `config.example.yaml`; add `models.example.yaml`
+- [ ] K0-07 `KASANE/waifus/`: pydantic model for `waifu.yaml` (FR-W-1, 4, 6), loader, validator, registry; unit tests
+- [ ] K0-08 Persona as data (D-031): split Yuri's `SYSTEM_PROMPT` into personality (waifu prompt) and shared app addendum (emotion tags, speech rules); `scripts/seed_waifus.py` imports the Luna and Yuri prompts from paths the user supplies and writes `data/waifus/<id>/`; create `docs/THIRD-PARTY.md`
+- [ ] K0-09 Active waifu in the existing single-history flow: per-connection active waifu; `switch_waifu` and `waifu_state` messages (`ARCHITECTURE.md` §5.2); system prompt swapped on switch; history kept
+- [ ] K0-10 `KASANE/prompting.py`: system assembly (persona + addendum), ephemeral blocks unchanged; unit tests
+- [ ] K0-11 TTS per waifu: `tts.synthesize(text, voice)` with the waifu's reference clip, transcript and language; backend URL from config; pre-warm; **pyttsx3 fallback off by default** (FR-V-7); typed error when the backend is down; tests with a fake server
+- [ ] K0-12 Shared memory with speakers (FR-MEM-1, 2): `transcript_log` gains a speaker column through `memory/migrate.py`; `add_transcript_turn(..., speaker=)`; writer prompt and episode summaries name the waifu; migration and writer tests
+- [ ] K0-13 **Invariance tests** (FR-W-3, FR-S-5): two fixture waifus; the `ModelRequest` messages differ only in the persona prompt; same role and model decision, same recall results, same tool schemas offered; only prompt and TTS parameters differ
+- [ ] K0-14 Map the existing local-only router tests to FR-R-3 (no behaviour change); add one test that no waifu field reaches `router.route`
+- [ ] K0-15 Temporary waifu dropdown in the existing widget's quick-action menu, with a one-line debug readout (waifu, voice clip, model); no layout redesign (that is K1)
+- [ ] K0-16 `scripts/check.mjs` and `npm run check` (tsc, test:fe, build, cargo check, pytest; cargo skippable with a flag); green in the sandbox
+- [ ] K0-17 Update `STATE`, `HANDOFF`, `TODO`, `DECISIONS`; gate review
+- **Gate K0 (sandbox, automated):** invariance tests green; switching Luna ↔ Yuri changes only the persona prompt and TTS parameters (asserted); `pytest` + `test:fe` + `tsc` + `vite build` green.
+- **Gate K0 (manual, user):** `npm run tauri dev` opens the Kokyu window; the dropdown switches waifus; replies differ in persona; the voice is audibly different per waifu using the **existing GPT-SoVITS install** (same `/tts` contract, so Track T is not required for this gate); `cargo check` passes on the PC.
 
 ## Phase K1: Chat shell
 
+- [ ] K1-00 Extract a **conversation manager** from `ws_endpoint` / `_run_turn`; SQLite **threads store** with `active_waifu_id`, per-thread `model_ref` and effort; divider messages (FR-C-1, 10, FR-S-2)
+- [ ] K1-00b Typed protocol (`KASANE/protocol/`, mirrored in `src/net/`), token streaming events, versioned frames (`ARCHITECTURE.md` §5.3)
+- [ ] K1-00c `llm.py` takes a model and an effort/think parameter; `OllamaNativeProvider` honours `model`; `chat` role and the egress policy in `router/decision.py` with tests (D-025, FR-R-4, 5, 7) — **needs the user's OK on D-025 first**
+- [ ] K1-00d Normal app window (replace the 340×480 widget window), CSP locked down, Temp Chat flag per thread (FR-MEM-5)
 - [ ] K1-01 Spike: Qwen3.5-35B-A3B Q4 on llama.cpp with experts on CPU: VRAM, RAM, tokens/s; record numbers
 - [ ] K1-02 Introduce React shell around the existing engine; Zustand store fed by WebSocket events (D-013)
 - [ ] K1-03 Sidebar: waifu list, history (grouped, search, rename, delete), Settings entry (FR-C-6)

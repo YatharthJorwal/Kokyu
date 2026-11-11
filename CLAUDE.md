@@ -7,7 +7,7 @@ Instructions for any AI coding agent working in this repository. **Read this fil
 Kōkyū is a Windows desktop chat app for a roster of AI companions ("waifus"). It looks like a normal chatbot UI (sidebar, one input box, one model switcher) and adds a VRM **stage view**, 2D **desktop pets**, a walkable **3D mode**, per-waifu **zero-shot voices** and an in-app **waifu creator**.
 
 - **A waifu is a voice and a persona, nothing more.** Switching her never changes the model, intelligence, tools, permissions or memory scope.
-- **KASANE** is the kernel (Python, `kasane/`). Clients are Tauri 2 + TypeScript + three.js / `@pixiv/three-vrm` (`src/`, `src-tauri/`).
+- **KASANE** is the kernel (Python, in the `KASANE/` folder). Clients are Tauri 2 + TypeScript + three.js / `@pixiv/three-vrm` (`src/`, `src-tauri/`).
 - Seeded from the author's earlier project **Yuri** (which succeeded **Luna**). Both live at `github.com/YatharthJorwal/Yuri` and `.../Luna`.
 - Single user, single Windows PC, local-first. Target machine: RTX 3060 12 GB, i5-14400F, 32 GB DDR5-4800.
 - Windows packaging comes later (phase K7) but constrains design from day one (RULES §9).
@@ -51,7 +51,7 @@ These are never traded away for convenience. Full list with rationale: `docs/RUL
 3. **Local-only data.** Camera frames, mic audio, screen captures and memory-writer jobs never leave the machine.
 4. **No silent fallback.** If the user's chosen API model fails, show the error with *Retry* and *Switch model*. Do not quietly change models.
 5. **No secrets or assets in git.** Keys, `.vrm`, `.wav`, model weights, databases and logs are gitignored and must never be committed.
-6. **No hard-coded paths.** Use `kasane/paths.py` (dev: `./data`; packaged: `%APPDATA%\Kokyu`).
+6. **No hard-coded paths.** Use `KASANE/paths.py` (dev: `./data`; packaged: `%APPDATA%\Kokyu`).
 7. **Never block** the kernel's asyncio loop or the render loop.
 8. **Honest verification.** No claim without running it.
 
@@ -60,37 +60,40 @@ These are never traded away for convenience. Full list with rationale: `docs/RUL
 ```
 CLAUDE.md             this file
 README.md  LICENSE    public face (MIT)
-kasane/               Python kernel: app.py, bus.py, config, paths, router/, models/, memory/,
-                      audio/, waifus/, threads/, scenes/, senses/, tests/
-src/                  frontend: React UI chrome + imperative three.js engine (stage, pets, 3D)
+KASANE/               Python kernel (flat modules, folder on sys.path: `import llm`, `from audio import tts`;
+                      there is NO `kasane` package). app.py, bus.py, config.py, paths.py, router/, memory/, audio/ ...
+src/                  frontend: Yuri's engine and widget UI (K0); React chrome + engine/ + net/ (K1+)
 src-tauri/            Rust: windows, tray, hotkeys, child processes (Job Object)
 config/               config.example.yaml, models.example.yaml, secrets.example.yaml
-scripts/              seed_waifus.py, doctor, packaging
-tests-fe/             frontend tests
-docs/                 SCOPE, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, HANDOFF, TTS-BACKEND
+scripts/              dev.mjs, doctor.mjs, check.mjs, seed_waifus.py, packaging
+tests-fe/             frontend tests (pure logic; Node test runner)
+docs/                 SCOPE, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, HANDOFF, TTS-BACKEND, notes/
 data/                 runtime data (gitignored)
 ```
 
-The tree above is the **target**. Phase K0 creates it by seeding from Yuri; until then only `docs/` exists. Check `STATE.md` for what actually exists.
+The tree is the **target**. Until K0-03 only `docs/` exists. Yuri's layout and findings: `docs/notes/yuri-inventory.md`. Check `STATE.md` for what actually exists.
 
 ## 5. Commands
 
-Inherited from Yuri; **confirm each works during K0** and fix this list.
+Taken from Yuri's `package.json` and handoff; **confirm each after the seed (K0-03/04)** and fix this list.
 
 ```powershell
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r kasane\requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt
 npm install
 
-npm run tauri dev                         # desktop shell; starts the kernel itself
-npm run dev                               # browser tab at http://localhost:1420 (do NOT run alongside tauri dev: same port)
-npm run doctor                            # why a window does not load
-npm run check                             # tsc --noEmit + frontend tests + vite build + cargo check (K0 creates this)
-.\.venv\Scripts\python.exe -m pytest kasane -q
-.\.venv\Scripts\python.exe kasane\check.py [--refresh]   # config, keys, model catalog, spend
+npm run tauri dev       # desktop shell; starts the kernel and the TTS backend itself (runs `npm run dev:ui` first)
+npm run dev             # kernel + page for a plain browser tab (reuses a kernel already running)
+npm run dev:ui          # page only (what tauri dev uses). Never run it together with `npm run dev` or `tauri dev`: port 1420
+npm run doctor          # why a window does not load
+npm run build           # tsc + vite build
+npm run test:fe         # frontend pure-logic tests
+npm run check           # NEW in K0-15: tsc --noEmit + test:fe + build + cargo check + pytest
+.\.venv\Scripts\python.exe -m pytest KASANE -q
+.\.venv\Scripts\python.exe KASANE\check.py --refresh   # config, key, catalog, spend
 ```
 
-`npm run check` plus `pytest` is the **definition of green**.
+`npm run check` (which includes `pytest`) is the **definition of green**. Delivery is by git bundle (D-030).
 
 ## 6. Conventions (short)
 
@@ -104,7 +107,9 @@ npm run check                             # tsc --noEmit + frontend tests + vite
 ## 7. Things that bite on this machine
 
 - Two dev servers share **port 1420**: run `npm run tauri dev` *or* `npm run dev`, never both.
-- Kokyu's kernel defaults to **127.0.0.1:8780**. Do not reuse 8765 (Luna's port; Yuri may use it too).
+- Yuri's kernel uses **8765** and its TTS backend **9880** (both hard-coded in Rust and Python). Kokyu's kernel uses **127.0.0.1:8780** (D-027); the TTS port comes from config and defaults to 9880.
+- **Never bulk-edit source with naive string replacement** (it once replaced every "a" with "w" in five files). Rename with targeted edits and run the tests after each step.
+- Tests stub `llm.<fn>` by module attribute and the router calls through the module; do not switch to `from llm import x`.
 - `WinError 10048` on startup means a leftover `python.exe` holds the port: check Task Manager.
 - Quit through the **tray Quit item**. Killing the process skips graceful shutdown, so that session's memory consolidation is lost.
 - faster-whisper on CUDA failed on this machine with a missing `cublas64_12.dll`; **STT runs on CPU** by default (and that is also the right call for the VRAM budget).

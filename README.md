@@ -47,14 +47,14 @@ git clone https://github.com/YatharthJorwal/Kokyu.git
 cd Kokyu
 
 python -m venv .venv
-.\.venv\Scripts\python.exe -m pip install -r kasane\requirements-dev.txt
+.\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt
 
 npm install
 Copy-Item .env.example .env        # optional: add AIROUTER_API_KEY
 npm run tauri dev
 ```
 
-`npm run doctor` explains why a window does not load. `python kasane\check.py` checks config, models and keys without starting the app.
+`npm run doctor` explains why a window does not load. `python KASANE\check.py` checks config, models and keys without starting the app.
 
 ## Your waifus
 
@@ -78,7 +78,7 @@ No characters, voices or model weights are included, and none may be committed. 
 ## Repository layout (target)
 
 ```
-kasane/        Python kernel (FastAPI/WebSocket, router, memory, audio, waifus)
+KASANE/        Python kernel (FastAPI/WebSocket, router, memory, audio, waifus)
 src/           Frontend: React UI chrome + three.js / three-vrm engine
 src-tauri/     Rust shell: windows, tray, hotkeys, child-process management
 config/        config.example.yaml, models.example.yaml, secrets.example.yaml
