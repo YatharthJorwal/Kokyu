@@ -1,0 +1,59 @@
+# --- dependencies / build output ---
+node_modules/
+dist/
+build/
+src-tauri/target/
+src-tauri/gen/
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.venv/
+venv/
+*.egg-info/
+
+# --- runtime data (never committed) ---
+data/
+logs/
+*.db
+*.db-journal
+*.sqlite
+*.sqlite3
+
+# --- secrets and machine-local config ---
+.env
+.env.*
+!.env.example
+config/config.yaml
+config/secrets.local.yaml
+src-tauri/launcher.local.txt
+*.local.*
+
+# --- user assets and model weights (never committed, never redistributed) ---
+*.vrm
+*.vrma
+*.wav
+*.mp3
+*.flac
+*.ogg
+*.gguf
+*.ckpt
+*.pth
+*.safetensors
+*.onnx
+public/vrm/*
+!public/vrm/README.txt
+public/vrm-animations/*
+!public/vrm-animations/README.txt
+
+# --- external backends live outside the repo ---
+tts-backend/
+gpt-sovits/
+
+# --- editor / OS ---
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db
+desktop.ini
