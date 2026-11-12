@@ -36,14 +36,15 @@ from typing import Any, Iterable, Mapping
 
 import yaml
 
+import paths
+
 _ORCHESTRATOR_DIR = pathlib.Path(__file__).parent
-_REPO_ROOT = _ORCHESTRATOR_DIR.parent
-EXAMPLE_PATH = _REPO_ROOT / "config" / "config.example.yaml"
-SECRETS_PATH = _REPO_ROOT / "config" / "secrets.local.yaml"
+EXAMPLE_PATH = paths.config_example_path()
+SECRETS_PATH = paths.secrets_path()
 
 _SEARCH_PATHS = (
     _ORCHESTRATOR_DIR / "config.yaml",
-    _REPO_ROOT / "config" / "config.yaml",
+    paths.config_dir() / "config.yaml",
     EXAMPLE_PATH,
 )
 
@@ -514,7 +515,7 @@ def resolve_api_key(
     if flat:
         return str(flat).strip()
 
-    return _read_dotenv(dotenv_path or (_REPO_ROOT / ".env")).get(api_key_env)
+    return _read_dotenv(dotenv_path or paths.dotenv_path()).get(api_key_env)
 
 
 # ─── loading ─────────────────────────────────────────────────────────────────

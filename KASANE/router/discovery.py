@@ -19,12 +19,11 @@ from typing import Any
 
 import httpx
 
-_REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
-
+import paths
 
 def repo_path(value: str | pathlib.Path) -> pathlib.Path:
-    path = pathlib.Path(value)
-    return path if path.is_absolute() else _REPO_ROOT / path
+    """Kept for callers; every location now comes from paths.py (R-40)."""
+    return paths.resolve(value)
 
 
 def _as_float(value: Any) -> float:

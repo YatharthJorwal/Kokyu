@@ -58,6 +58,7 @@ import context_budget
 from audio import arbiter
 from audio import latency
 import llm
+import paths
 import router
 import settings as runtime_settings
 from senses import look_intent
@@ -1633,7 +1634,7 @@ if __name__ == "__main__":
     # KASANE/ via current_dir("../orchestrator"); a manually-run
     # `python app.py` from inside KASANE/ lands at the same cwd;
     # __file__-relative means this doesn't depend on either being true).
-    _take_over_stale_orchestrator(Path(__file__).resolve().parent.parent / "logs" / "orchestrator.pid")
+    _take_over_stale_orchestrator(paths.logs_dir() / "orchestrator.pid")
 
     # Cheap check, once per process start -- see
     # check_embedding_dimension_matches()'s docstring for why this is

@@ -26,11 +26,12 @@ from collections.abc import Iterator
 
 import sqlite_vec
 
+import paths
 from config import CONFIG
 
 from . import migrate
 
-_DB_PATH = pathlib.Path(__file__).parent.parent / CONFIG.memory.db_path
+_DB_PATH = paths.resolve(CONFIG.memory.db_path)
 _conn: sqlite3.Connection | None = None
 
 # One connection is shared by every thread (asyncio.to_thread callers), so every
