@@ -46,13 +46,18 @@ Scoped the product, wrote the full doc set and pushed it (`704c05d`). Decisions 
 - Recorded decisions D-024 to D-031. **Rescoped K0** (D-026): threads, typed protocol, token streaming and model plumbing moved to K1.
 - Delivered as a git bundle of docs-only commits on top of `704c05d`. **No product code was written** and nothing was copied from Yuri yet.
 
+### Session 1 (continued): product direction
+- The user supplied a product-vision handoff made with ChatGPT (kept verbatim in `docs/notes/product-vision-handoff-2026-11-11.md`) and asked me to weigh it. Result: `docs/PRODUCT.md`, decisions D-032 to D-039, TODO restructured, SPEC gains FR-COMP, FR-WIZ, FR-VP.
+- Key points: the project is now a **paid one-time-purchase product** (direction), which makes the **license** an urgent decision (MIT code would be free to redistribute; hold code pushes until LIC-1). The handoff's per-companion model selection was **rejected** (D-003/D-038). Added: component manager, early installer skeleton (K1b), voice tiers with a built-in default, Credential Manager key storage, release train 1.0 / 1.1 / 2.x (pets and 3D after 1.0).
+- Everything is docs-only and in one cumulative bundle (it contains the earlier session-1 commits; applying it alone is enough).
+
 ## 4. Where we stopped
 
 K0-00 to K0-02 are done. **K0-03 (the seed commit) has not started.** The K0 plan is in `TODO.md` §K0 and is waiting for the user's approval, plus one product answer (Task Guide / OCR watch, D-029).
 
 ## 5. Next session: start here
 
-1. `git log` and `git status`; confirm the session-1 bundle was merged and pushed. If not, remind the user (commands below).
+1. `git log` and `git status`; confirm the session-1 bundle was merged and pushed. If not, remind the user (commands below). Also ask whether LIC-1 (the license) is decided: **no product code may be pushed to the public repo before it is** (D-032).
 2. Ask for the user's approval of the K0 plan, the answer on parking Task Guide and OCR watch, and the output of this block (fills `STATE.md` §2):
 
 ```powershell
@@ -80,6 +85,10 @@ git push
 - OK with D-025 (egress policy for user-selected API models)? Needed before K1, not K0.
 - Track the licensed VRMA pack in git (Luna does, Yuri does not)? Needed at K4.
 - Seed from `e32af4f` or a newer Yuri commit?
+- **LIC-1:** which license path (keep MIT and sell convenience, source-available, or private source)? Needed before any code push.
+- Approve the release boundaries (1.0 without pets and 3D) and the voice tiers (built-in default voice)?
+- Where will the 2 to 3 premade companions (VRMs and voices with redistribution rights) come from?
+- Has the Dodo Payments acceptable-use policy been checked against a companion product?
 
 ## 7. Traps and gotchas
 

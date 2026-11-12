@@ -1,7 +1,7 @@
 # Kōkyū — Scope
 
 > **Kōkyū** (後宮, "the inner palace"; ASCII *Kokyu* for paths and identifiers) is the app. **KASANE** (*Kernel for Adaptive Synthetic Agents, Networks and Embodiments*) is the kernel inside it.
-> Status: scope v0.3 (2026-11-11). One-page overview; detailed requirements are in `SPEC.md`, design in `ARCHITECTURE.md`, decisions in `DECISIONS.md`. Successor to Luna and Yuri. Local-first, single Windows PC.
+> Status: scope v0.4 (2026-11-11). One-page overview; product direction and release boundaries are in `PRODUCT.md`, requirements in `SPEC.md`, design in `ARCHITECTURE.md`, decisions in `DECISIONS.md`. Successor to Luna and Yuri. Local-first Windows desktop app.
 
 ## 1. What this is
 
@@ -32,7 +32,7 @@ Fork **Yuri**, not Luna. Yuri already provides the role-based model router (spen
 4. A **stage view** where the waifu's VRM is in front of you (Ani-style).
 5. Create a new waifu **entirely inside the app**.
 6. 2D desktop pets and a walkable 3D space with one or two waifus.
-7. Later, ship as a Windows app: an installer, or a portable bundle with packages and setup instructions in the README (§14).
+7. Ship as a one-time-purchase Windows app: a signed installer plus a first-run wizard that sets up the rest (§14, `PRODUCT.md`).
 
 ## 3. Non-goals
 
@@ -270,12 +270,16 @@ Each phase has a gate that must pass before the next starts.
 | **T (parallel)** TTS backend | CLI agent builds the headless GPT-SoVITS server to the §7.2 contract | Smoke test: two clips back-to-back, no restart |
 | **K0** Skeleton | New repo from Yuri; waifu pack format; Luna and Yuri as waifus | Waifu box switches persona text and voice; model and effort unchanged |
 | **K1** Chat shell | Sidebar, threads, input box, ＋ tray, heart animation, waifu switcher, model switcher (Local/API), effort slider | Chat with one local and one API model; change model, effort and waifu mid-thread independently |
+| **K1b** Installer skeleton | Thin NSIS installer with the kernel sidecar, tested on a clean machine | Clean-machine install reaches an API chat |
 | **K2** Stage and voice | Ani-style stage, lip-sync, zero-shot voice through the TTS contract, STT, barge-in, camera and file attach | Alternate two waifus mid-conversation: voice and persona change, no reload or audible delay |
 | **K3** Waifu creator | The full in-app form (§8) | A new waifu created end-to-end without touching any file |
+| **W** Components and wizard | Component manager, Doctor, Welcome to Kōkyū wizard, premade companions | Clean machine: installer to first reply |
 | **K4** Desktop pets | Sprite baking, pet windows, state machine, click-through, quick reply | Two pets idle and walk for an hour; overhead measured |
 | **K5** 3D mode | WASD, apartment and garden, scene switcher, one or two waifus with the turn arbiter | Walk, switch scene, talk to two waifus with no persona bleed |
 | **K6** Hardening | Evals, perf budgets, crash recovery, docs | Soak test; docs complete |
-| **K7** Packaging | Windows installer and portable bundle with setup instructions (§14) | Clean-machine install runs the app |
+| **K7** Release engineering | Signing, updater, license key, diagnostics, CI (§14) | Signed installer from a tagged release works on a clean machine |
+
+Release boundaries (`PRODUCT.md` §4): **1.0** = T, K0 to K3, K1b, W, K6, K7; **1.1** = K4 and K5; **2.x** = agent mode and VR.
 
 ## 12. Deferred
 
@@ -301,14 +305,11 @@ Each phase has a gate that must pass before the next starts.
 - Clicking a waifu opens Stage view; clicking a history entry opens Chat view; the effort slider lives inside the model popover.
 - Helper models stay in Settings → Advanced and are not user-facing.
 
-## 14. Distribution (planned, after the core app)
+## 14. Distribution (planned)
 
-The app will be packaged for Windows in phase K7, in two forms:
+See `PRODUCT.md` §4 to §6 for the release boundaries (1.0 / 1.1 / 2.x), commercial direction and asset checklist, and `ARCHITECTURE.md` §11 and §15 for the technical plan.
 
-- **Installer:** an NSIS installer built by the Tauri bundler, with the Python kernel shipped as a sidecar so end users need neither Python nor Node, and the WebView2 bootstrapper included.
-- **Portable bundle:** a zip with the app, a `setup.ps1` that prepares the environment and verifies prerequisites, and a README with setup instructions.
-
-Not bundled: model weights, Ollama, and the GPT-SoVITS backend. A first-run checklist (the Doctor panel) detects each one and links to install steps. User data lives in `%APPDATA%\Kokyu` and survives upgrades. Design consequences apply from phase K0: all paths through one module, no repo-relative assumptions at runtime, config layering, a versioned protocol (see `RULES.md` §9 and `ARCHITECTURE.md` §11).
+In short: a one-time-purchase Windows app sold from an official site, shipped as a signed per-user NSIS installer with the Python kernel as a sidecar (no Python or Node for the user). A **Welcome to Kōkyū** wizard detects and installs optional components (Ollama, llama.cpp, the GPT-SoVITS backend, the STT model) with the user's confirmation; model weights and large runtimes are never in the installer. User data lives in `%APPDATA%\Kokyu` and survives upgrades. The license is undecided and no code is published until it is (D-032).
 
 ## Appendix A: system-prompt instruction template
 

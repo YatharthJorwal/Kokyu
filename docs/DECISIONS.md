@@ -200,3 +200,48 @@ Provisional · Default · 2026-11-11
 **Context:** In Yuri the emotion-tag convention and speech rules are entangled with the persona prompt. The creator's instruction template (SPEC Appendix A) tells the user's LLM only about personality and speech style.
 **Decision:** The shared **app addendum** (identical for every waifu) carries the emotion-tag convention, speech rules and output cleanup. Waifu prompts contain personality only.
 **Consequences:** K0-08 splits Yuri's `SYSTEM_PROMPT` when seeding; `ARCHITECTURE.md` §4.1.
+
+---
+
+## Session 1, product direction (2026-11-11, after weighing the external vision handoff: `PRODUCT.md`)
+
+## D-032 License is undecided; no code goes public until it is decided
+Accepted (direction) · User (the license is expected to change) + Default (hold rule) · 2026-11-11
+**Context:** D-015 chose MIT provisionally. The product is now intended to be sold for about $15 to $20 (D-033). MIT lets anyone legally build and redistribute the code for free. Only documentation is published so far.
+**Decision:** The license is **undecided**. MIT covers only the documentation-only history already public. **No product code is pushed to the public repository until the license is decided** (TODO LIC-1). Options (A keep MIT and sell convenience, B source-available, C private source) are in `PRODUCT.md` §5. Not legal advice.
+**Consequences:** Supersedes D-015's direction. K0-03 is on hold for pushes (work can continue in the sandbox and be bundled). README's license section updated; `LICENSE` is left untouched until the user decides.
+
+## D-033 Commercial direction: paid, one-time purchase, BYOK and BYOM
+Accepted (direction) · User · 2026-11-11
+**Decision:** Kōkyū is a paid desktop app: one-time purchase, no mandatory subscription, no hosted inference, users bring their own models, keys and voice providers. Sold from an official website with Dodo Payments; installer preferred over the Microsoft Store. Price undecided ($14.99 launch and $19.99 standard were discussed).
+**Consequences:** `PRODUCT.md`; Track B (business, non-code) in `TODO.md`; K7 grows (signing, updater, license key, diagnostics).
+
+## D-034 Release boundaries and phase order
+Provisional · Default · 2026-11-11
+**Decision:** **1.0** = T, K0, K1, K1b, K2, K3, W, K6, K7. **1.1** = K4 (pets) and K5 (3D). **2.x** = D1 (agent mode) and D2 (VR). Execution order: T (parallel), K0, K1, K1b, K2, K3, W, K6, K7, then K4, K5.
+**Consequences:** Pets and 3D rooms stay in scope but ship after the first stable release; waifu packs and shared memory remain foundational from K0.
+
+## D-035 Component manager, Welcome wizard and an early installer
+Provisional · Default · 2026-11-11
+**Decision:** One **component** interface (`detect`, `install`, `start`, `stop`, `health`, `repair`) behind the Doctor panel and the first-run **Welcome wizard** (new phase W). A thin **walking-skeleton installer** (K1b) is built right after K1 so the Python sidecar, antivirus behaviour and clean-machine install are tested early. GPT-SoVITS is treated as an advanced, hardware-gated component, not a default.
+**Consequences:** FR-COMP, FR-WIZ, ARCHITECTURE §15; Track T's brief now asks for a reproducible component manifest.
+
+## D-036 Voice providers
+Provisional · Default · 2026-11-11
+**Decision:** A voice provider interface with three providers: `gpt_sovits` (reference clip plus transcript, local, advanced), `builtin` (small local voices, the default so the first conversation never waits; model chosen in a K2 spike) and `elevenlabs` (hosted voice ID plus key; cloud, opt-in, badged). The waifu's `voice` block names its provider; nothing else about her changes.
+**Consequences:** D-006 stays true for the `gpt_sovits` provider. FR-VP, FR-V-1 reworded. Choosing a cloud voice is consent for that spoken text to leave the machine.
+
+## D-037 Model providers and key storage
+Provisional · Default · 2026-11-11
+**Decision:** A generic **`openai_compat`** provider (configurable base URL and key) replaces the hard-wired AI Router; AI Router, OpenRouter, DeepSeek and others are presets. End-user keys live in the **Windows Credential Manager**, set through the app; `.env` and `secrets.local.yaml` are developer-only.
+**Consequences:** Yuri's `airouter` provider is the starting point (K1). FR-M-4, FR-R-6 and R-33 updated.
+
+## D-038 D-003 stands: a companion does not carry its own model
+Accepted · User (D-003) · 2026-11-11
+**Context:** The external handoff lists "AI model selection" and "companion-specific intelligence" inside companion creation.
+**Decision:** Rejected. "Choose her intelligence" is delivered by the single global model switcher. Waifus remain voice and persona only.
+
+## D-039 Premade companions are built-in, read-only packs with a rights record
+Provisional · Default · 2026-11-11
+**Decision:** The 2 to 3 included companions ship as read-only packs resolved through the resource resolver; users duplicate them to edit. Every shipped asset (VRM, voice, animation, scene, icon) has a rights record in `docs/THIRD-PARTY.md`. Luna's and Yuri's current assets are not shipped unless their provenance is confirmed. Premade personas are conservative by default.
+**Consequences:** RULES R-51; `PRODUCT.md` §6.

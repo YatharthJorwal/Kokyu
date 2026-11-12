@@ -6,19 +6,24 @@ Last updated: 2026-11-11 (session 1, docs only: inventory and corrections).
 
 ## Phase overview
 
-| Phase | Goal | Status |
-|---|---|---|
-| Docs | Spec set, license, README | **Done and pushed** (`704c05d`) |
-| **T** | Headless GPT-SoVITS backend by a CLI agent (parallel track) | Not started |
-| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | **In progress:** K0-00 to K0-02 done; K0-03 onward awaits plan approval |
-| K1 | Chat shell, waifu switcher, model switcher, effort slider | Not started |
-| K2 | Stage view, voice, senses | Not started |
-| K3 | In-app waifu creator | Not started |
-| K4 | Desktop pets | Not started |
-| K5 | 3D mode | Not started |
-| K6 | Hardening | Not started |
-| K7 | Windows packaging | Not started |
-| D1, D2 | Agent mode, VR | Deferred |
+Execution order (D-034): T (parallel), K0, K1, K1b, K2, K3, W, K6, K7, then K4 and K5. IDs are stable labels, not the order.
+
+| Phase | Goal | Release | Status |
+|---|---|---|---|
+| Docs | Spec set, README, product direction | n/a | Done; session-1 bundle pending merge |
+| **LIC-1** | Decide the license before any code is pushed publicly | gate | **Open** (D-032) |
+| **T** | GPT-SoVITS component recipe by a CLI agent (parallel track) | 1.0 | Not started |
+| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | 1.0 | In progress: K0-00 to K0-02 done; K0-03 onward awaits plan approval and LIC-1 for pushes |
+| K1 | Chat shell, waifu switcher, model switcher, API providers | 1.0 | Not started |
+| **K1b** | Installer walking skeleton on a clean machine (D-035) | 1.0 | Not started |
+| K2 | Stage view, voice providers, senses | 1.0 | Not started |
+| K3 | In-app waifu creator | 1.0 | Not started |
+| **W** | Component manager and Welcome wizard | 1.0 | Not started |
+| K6 | Hardening | 1.0 | Not started |
+| K7 | Release engineering: signing, updater, license key, diagnostics, CI | 1.0 | Not started |
+| K4 | Desktop pets | 1.1 | Not started |
+| K5 | 3D mode | 1.1 | Not started |
+| D1, D2 | Agent mode, VR | 2.x | Deferred |
 
 ---
 
@@ -27,6 +32,8 @@ Last updated: 2026-11-11 (session 1, docs only: inventory and corrections).
 - [x] Scope v0.3, SPEC, ARCHITECTURE, RULES, DECISIONS, STATE, HANDOFF, TODO, TTS brief, README, LICENSE, `.gitignore`
 - [x] DOC-1 User reviewed the docs (confirmed: shared memory, name Kōkyū, KASANE folder stays uppercase)
 - [x] DOC-2 First commit pushed to `main` (`704c05d`)
+- [ ] LIC-1 **User decides the license** (`PRODUCT.md` §5, D-032). Until then no product code is pushed to the public repo; the sandbox can keep working and hand over bundles
+- [ ] PROD-1 User reviews `PRODUCT.md`: release boundaries (D-034), voice tiers (D-036), providers and key storage (D-037), premade-asset plan (D-039)
 
 ## Track T: TTS backend (parallel, separate agent) — brief: `TTS-BACKEND.md`
 
@@ -37,7 +44,22 @@ Last updated: 2026-11-11 (session 1, docs only: inventory and corrections).
 - [ ] T-5 `smoke_test` script: same sentence with two different reference clips back-to-back, no restart, prints latency per call
 - [ ] T-6 English `INSTALL.md` and `README.md` in the backend folder; record exact API parameters actually accepted
 - [ ] T-7 Measure VRAM use while idle and while synthesizing; report to the user (feeds `ARCHITECTURE.md` §13)
+- [ ] T-8 `component.json` manifest so Kōkyū's component manager can reproduce the install: URLs, versions, SHA-256, sizes, Python/CUDA versions, start command, health URL, hardware requirements; the install must be scriptable and non-interactive
 - **Gate T:** smoke test passes on this machine; parameters and VRAM numbers recorded in `STATE.md`.
+
+## Track B: business and content (non-code, user-owned)
+
+Tracked here so nothing is forgotten; none of it blocks engineering except LIC-1.
+
+- [ ] B-1 License decision (LIC-1) and, if proprietary or source-available, replace `LICENSE` and the README license section
+- [ ] B-2 Price and free-trial policy (demo limits)
+- [ ] B-3 Dodo Payments account; **read its acceptable-use and prohibited-business rules** against a companion product; confirm whether it is the Merchant of Record for VAT/sales tax
+- [ ] B-4 Name and domain check for "Kokyu" / "Kōkyū" (basic trademark search)
+- [ ] B-5 Premade companions: commission or create 2 to 3 VRMs and original voices with written rights (D-039)
+- [ ] B-6 Code-signing options and cost (individual publisher eligibility)
+- [ ] B-7 Website (separate repo): landing, screenshots, checkout, downloads, docs, support
+- [ ] B-8 Privacy policy, terms (including intended audience age), refund policy, support channel
+- [ ] B-9 Marketing plan (kept out of engineering docs; see the IP caution in `PRODUCT.md` §6)
 
 ## Phase K0: Skeleton (rescoped in session 1, D-026)
 
@@ -46,7 +68,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K0-00 Environment: sandbox baseline verified (Yuri: 641 pytest, 65 frontend, tsc, vite build). **User machine still unverified:** run the command block in `HANDOFF.md` §5 and paste the output into `STATE.md` §2
 - [x] K0-01 Docs committed and pushed (`704c05d`)
 - [x] K0-02 Yuri and Luna inventory: `docs/notes/yuri-inventory.md`; `ARCHITECTURE.md` §2, 3, 4.1, 5, 7.1, 9.1, 11 corrected; D-024 to D-031 recorded
-- [ ] K0-03 Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded
+- [ ] K0-03 (**no public push before LIC-1**) Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded
 - [ ] K0-04 Rename and rebrand in small reviewed steps (no bulk replace): `orchestrator/` → `KASANE/` (`git mv`), `conftest.py`, scripts, Rust paths; product name Kokyu, identifier `io.github.yatharthjorwal.kokyu`, window title, tray text, `YURI_*` → `KOKYU_*`, log prefixes, npm package name; kernel port 8765 → 8780 in Python, Rust, `ws-client.ts`; no hard-coded ports left in Rust
 - [ ] K0-05 `KASANE/paths.py` (dev `./data`, packaged `%APPDATA%\Kokyu`); replace `repo_path("data/…")` and other hard-coded locations; tests
 - [ ] K0-06 Config v3: strip machine paths from the example, move the TTS reference clip and transcript out of config (they become waifu data), add `waifus.dir` and `kernel.port`, TTS block becomes `tts.backend` (URL plus optional launch); update `config.example.yaml`; add `models.example.yaml`
@@ -78,6 +100,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2)
 - [ ] K1-07 Capability registry (`models.yaml`) and Ollama/llama.cpp discovery (FR-M-3, 10)
 - [ ] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6)
+- [ ] K1-08b Generic `openai_compat` provider (base URL plus key; AI Router, OpenRouter, DeepSeek presets); end-user keys in the Windows Credential Manager through the shell (D-037, FR-R-6)
 - [ ] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-6, ARCHITECTURE §7.3)
 - [ ] K1-10 Model chip + popover (search, Local/API sections, badges, footer meters) (FR-M-1, 2, 5, 7)
 - [ ] K1-11 Effort slider with animation and reduced-motion fallback (FR-M-8, 9, 11)
@@ -86,6 +109,16 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-14 Tests, `STATE`/`HANDOFF` update
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 
+## Phase K1b: Installer walking skeleton (D-035)
+
+Goal: find packaging problems in week one of the product, not the last week.
+
+- [ ] K1b-01 Choose the kernel packaging approach by spike: PyInstaller one-folder vs embedded CPython (size, antivirus behaviour, updateability) (`ARCHITECTURE.md` §11.1)
+- [ ] K1b-02 Tauri bundle: NSIS per-user installer, WebView2 bootstrapper, kernel as sidecar or resources, data in `%APPDATA%\Kokyu`
+- [ ] K1b-03 Test on a clean Windows machine or VM (no Python, Node, Rust, Git): install, launch, text chat with an API key, uninstall
+- [ ] K1b-04 Record antivirus/SmartScreen behaviour, installer size and install time in `STATE.md`
+- **Gate K1b:** a clean-machine install reaches a working API chat; findings recorded; packaging approach decided in `DECISIONS.md`.
+
 ## Phase K2: Stage and voice
 
 - [ ] K2-01 Stage view: auto-framing, backdrop, spring bones, idle motion, look-at, expression hooks (FR-ST-1..3, 5, 7)
@@ -93,6 +126,8 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K2-03 Sidebar waifu click → Stage, history click → Chat (FR-S-4)
 - [ ] K2-04 Speech-safe normalizer, clause pipelining, arbiter, barge-in (FR-V-2..5)
 - [ ] K2-05 TTS pre-warm on switch (FR-S-3); TTS-down banner (FR-V-7)
+- [ ] K2-05b Voice provider interface; spike a small `builtin` voice (license, quality, CPU latency); make it the default provider (FR-VP-1, 5)
+- [ ] K2-05c `elevenlabs` provider: voice ID plus key, cloud badge, opt-in (FR-VP-3)
 - [ ] K2-06 STT (faster-whisper CPU), VAD, push-to-talk, mic toggle, live voice (FR-V-6)
 - [ ] K2-07 Camera and file attach into the tray; vision helper (FR-C-4, FR-R-3, 4)
 - [ ] K2-08 Measure and calibrate latency and fps targets (FR-V-8, FR-ST-6); record in `STATE.md`
@@ -108,7 +143,18 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K3-06 Test chat, Save, atomic pack creation, delete flow (FR-CR-7, 8; FR-W-2, 5)
 - **Gate K3:** a new waifu created end-to-end with no file touched; she speaks in her own voice.
 
-## Phase K4: Desktop pets
+## Phase W: Component manager and Welcome wizard (release 1.0)
+
+- [ ] W-01 Component interface and states in the kernel; manifests under `components/` (FR-COMP-1, ARCHITECTURE §15)
+- [ ] W-02 Ollama: detect, guided install (silent mode tested), model pull with progress
+- [ ] W-03 llama.cpp server download and start; STT model download with progress
+- [ ] W-04 GPT-SoVITS component from Track T's manifest (advanced, hardware-gated)
+- [ ] W-05 Doctor panel as the component UI with plain-language fixes (FR-COMP-4, 5)
+- [ ] W-06 Welcome wizard: hardware check, API-key step with Test key, model, voice, companion (premade or create), first conversation (FR-WIZ-1..6)
+- [ ] W-07 Premade companions as built-in read-only packs (D-039)
+- **Gate W:** on a clean machine, installer to first reply on the API path, measured against FR-WIZ-7; the local path completes with guided installs; every failure shows a plain message.
+
+## Phase K4: Desktop pets (release 1.1)
 
 - [ ] K4-01 Spike: single overlay per monitor with alpha hit-testing vs one window per pet; record result in `DECISIONS.md` (D-014)
 - [ ] K4-02 Baker: VRMA clips (idle, sit, walk) or procedural → atlas in `pet/` (FR-P-2)
@@ -117,7 +163,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K4-05 Lifecycle with tray, 1 to 3 pets, overhead measurement (FR-P-1, 6)
 - **Gate K4:** two pets idle and walk for an hour; overhead measured; user sign-off.
 
-## Phase K5: 3D mode
+## Phase K5: 3D mode (release 1.1)
 
 - [ ] K5-01 Port Luna's sandbox into the engine: room, camera, wandering
 - [ ] K5-02 Scene pack loader, WASD + pointer lock + colliders, scene switcher (FR-3D-1, 2)
@@ -135,16 +181,17 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K6-04 Docs pass: README quickstart verified from a clean clone
 - **Gate K6:** soak test clean; docs verified.
 
-## Phase K7: Windows packaging (planned)
+## Phase K7: Release engineering (release 1.0)
 
-- [ ] K7-01 Freeze the kernel (PyInstaller or embedded Python) as a Tauri sidecar; Job Object still works
-- [ ] K7-02 Tauri bundler: NSIS installer, WebView2 bootstrapper, icons, version stamping
-- [ ] K7-03 Resource resolver for built-in scenes/templates; verify the app works with the repo absent
-- [ ] K7-04 First-run checklist (Doctor) for Ollama, models, TTS backend, key
-- [ ] K7-05 Portable bundle: zip + `setup.ps1` + README setup instructions
-- [ ] K7-06 `docs/THIRD-PARTY.md` complete; SHA-256 checksums; release notes
-- [ ] K7-07 Test on a clean Windows machine/VM; decide on code signing (unsigned builds trigger SmartScreen warnings)
-- **Gate K7:** clean-machine install runs the app and the Doctor guides the user to a working setup.
+- [ ] K7-01 Productionize the K1b packaging; resource resolver for built-in scenes, templates and premade packs; verify with the repo absent
+- [ ] K7-02 Code signing for the installer and the kernel; SmartScreen behaviour recorded (Track B-6)
+- [ ] K7-03 Updater: signed updates, static manifest, "update available" UX (FR-DIST-7)
+- [ ] K7-04 License key verification, per D-032 and the payment provider (FR-DIST-10)
+- [ ] K7-05 Export diagnostics (FR-DIST-8)
+- [ ] K7-06 `docs/THIRD-PARTY.md` complete including asset rights; SHA-256 checksums; release notes
+- [ ] K7-07 GitHub Actions: tagged release builds the Windows installer; clean-VM install test (manual until automated)
+- [ ] K7-08 Portable bundle with `setup.ps1` and README setup instructions as a fallback channel
+- **Gate K7:** a signed installer from a tagged release installs on a clean machine, passes the wizard, updates to the next tag, and exports diagnostics.
 
 ## Deferred
 

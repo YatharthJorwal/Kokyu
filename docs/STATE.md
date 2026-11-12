@@ -14,6 +14,7 @@
 |---|---|
 | Docs (SCOPE, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, HANDOFF, TTS-BACKEND), README, LICENSE, `.gitignore`, `.env.example` | Committed and pushed (`704c05d`) |
 | `docs/notes/yuri-inventory.md`; corrections to ARCHITECTURE, SPEC, RULES, CLAUDE, README, TTS-BACKEND; decisions D-024 to D-031; rescoped K0 | In the session-1 bundle, **not yet merged** |
+| `docs/PRODUCT.md`, `docs/notes/product-vision-handoff-2026-11-11.md`; D-032 to D-039; TODO restructured (LIC-1, Track B, K1b, W, release train); SPEC FR-COMP, FR-WIZ, FR-VP | In the same cumulative bundle, **not yet merged** |
 | Kernel, shell, UI, tests | Nothing yet |
 | TTS backend (Track T) | Not started. The user's existing GPT-SoVITS (v3lora) install can serve the K0 voice gate |
 | Waifu packs | None (Luna and Yuri to be seeded in K0-08) |
@@ -59,6 +60,11 @@ Node, Rust, Python versions; WebView2; whether Ollama runs as a service; where t
 | VRAM figures in `ARCHITECTURE.md` §13 | **Estimates** except model file sizes |
 | Latency/fps numbers in `SPEC.md` | **Targets**, nothing measured |
 | Pet overlay approach | **Unvalidated** (K4-01 spike) |
+| Dodo Payments is a Merchant of Record; its acceptable-use rules cover a companion product | **Unverified** (Track B-3) |
+| GPT-SoVITS Windows integrated package is officially distributed and scriptable to install | **Unverified** (Track T) |
+| A small built-in voice model with a suitable license and quality exists | **Unverified** (K2 spike) |
+| PyInstaller kernel triggers antivirus false positives | **Known general risk, not tested here** (K1b) |
+| Ollama installer supports silent install | **Unverified** (W-02) |
 
 ## 4. Known issues and risks
 
@@ -89,6 +95,8 @@ Node, Rust, Python versions; WebView2; whether Ollama runs as a service; where t
 6. Paste-only prompt box may frustrate small edits.
 7. Overlay approach for pets may misbehave with fullscreen games.
 8. The sandbox cannot verify Rust, audio or GUI work; those stay manual gates (D-030).
+9. **License undecided while the repo is public** (D-032): pushing code would publish it under MIT.
+10. Non-technical users need an API key or a capable GPU; the API-key step is the real onboarding wall (`PRODUCT.md` §3).
 
 ## 5. Recent issues log
 

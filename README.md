@@ -6,6 +6,8 @@
 
 Kōkyū (後宮, "the inner palace") is the app. **KASANE** (*Kernel for Adaptive Synthetic Agents, Networks and Embodiments*) is the kernel inside it.
 
+**Direction:** a one-time-purchase Windows app where you bring your own models, keys and voices. A first-run wizard is meant to set up the plumbing so no terminal is needed. See [`docs/PRODUCT.md`](docs/PRODUCT.md).
+
 ## What it will be
 
 A normal-looking chatbot UI with a roster of companions. A waifu is **a voice and a persona, nothing more**: switching her never changes the model, its intelligence or its capabilities.
@@ -36,7 +38,7 @@ A normal-looking chatbot UI with a roster of companions. A waifu is **a voice an
 
 > None of these paths exist yet. They are documented now so the project is built to support them.
 
-**A. Windows installer** *(planned, phase K7).* Download the installer from Releases, run it, then follow the first-run checklist. Large components (model weights, the GPT-SoVITS backend) are not bundled; the app links to what to install and checks it for you.
+**A. Windows installer** *(planned, phase K7).* Download the installer, run it, then complete the **Welcome to Kōkyū** wizard. Large components (model weights, local runtimes, the GPT-SoVITS backend) are not bundled; the wizard detects what is missing and installs it with your confirmation.
 
 **B. Portable bundle** *(planned, phase K7).* Unzip, run `setup.ps1` once to create the Python environment and verify the machine, then launch `Kokyu.exe`.
 
@@ -66,6 +68,7 @@ No characters, voices or model weights are included, and none may be committed. 
 |---|---|
 | [`CLAUDE.md`](CLAUDE.md) | Entry point and rules for AI coding agents |
 | [`docs/SCOPE.md`](docs/SCOPE.md) | One-page overview of what is being built |
+| [`docs/PRODUCT.md`](docs/PRODUCT.md) | Product direction, release boundaries, commercial and asset checklist |
 | [`docs/SPEC.md`](docs/SPEC.md) | Requirements with IDs and acceptance criteria |
 | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) | How it is built |
 | [`docs/RULES.md`](docs/RULES.md) | Engineering and process rules |
@@ -94,6 +97,6 @@ Kōkyū is the successor to two earlier projects by the same author, [Luna](http
 
 ## License
 
-[MIT](LICENSE) © 2026 Yatharth Jorwal.
+**Undecided.** The repository currently carries the MIT license (see [`LICENSE`](LICENSE)) for its documentation-only history. Kōkyū is intended to become a paid product and the license is expected to change before any source code is published (`docs/DECISIONS.md` D-032).
 
-The license covers this repository's code and documents only. Avatars (`.vrm`), voice clips, animation files and model weights you add are yours or their creators' and keep their own licenses; they are excluded from the repository and must not be redistributed with it.
+The license covers this repository's documents. Avatars (`.vrm`), voice clips, animation files and model weights you add are yours or their creators' and keep their own licenses; they are excluded from the repository and must not be redistributed with it.

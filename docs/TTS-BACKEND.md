@@ -4,7 +4,7 @@ This is a **self-contained task brief** for a CLI agent. Goal: a clean, headless
 
 ## Why
 
-The user's existing GPT-SoVITS folder is cluttered and the WebUI is in Chinese. They want a clean install, English documentation and no WebUI. Do **not** modify or delete the old folder.
+The user's existing GPT-SoVITS folder is cluttered and the WebUI is in Chinese. They want a clean install, English documentation and no WebUI. Do **not** modify or delete the old folder. In the commercial product Kōkyū will install and manage this component for ordinary users (FR-COMP), so the result must be a **reproducible, scriptable recipe**, not just a working folder.
 
 ## Machine
 
@@ -29,6 +29,7 @@ Windows 10/11, PowerShell, RTX 3060 12 GB, i5-14400F, 32 GB RAM. NVIDIA driver a
    - `smoke_test.py` (or `.ps1`): synthesizes **the same sentence with two different reference clips back-to-back** against the running server, saves two WAVs, prints the latency of each call and fails loudly on any error. Accept clip paths and transcripts as arguments.
 9. **Docs** in English, in the backend folder: `INSTALL.md` (exact steps to rebuild from scratch), `README.md` (how to start/stop/test), and the **actual list of request parameters** the installed API accepts.
 10. **Measure** VRAM idle and while synthesizing (for example with `nvidia-smi`) and report both numbers.
+11. **Component manifest:** write `component.json` in the backend folder with source URLs and versions, SHA-256 of each download, sizes, Python and CUDA versions, the exact start command and arguments, the health URL and hardware requirements (GPU, VRAM). The install must be **scriptable and non-interactive** because the app may run it for the user. Say plainly whether the upstream Windows package is officially distributed and how it is pinned.
 
 ## API shape Kōkyū expects
 
@@ -59,4 +60,5 @@ If the installed version differs, document the real parameters in the README; K�
 - [ ] `smoke_test` passes with two different clips, no restart between them; latencies printed
 - [ ] `INSTALL.md` and `README.md` written; real API parameters recorded
 - [ ] VRAM idle and under load reported
+- [ ] `component.json` written and the install reproducible by script from scratch
 - [ ] Version/commit and the final backend path reported to the user for `STATE.md`

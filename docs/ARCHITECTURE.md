@@ -245,7 +245,7 @@ Yuri's roles are kept (`docs/notes/yuri-inventory.md` §6): `reflex`, `vision`, 
 
 ### 7.4 Providers
 
-`ollama` (native API), `llamacpp` (OpenAI-compatible), `airouter` (OpenAI-compatible SSE). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). **Known gap:** Yuri's `OllamaNativeProvider.complete` ignores its `model` argument and uses the global `llm.CONFIG.llm.model`; K1 changes `llm.py` to take a model and an effort setting.
+`ollama` (native API), `llamacpp` (OpenAI-compatible) and a generic **`openai_compat`** provider (configurable base URL and key; AI Router, OpenRouter, DeepSeek and others are presets; Yuri's `airouter` provider is the starting point, D-037). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). **Known gap:** Yuri's `OllamaNativeProvider.complete` ignores its `model` argument and uses the global `llm.CONFIG.llm.model`; K1 changes `llm.py` to take a model and an effort setting.
 
 ## 8. Voice pipeline
 
@@ -254,7 +254,7 @@ mic frames → VAD (energy) → STT (faster-whisper, CPU) → transcript → use
 model tokens → sentence splitter → speech-safe normalizer → TTS adapter → audio chunks → arbiter → client playback → lip-sync
 ```
 
-- **TTS adapter** (`audio/tts.py`) speaks only the contract in `TTS-BACKEND.md`. Per request: `text`, `text_lang`, `ref_audio_path`, `prompt_text`, `prompt_lang`. It sends a **pre-warm** on waifu select. If the backend is down it raises a typed error; the conversation continues text-only.
+- **Voice providers** share one interface, `synthesize(text, voice) → audio` (D-036): `gpt_sovits`, `builtin` (small local voices; chosen in a K2 spike) and `elevenlabs` (hosted, opt-in, badged as cloud). The **`gpt_sovits` adapter** (`audio/tts.py`) speaks only the contract in `TTS-BACKEND.md`. Per request: `text`, `text_lang`, `ref_audio_path`, `prompt_text`, `prompt_lang`. It sends a **pre-warm** on waifu select. If the backend is down it raises a typed error; the conversation continues text-only.
 - **Arbiter** owns the single audio output: states `idle`, `speaking`, `cancelling`. A new user speech event while `speaking` triggers barge-in: cancel generation, drop queued lines, send `stop_playback`.
 - **Lip-sync** is computed on the client from the audio being played (amplitude to `aa`), so it stays in sync with real playback.
 - STT stays on **CPU** by default (VRAM budget, and the known CUDA DLL issue on this machine).
@@ -299,7 +299,7 @@ Scene pack (`scene.glb` + `scene.yaml`) loaded by the engine. The kernel's **sce
 - Kernel binds to loopback; Tauri CSP forbids remote scripts.
 - Bus events carry `trust` (`trusted` from the user, `untrusted` from files, OCR, web). Untrusted text is data, never an instruction source. This is groundwork for agent mode.
 - Redaction (keys, paths, emails, long digit runs) applies before any cloud call and in the audit log.
-- Secrets only in `.env` or `secrets.local.yaml`; the repo carries `.example` files.
+- End-user keys live in the **Windows Credential Manager** (set through the app; the Rust shell passes them to the kernel at spawn). `.env` and `secrets.local.yaml` are developer-only; the repo carries `.example` files.
 
 ## 11. Packaging architecture (K7, designed now)
 
@@ -309,6 +309,16 @@ Scene pack (`scene.glb` + `scene.yaml`) loaded by the engine. The kernel's **sce
 - **Portable bundle:** zip containing the app, `setup.ps1` (creates the Python environment if the sidecar is not frozen, verifies prerequisites, runs the Doctor) and a README with setup instructions.
 - **Data:** `%APPDATA%\Kokyu` (FR-DIST-4). Built-in scenes and the instruction template ship as read-only resources.
 - Design consequences already enforced: `paths.py`, no repo-relative assumptions, config layering, versioned protocol, bundled resources accessed through a resource resolver.
+
+### 11.1 Packaging decisions for the K1b spike
+
+1. **Kernel packaging.** (a) PyInstaller one-folder build shipped as app resources and launched by the shell, or (b) an embedded CPython with prebuilt site-packages. The user installs neither Python nor Node in either case. Choose by installer size, antivirus behaviour (unsigned PyInstaller executables are a known false-positive trigger) and updateability. Tauri's `externalBin` expects one executable, so a one-folder build needs resource bundling.
+2. **Installer.** NSIS, per-user (no admin), with the WebView2 bootstrapper; MSI only if a channel needs it.
+3. **Updater.** Tauri updater with its own signing key (separate from the code-signing certificate); a static update manifest.
+4. **Code signing.** Research certificate options and eligibility; sign the installer and the kernel executable. Expect SmartScreen friction for a new publisher.
+5. **License key.** A public key compiled into the app verifies a signed key offline; storage in app data (FR-DIST-10, depends on D-032).
+6. **Diagnostics.** Export zip: redacted logs, versions, component states (FR-DIST-8).
+7. **CI.** GitHub Actions on tagged releases builds the installer on a Windows runner; the clean-VM install test is manual until automated.
 
 ## 12. Testing architecture
 
@@ -338,3 +348,24 @@ No automated test may require a GPU, network, API key or display.
 
 - **Agent mode** adds a `tools/` package and a `read/write` tier system behind the existing router and bus; the thread gains a `mode` field; no waifu-facing changes. The `trust` flag already exists.
 - **VR** adds an XR session to the engine's renderer and a client route served by the kernel; the protocol and scene runtime are unchanged.
+
+## 15. Component manager and first-run
+
+Every managed piece of infrastructure is a **component** with one interface, so the Doctor panel, the Welcome wizard and the repair buttons share the same code (FR-COMP, D-035).
+
+| Component | Kind | How it is managed |
+|---|---|---|
+| Ollama | external service | Detect (port 11434, installed), install by running the official installer with the user's consent (silent mode to be tested), monitored only; model pulls through the Ollama API with progress |
+| llama.cpp server | downloadable binary | Download a pinned release (CPU or CUDA variant chosen by the hardware check), verify our SHA-256, start on demand as a kernel child |
+| GPT-SoVITS backend | downloadable package | Recipe from Track T (official Windows package or a scripted install), pinned version and hash, started by the shell as a child; advanced and hardware-gated |
+| STT model | model files | faster-whisper downloads the chosen size on first use; the app shows progress |
+| Built-in voice | model files | Small local voice model, chosen in K2 |
+| Hosted providers | none | Key test only |
+
+**Interface:** `detect() → {state, version, location}`, `install(progress)`, `start()`, `stop()`, `health() → {ok, code, message, fix}`, `repair()`. **States:** `missing`, `installing`, `stopped`, `starting`, `running`, `unhealthy`.
+
+**Manifest:** `components/<id>.json` ships with the app: id, version, source URLs, SHA-256, size, install steps, start command, health URL, hardware requirements. Track T delivers the GPT-SoVITS one.
+
+**Rules:** installs are user-initiated, resumable, cancellable, write only under the app-data directory and verify hashes; started components are Job Object children; externally managed ones are only monitored; every failure maps to a plain message with one primary action.
+
+**Wizard:** a state machine persisted in `settings.json` (`onboarding.step`, `completed`); skippable steps; re-runnable from Settings; the API path finishes with nothing installed except the built-in voice. **Doctor:** the same component states as a panel.

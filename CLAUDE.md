@@ -9,7 +9,8 @@ Kōkyū is a Windows desktop chat app for a roster of AI companions ("waifus"). 
 - **A waifu is a voice and a persona, nothing more.** Switching her never changes the model, intelligence, tools, permissions or memory scope.
 - **KASANE** is the kernel (Python, in the `KASANE/` folder). Clients are Tauri 2 + TypeScript + three.js / `@pixiv/three-vrm` (`src/`, `src-tauri/`).
 - Seeded from the author's earlier project **Yuri** (which succeeded **Luna**). Both live at `github.com/YatharthJorwal/Yuri` and `.../Luna`.
-- Single user, single Windows PC, local-first. Target machine: RTX 3060 12 GB, i5-14400F, 32 GB DDR5-4800.
+- One user per install, one Windows PC, local-first. Development machine: RTX 3060 12 GB, i5-14400F, 32 GB DDR5-4800.
+- Commercial direction: a paid, one-time-purchase app where users bring their own models and keys (`docs/PRODUCT.md`). Ordinary users and a clean-machine install shape priorities.
 - Windows packaging comes later (phase K7) but constrains design from day one (RULES §9).
 
 Current status and plan: `docs/STATE.md`, `docs/TODO.md`.
@@ -21,7 +22,7 @@ Current status and plan: `docs/STATE.md`, `docs/TODO.md`.
 1. Read `docs/HANDOFF.md` completely. It is the narrative from the last session.
 2. Read `docs/STATE.md` (current state, known issues, what is verified).
 3. Read `docs/TODO.md`, at least the current phase.
-4. Skim `docs/RULES.md`. Read the `docs/SPEC.md` and `docs/ARCHITECTURE.md` sections relevant to the task. Search `docs/DECISIONS.md` before changing anything that looks settled.
+4. Skim `docs/RULES.md`. Read the `docs/SPEC.md` and `docs/ARCHITECTURE.md` sections relevant to the task. Search `docs/DECISIONS.md` before changing anything that looks settled. Read `docs/PRODUCT.md` when a task touches onboarding, packaging, licensing, assets or providers.
 5. Run `git status`, `git log -5 --oneline` and the check command (§5). If reality disagrees with `STATE.md`, **tell the user before doing anything else**.
 
 ### During the session
@@ -54,6 +55,7 @@ These are never traded away for convenience. Full list with rationale: `docs/RUL
 6. **No hard-coded paths.** Use `KASANE/paths.py` (dev: `./data`; packaged: `%APPDATA%\Kokyu`).
 7. **Never block** the kernel's asyncio loop or the render loop.
 8. **Honest verification.** No claim without running it.
+9. **No code goes public before the license is decided** (LIC-1, D-032). Deliver code by bundle and warn the user if a push would publish it.
 
 ## 4. Repository map
 
@@ -129,6 +131,7 @@ npm run check           # NEW in K0-15: tsc --noEmit + test:fe + build + cargo c
 | Question | Doc |
 |---|---|
 | What are we building and why? | `docs/SCOPE.md` |
+| What is the product and what ships when? | `docs/PRODUCT.md` |
 | What exactly must it do? | `docs/SPEC.md` |
 | How is it put together? | `docs/ARCHITECTURE.md` |
 | What must I never do? | `docs/RULES.md` |

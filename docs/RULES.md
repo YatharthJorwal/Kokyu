@@ -54,7 +54,7 @@ Binding rules for everyone (human or agent) working in this repo. A rule can cha
 
 ## 7. Security and privacy
 
-- **R-33 Secrets** only in `.env` or `config/secrets.local.yaml`. Never log, echo, print or put them in an audit row, crash report, screenshot or doc.
+- **R-33 Secrets.** End-user keys live in the Windows Credential Manager (set through the app); `.env` and `config/secrets.local.yaml` are developer-only. Never log, echo, print or put them in an audit row, crash report, screenshot or doc.
 - **R-34 Loopback only.** The kernel binds to `127.0.0.1`. Tauri CSP forbids remote scripts.
 - **R-35 Untrusted content is data.** Text from files, OCR or the web carries `trust=false` and never authorises an action.
 - **R-36 Redact before cloud.** Keys, paths, emails and long digit runs are redacted from anything sent to a cloud model and from the audit log.
@@ -62,8 +62,9 @@ Binding rules for everyone (human or agent) working in this repo. A rule can cha
 ## 8. Assets and licensing
 
 - **R-37 User assets are user assets.** VRM models, voice clips, VRMA animations and model weights are never committed or redistributed. Respect their licenses; the app may remind the user to check a VRM's usage terms at upload.
-- **R-38 Dependencies are logged.** Every new dependency gets a row in `docs/THIRD-PARTY.md` (created in K0) with its license, checked before adoption. Copyleft or unclear licenses need a `DECISIONS.md` entry.
-- **R-39 Project license is MIT** (D-015). Do not add code with an incompatible license.
+- **R-38 Dependencies are logged.** Every new dependency gets a row in `docs/THIRD-PARTY.md` (created in K0) with its license, checked before adoption. Dependencies must permit closed-source commercial distribution (permissive licenses); copyleft, non-commercial or unclear licenses need a `DECISIONS.md` entry first.
+- **R-39 License is undecided** (D-032). MIT covers only the documentation-only history. Do not push product code publicly before LIC-1, and do not add code or dependencies whose license blocks closed-source commercial distribution.
+- **R-51 Shipped assets have a rights record.** Anything in the installer (premade characters, voices, animations, scenes, icons, fonts) is listed in `docs/THIRD-PARTY.md` with its source and license or written permission. No record, no shipping (D-039).
 
 ## 9. Windows and packaging readiness
 

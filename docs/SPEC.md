@@ -29,7 +29,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-W-1 | A waifu MUST consist of exactly: `id`, `name`, `traits[]`, `prompt`, `vrm`, `voice{ref_audio, ref_text, ref_lang}`, plus a derived `pet/` atlas. | K0 |
+| FR-W-1 | A waifu MUST consist of exactly: `id`, `name`, `traits[]`, `prompt`, `vrm`, `voice{provider, provider-specific fields}`, plus a derived `pet/` atlas. | K0 |
 | FR-W-2 | Waifus MUST live in the app-data directory (`waifus/<id>/`). They MUST be created, edited and deleted only through the app UI (K3). A dev seed script MAY import Luna and Yuri before the creator exists. | K0, K3 |
 | FR-W-3 | **Invariance:** for the same thread state and input, switching the active waifu MUST NOT change model selection, effort, router decisions, available tools, permissions or memory recall results. Only the system prompt, TTS parameters, VRM and pet sprites differ. A parameterized test over two fixture waifus MUST enforce this. | K0 |
 | FR-W-4 | `id` is an immutable slug (`[a-z0-9-]{2,32}`). The display `name` (1 to 32 chars) MAY be renamed. | K0 |
@@ -68,7 +68,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-M-1 | There MUST be **one** model control: a chip in the input row showing the current model and effort label. | K1 |
 | FR-M-2 | Its popover MUST have a search box and two clearly separated sections, **Local** and **API**, as one list (not a toggle). The current model carries a check mark. Picking a row is the whole action. | K1 |
 | FR-M-3 | **Local** lists Ollama models (`GET /api/tags`) plus llama.cpp presets from `config/models.yaml`. Each row shows size and a *fits / won't fit* hint from the VRAM manager. | K1 |
-| FR-M-4 | **API** lists the AI Router catalog (`/v1/models`), grouped by provider, with variant badges and a price hint when the catalog provides one. The catalog is cached; offline it shows the cache marked *stale*. A refresh button re-fetches. | K1 |
+| FR-M-4 | **API** lists the models of the user's configured OpenAI-compatible endpoints (AI Router, OpenRouter, DeepSeek and others as presets, or a custom base URL and key; D-037) from `/v1/models`, grouped by provider, with variant badges and a price hint when the catalog provides one. The catalog is cached; offline it shows the cache marked *stale*. A refresh button re-fetches. | K1 |
 | FR-M-5 | The selection is **per thread**; new threads inherit the last selection. It is independent of the waifu. | K1 |
 | FR-M-6 | Selecting a local model on a different backend MUST unload the other backend's large model first (VRAM manager) and show progress on the chip. Load failures are shown inline. | K1 |
 | FR-M-7 | The chip MUST show a local or cloud icon. Spend so far and the budget cap appear in the popover footer. | K1 |
@@ -86,14 +86,14 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-R-3 | Camera frames, mic audio, screen captures and `memory_writer` jobs MUST be structurally refused by `decide()` for any non-local provider. | K0 |
 | FR-R-4 | Selecting an API model is the user's explicit consent to send that thread's text (including recalled memory snippets injected into the prompt). Images the user explicitly attaches MAY go to a vision-capable API model, with a visible badge on that message. | K1, K2 |
 | FR-R-5 | API failures (quota, auth, rate limit, timeout, provider error) MUST appear inline on the turn with *Retry* and *Switch model*. **No silent fallback** to another model. | K1 |
-| FR-R-6 | The API key MUST come from `.env` or `config/secrets.local.yaml`, never be logged, and be redacted in the audit log. | K1 |
+| FR-R-6 | End-user API keys MUST be stored in the **Windows Credential Manager** (entered in the app; the shell hands them to the kernel at spawn), never logged, and redacted in the audit log. `.env` and `config/secrets.local.yaml` are developer-only. | K1 |
 | FR-R-7 | **Egress policy (D-025):** content captured *ambiently* (camera, screen capture, OCR watch) MUST NOT reach a non-local model; if a turn needs it the user sees a message, never a silent reroute. Files and images the user explicitly *attaches* are untrusted for authorising actions but MAY go to the user's chosen API model, with a visible badge on that message. | K1 |
 
 ### 2.6 Voice (FR-V)
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-V-1 | TTS MUST go through a single adapter that speaks the contract in `TTS-BACKEND.md`: every request carries `ref_audio_path`, `prompt_text`, `prompt_lang` of the **speaking waifu**. No weight swapping. | K0, K2 |
+| FR-V-1 | TTS MUST go through the provider interface (FR-VP-1). The `gpt_sovits` provider speaks the contract in `TTS-BACKEND.md`: every request carries `ref_audio_path`, `prompt_text`, `prompt_lang` of the **speaking waifu**. No weight swapping. | K0, K2 |
 | FR-V-2 | Text sent to TTS MUST pass the speech-safe normalizer (ported from Yuri's `audio/speech.py`): no markdown, emoji, URLs, code fences, reasoning text, stage directions. | K2 |
 | FR-V-3 | TTS SHOULD be pipelined one clause ahead of the model's output. | K2 |
 | FR-V-4 | One audio **arbiter** MUST ensure only one voice plays at a time; later lines queue. | K2 |
@@ -178,7 +178,44 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-DIST-3 | Model weights and the GPT-SoVITS backend are **not bundled**. First-run checklist detects them and links to install steps. | K7 |
 | FR-DIST-4 | User data lives in `%APPDATA%\Kokyu` and survives upgrades and uninstall (uninstall asks before removing it). | K7 |
 | FR-DIST-5 | The WebView2 runtime MUST be detected; the installer includes the bootstrapper. | K7 |
-| FR-DIST-6 | Releases include `docs/THIRD-PARTY.md` (all dependency licenses) and SHA-256 checksums. | K7 |
+| FR-DIST-6 | Releases include `docs/THIRD-PARTY.md` (all dependency licenses and shipped-asset rights records) and SHA-256 checksums. | K7 |
+| FR-DIST-7 | **Updater:** signed updates (Tauri updater) with a manifest hosted statically; the user is told before an update installs. | K7 |
+| FR-DIST-8 | **Diagnostics:** an *Export diagnostics* button zips redacted logs, versions and component states for support. No telemetry by default. | K7 |
+| FR-DIST-9 | The installer is **per-user** (no admin rights), signed, and offers uninstall that asks before removing user data. | K1b, K7 |
+| FR-DIST-10 | **License key:** a signed key (public key compiled into the app) is verified offline and stored in app data; the app explains plainly what an invalid or missing key does. Details depend on D-032 and the payment provider. | K7 |
+| FR-DIST-11 | The application MUST run correctly from a clean Windows machine with no Python, Node, Rust or Git installed. | K1b, K7 |
+
+### 2.14 Components (FR-COMP)
+
+| ID | Requirement | Phase |
+|---|---|---|
+| FR-COMP-1 | The kernel MUST manage infrastructure as **components** (Ollama, llama.cpp server, GPT-SoVITS backend, STT model, built-in voice) behind one interface: `detect`, `install`, `start`, `stop`, `health`, `repair`, with state `missing / installing / stopped / starting / running / unhealthy`, version and size. | K1 (skeleton), W |
+| FR-COMP-2 | Installs MUST be user-initiated, show size and progress, verify SHA-256 against a pinned manifest, be cancellable and resumable, and write only inside the app-data directory (or run the component's official installer with the user's consent). | W |
+| FR-COMP-3 | Components the app starts MUST be children under the Job Object; externally managed ones (Ollama as a service) are only monitored. | W |
+| FR-COMP-4 | Every health or repair result MUST map to a plain-language message with one primary action (*Retry*, *Repair*, *Open install page*). | W |
+| FR-COMP-5 | The Doctor panel (FR-SET-3) is the UI of the component manager. | K1, W |
+
+### 2.15 Welcome wizard (FR-WIZ)
+
+| ID | Requirement | Phase |
+|---|---|---|
+| FR-WIZ-1 | First launch MUST open a graphical **Welcome to Kōkyū** wizard; it can be re-run from Settings. | W |
+| FR-WIZ-2 | Steps: Welcome → Detect (hardware and components) → Model (API key or local) → Voice → Companion (premade or create) → First conversation. | W |
+| FR-WIZ-3 | Only a working **model** is mandatory. Voice upgrades, STT, local components and custom companions are skippable. A first conversation MUST be reachable with an API key and the built-in voice. | W |
+| FR-WIZ-4 | The hardware check reports GPU, VRAM and RAM and recommends API-only, a small local model or full local. It never blocks. | W |
+| FR-WIZ-5 | The API-key step explains what a key is and what it costs, links to the provider's key page, has a **Test key** button, and stores the key in the Credential Manager. | W |
+| FR-WIZ-6 | No terminal and no manual file editing anywhere in the wizard. | W |
+| FR-WIZ-7 | TARGET: on a clean machine, installer to first reply on the API path in under 10 minutes excluding downloads. Measured in the W gate. | W |
+
+### 2.16 Voice providers (FR-VP)
+
+| ID | Requirement | Phase |
+|---|---|---|
+| FR-VP-1 | Voice MUST go through a provider interface `synthesize(text, voice) → audio stream` with providers `builtin`, `gpt_sovits` and `elevenlabs`. | K2 |
+| FR-VP-2 | A waifu's `voice` block names its provider and that provider's parameters; no other waifu field changes (FR-W-3 invariance holds). | K0, K2 |
+| FR-VP-3 | Cloud providers are **opt-in**; choosing one is consent for the spoken text to leave the machine, shown with a cloud badge. Mic audio and camera frames never leave (FR-R-3). | K2 |
+| FR-VP-4 | Provider failure shows a banner and continues text-only (FR-V-7). | K2 |
+| FR-VP-5 | The default provider on a fresh install is `builtin`, so the first conversation never waits for a large download. The model is chosen in a K2 spike (license, quality, CPU latency). | K2 |
 
 ## 3. Data formats
 
@@ -192,9 +229,11 @@ traits: [calm, teasing, curious]   # 1–12 adjectives
 vrm: model.vrm
 prompt: prompt.md         # system prompt, pasted in the creator
 voice:
-  ref_audio: voice/ref.wav
-  ref_text: "exact transcript of the clip"
-  ref_lang: en            # tag understood by the TTS backend
+  provider: gpt_sovits    # builtin | gpt_sovits | elevenlabs
+  ref_audio: voice/ref.wav                    # gpt_sovits only
+  ref_text: "exact transcript of the clip"    # gpt_sovits only
+  ref_lang: en                                # gpt_sovits only
+  # builtin: `voice: <name>`    elevenlabs: `voice_id: <id>` (key is in the credential store, never here)
 created: 2026-11-11T12:00:00Z
 ```
 
@@ -298,15 +337,17 @@ Agent mode and VR (deferred, see `SCOPE.md` §12); mobile, web hosting, multi-us
 
 | Phase | Requirements delivered |
 |---|---|
-| T | TTS backend contract (`TTS-BACKEND.md`) |
+| T | GPT-SoVITS component recipe and contract (`TTS-BACKEND.md`) |
 | K0 | FR-W-1..4, 6; FR-S-5; FR-R-3 (mapped to existing tests); FR-V-1, 7 (adapter); FR-MEM-1..3 |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3 |
-| K2 | FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-2..6, 8; FR-C-4 live |
+| K2 | FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-2..6, 8; FR-VP-1..5; FR-C-4 live |
+| K1b | FR-DIST-9, 11 (walking-skeleton installer on a clean machine) |
 | K3 | FR-W-2 (UI), FR-W-5; FR-CR-1..8 |
+| W | FR-COMP-1..5; FR-WIZ-1..7 |
 | K4 | FR-P-1..6 |
 | K5 | FR-3D-1..6 |
 | K6 | NFR calibration, evals, crash recovery, docs |
-| K7 | FR-DIST-1..6 |
+| K7 | FR-DIST-1..11 |
 
 ## Appendix A: system-prompt instruction template (canonical)
 
