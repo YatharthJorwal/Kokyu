@@ -29,6 +29,7 @@ import subprocess
 import sys
 import tempfile
 import time
+from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import httpx
@@ -42,6 +43,18 @@ class TTSUnreachableError(Exception):
     out. synthesize() catches this itself for the gpt_sovits engine and
     falls back to pyttsx3 rather than letting a turn go silent -- callers
     in app.py don't need to handle this directly."""
+
+
+@dataclass(frozen=True)
+class VoiceParams:
+    """One waifu's voice for one request: the zero-shot reference clip, its exact
+    transcript and languages. Sent with EVERY request, so switching waifus changes
+    parameters only: no weights, no reload (D-006, FR-V-1)."""
+
+    ref_audio_path: str
+    prompt_text: str
+    prompt_lang: str = "en"
+    text_lang: str = "en"
 
 
 def _synthesize_pyttsx3_sync(text: str) -> bytes:
@@ -66,14 +79,15 @@ def _synthesize_pyttsx3_sync(text: str) -> bytes:
             pass
 
 
-async def _synthesize_gpt_sovits(text: str) -> bytes:
+async def _synthesize_gpt_sovits(text: str, voice: VoiceParams | None = None) -> bytes:
     cfg = CONFIG.tts.gpt_sovits
+    # `voice` is the speaking waifu's clip; without one the legacy config clip is used.
     payload = {
         "text": text,
-        "text_lang": cfg.text_lang,
-        "ref_audio_path": cfg.ref_audio_path,
-        "prompt_text": cfg.prompt_text,
-        "prompt_lang": cfg.prompt_lang,
+        "text_lang": voice.text_lang if voice else cfg.text_lang,
+        "ref_audio_path": voice.ref_audio_path if voice else cfg.ref_audio_path,
+        "prompt_text": voice.prompt_text if voice else cfg.prompt_text,
+        "prompt_lang": voice.prompt_lang if voice else cfg.prompt_lang,
     }
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as client:
@@ -112,10 +126,28 @@ async def _synthesize_gpt_sovits(text: str) -> bytes:
         raise TTSUnreachableError(f"couldn't reach {cfg.api_url}: {exc}") from exc
 
 
-async def synthesize(text: str) -> bytes:
+def _fallback_enabled() -> bool:
+    return CONFIG.tts.fallback_engine == "pyttsx3"
+
+
+async def prewarm(voice: VoiceParams) -> bool:
+    """A short throwaway synthesis so the first real line in this waifu's voice is not
+    slower (FR-S-3). Never raises; returns whether the backend answered."""
+    if CONFIG.tts.engine != "gpt_sovits":
+        return False
+    try:
+        await _synthesize_gpt_sovits("Hm.", voice)
+        return True
+    except TTSUnreachableError:
+        return False
+
+
+async def synthesize(text: str, voice: VoiceParams | None = None) -> bytes:
     """Returns WAV bytes for `text` from whichever engine config.yaml's
-    tts.engine selects. Runs pyttsx3's blocking engine in a thread so it
-    doesn't stall the websocket event loop."""
+    tts.engine selects, in `voice` (the speaking waifu's clip) when given.
+    Raises TTSUnreachableError when the backend is down and the pyttsx3 fallback is
+    not enabled (the reply then stays text-only, FR-V-7). Runs pyttsx3's blocking
+    engine in a thread so it doesn't stall the websocket event loop."""
     if CONFIG.tts.engine == "gpt_sovits":
         if (
             _shell_manages_server()
@@ -126,8 +158,12 @@ async def synthesize(text: str) -> bytes:
             # seconds rather than speaking them in the placeholder voice.
             await _wait_for_health(_STARTUP_GRACE_PER_LINE_S, interval=0.25)
         try:
-            return await _synthesize_gpt_sovits(text)
+            if voice is None:
+                return await _synthesize_gpt_sovits(text)
+            return await _synthesize_gpt_sovits(text, voice)
         except TTSUnreachableError as exc:
+            if not _fallback_enabled():
+                raise
             # Fall back to pyttsx3 for this one line rather than letting the
             # turn go silent -- she still says the actual reply, just in the
             # placeholder voice for that line. This WAS silent before, which
@@ -190,9 +226,10 @@ def _launch_gpt_sovits() -> subprocess.Popen | None:
     launch = dict(CONFIG.tts.gpt_sovits.launch or {})
     if not launch.get("enabled", False):
         return None
-    python = str(launch.get("python") or "")
-    script = str(launch.get("script") or "")
-    cwd = str(launch.get("cwd") or "")
+    root = str(launch.get("dir") or "")
+    python = str(launch.get("python") or (os.path.join(root, "runtime", "python.exe") if root else ""))
+    script = str(launch.get("script") or (os.path.join(root, "api_v2.py") if root else ""))
+    cwd = str(launch.get("cwd") or root)
     if not (python and script and os.path.isfile(python) and os.path.isfile(script)):
         print(
             "[yuri] gpt_sovits: launch paths are missing or wrong "

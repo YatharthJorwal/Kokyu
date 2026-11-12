@@ -14,6 +14,10 @@ def with_launch(**overrides):
     return dataclasses.replace(config.CONFIG, tts=dataclasses.replace(config.CONFIG.tts, gpt_sovits=sovits))
 
 
+def with_fallback(engine: str):
+    return dataclasses.replace(config.CONFIG, tts=dataclasses.replace(config.CONFIG.tts, fallback_engine=engine))
+
+
 def with_engine(engine: str):
     return dataclasses.replace(config.CONFIG, tts=dataclasses.replace(config.CONFIG.tts, engine=engine))
 
@@ -59,7 +63,7 @@ async def test_ensure_server_launches_and_waits(monkeypatch):
 
     monkeypatch.setattr(tts, "_port_open", lambda *a, **k: opened["value"])
     monkeypatch.setattr(tts, "_launch_gpt_sovits", fake_launch)
-    monkeypatch.setattr(tts, "CONFIG", with_launch(startup_timeout_s=5))
+    monkeypatch.setattr(tts, "CONFIG", with_launch(enabled=True, startup_timeout_s=5))
 
     assert await tts.ensure_server() is True
 
@@ -161,6 +165,7 @@ async def test_no_grace_wait_outside_shell_managed_mode_or_after_startup(monkeyp
     monkeypatch.setattr(tts, "_synthesize_gpt_sovits", sovits)
     monkeypatch.setattr(tts, "_synthesize_pyttsx3_sync", lambda t: b"PYTTSX3")
     monkeypatch.setattr(tts, "_port_open", lambda *a, **k: False)
+    monkeypatch.setattr(tts, "CONFIG", with_fallback("pyttsx3"))  # the opt-in placeholder voice
 
     monkeypatch.delenv(tts.SHELL_MANAGED_ENV, raising=False)
     assert await tts.synthesize("a") == b"PYTTSX3" and waited["n"] == 0

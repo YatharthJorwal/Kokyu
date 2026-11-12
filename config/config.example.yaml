@@ -218,16 +218,18 @@ voice:
 tts:
   engine: 'gpt_sovits'
   stream: 'per_clause'
-  fallback_engine: 'pyttsx3'
+  fallback_engine: 'none'     # 'pyttsx3' opts in to the robotic placeholder voice
 
   gpt_sovits:
     api_url: 'http://127.0.0.1:9880/tts'
 
+    # Only used when the Tauri shell is NOT starting the server (e.g. running the kernel by
+    # hand). Put your install folder in config/config.yaml (gitignored), single-quoted:
+    #   dir: 'D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228'
+    # The shell reads the same folder from src-tauri/launcher.local.txt instead.
     launch:
-      enabled: true
-      python: 'D:\AI\Project Luna\GPT-SoVITS-v3lora-20250228\runtime\python.exe'
-      script: 'D:\AI\Project Luna\GPT-SoVITS-v3lora-20250228\api_v2.py'
-      cwd: 'D:\AI\Project Luna\GPT-SoVITS-v3lora-20250228'
+      enabled: false
+      dir: ''
       args:
         - '-a'
         - '127.0.0.1'
@@ -238,9 +240,10 @@ tts:
       startup_timeout_s: 120
       restart_max: 2
 
-    # Zero-shot cloned voice from this clip. 8.52 s, mono.
-    ref_audio_path: 'C:\Users\User\Downloads\character_files_main_sample.wav'
-    prompt_text: "This is a sample voice for you to just get started with because it sounds kind of cute, but just make sure this doesn't have long silences."
+    # Reference clips are per waifu now (waifu.yaml -> voice). These three keys are only
+    # the legacy single-voice fallback used when no waifu is active; leave them empty.
+    ref_audio_path: ''
+    prompt_text: ''
     prompt_lang: 'en'
     text_lang: 'en'
 

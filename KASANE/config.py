@@ -323,10 +323,14 @@ class GPTSoVITSConfig:
     # never has to remember to start GPT-SoVITS first.
     launch: Mapping[str, Any] = field(
         default_factory=lambda: {
-            "enabled": True,
-            "python": r"D:\AI\Project Luna\GPT-SoVITS-v3lora-20250228\runtime\python.exe",
-            "script": r"D:\AI\Project Luna\GPT-SoVITS-v3lora-20250228\api_v2.py",
-            "cwd": r"D:\AI\Project Luna\GPT-SoVITS-v3lora-20250228",
+            # Off by default and no machine paths in code (R-40). Point `dir` at the
+            # GPT-SoVITS install in config/config.yaml (gitignored), or let the Tauri
+            # shell start it from src-tauri/launcher.local.txt.
+            "enabled": False,
+            "dir": "",
+            "python": "",
+            "script": "",
+            "cwd": "",
             "args": [
                 "-a", "127.0.0.1", "-p", "9880",
                 "-c", "GPT_SoVITS/configs/tts_infer.yaml",
@@ -341,7 +345,9 @@ class GPTSoVITSConfig:
 class TTSConfig:
     engine: str = "gpt_sovits"
     stream: str = "per_clause"           # "per_clause" | "off"
-    fallback_engine: str = "pyttsx3"
+    # "none" (default): if the voice backend is down, the reply stays text-only. "pyttsx3"
+    # opts in to the robotic placeholder voice (it breaks voice identity, FR-V-7).
+    fallback_engine: str = "none"
     gpt_sovits: GPTSoVITSConfig = field(default_factory=GPTSoVITSConfig)
 
 
