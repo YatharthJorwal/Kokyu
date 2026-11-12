@@ -97,6 +97,6 @@ Kōkyū is the successor to two earlier projects by the same author, [Luna](http
 
 ## License
 
-**Undecided.** The repository currently carries the MIT license (see [`LICENSE`](LICENSE)) for its documentation-only history. Kōkyū is intended to become a paid product and the license is expected to change before any source code is published (`docs/DECISIONS.md` D-032).
+**Proprietary. All rights reserved.** Kōkyū is not open source; see [`LICENSE`](LICENSE). The documentation-only history up to commit `346f0c3` was published under MIT and stays MIT for those versions only.
 
-The license covers this repository's documents. Avatars (`.vrm`), voice clips, animation files and model weights you add are yours or their creators' and keep their own licenses; they are excluded from the repository and must not be redistributed with it.
+The premade companions (Luna and Yuri: models, voices, prompts) are part of the proprietary software. Avatars, voice clips and animation files that *users* add keep their own licenses and stay on the user's machine.

@@ -50,6 +50,8 @@ This follows the handoff's own priorities (§11) with one change: the handoff li
 
 ## 5. Distribution and commercial direction
 
+> **Update 2026-11-12 (D-043):** Dodo Payments, the website, pricing, signing and licensing keys are **deferred until the product is developed**. This section records direction only.
+
 | Topic | State | Notes |
 |---|---|---|
 | Model | **Direction:** paid, one-time purchase, no subscription | Price undecided; ideas on the table: $14.99 launch, $19.99 standard |
@@ -63,7 +65,11 @@ This follows the handoff's own priorities (§11) with one change: the handoff li
 | Diagnostics | **Proposal** | "Export diagnostics" zips redacted logs and component status for support; no telemetry by default |
 | Website, checkout, docs | **Out of this repo** | Separate site; tracked in `TODO.md` Track B |
 
-### License (D-032)
+### License (decided, D-040)
+
+**Update 2026-11-12:** the user decided the project is **proprietary, not open source** (`LICENSE`, D-040). The analysis below is kept for the record.
+
+#### Original analysis (D-032)
 
 Today the repository carries **MIT**, and only documentation is published. The user says the license will change, and "open source" and "paid at $15 to $20" pull in opposite directions: anyone can legally build and redistribute MIT code for free. Options, none decided:
 

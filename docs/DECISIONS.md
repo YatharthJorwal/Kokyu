@@ -245,3 +245,34 @@ Accepted · User (D-003) · 2026-11-11
 Provisional · Default · 2026-11-11
 **Decision:** The 2 to 3 included companions ship as read-only packs resolved through the resource resolver; users duplicate them to edit. Every shipped asset (VRM, voice, animation, scene, icon) has a rights record in `docs/THIRD-PARTY.md`. Luna's and Yuri's current assets are not shipped unless their provenance is confirmed. Premade personas are conservative by default.
 **Consequences:** RULES R-51; `PRODUCT.md` §6.
+
+---
+
+## Session 2 entries (2026-11-12: license decided, spec finalized, Phase 0 started)
+
+## D-040 License: proprietary, not open source
+Accepted · User · 2026-11-12
+**Context:** D-032 held code pushes until the license was decided. The user decided the project is not open source.
+**Decision:** `LICENSE` is a proprietary "all rights reserved" notice. Commits up to and including `346f0c3` (documentation only) were published under MIT; that grant applies only to those versions. The repository should be **private** (user setting; recommended) because it will contain the premade companions' assets. This is a plain notice, not legal advice; have it reviewed before a commercial release.
+**Consequences:** Supersedes D-032 and D-015. The hold on code pushes is lifted. RULES R-39 and the README license section updated; THIRD-PARTY.md still tracks dependency licenses (R-38).
+
+## D-041 The premade companions are Luna and Yuri, with the user's own assets
+Accepted · User · 2026-11-12
+**Context:** The user made the VRMs themselves and generated the reference voices on the ElevenLabs website; both are AI-generated, not taken from anywhere. Transcripts live in `KASANE/voice_files/{Luna,Yuri}/transcript.txt`; the `.wav` and `.vrm` files are on the user's disk and were gitignored.
+**Decision:** Luna and Yuri ship as the two default companions, as built-in read-only packs under `assets/premade/<id>/` (D-039). The `.gitignore` allows committed assets only under `assets/premade/`. A script (`scripts/build_premade.py`) assembles each pack from the user's files and the existing persona prompts.
+**Consequences:** Supersedes D-039's "not shipped unless provenance is confirmed" for these two (provenance confirmed by the user). **To verify before any release:** the ElevenLabs plan used when generating the clips determines commercial-use rights and any voice-library restrictions; record it in `docs/THIRD-PARTY.md`.
+
+## D-042 GPT-SoVITS install for development
+Accepted · User · 2026-11-12
+**Decision:** Development uses the existing install at `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (note the **space** in `GPT SoVITS`: paths must be quoted). Track T (a clean reproducible install) continues in parallel but no longer blocks the K0 voice gate.
+**Consequences:** `launcher.local.txt` (gitignored) holds the path; code never hard-codes it.
+
+## D-043 Commercial and release work is deferred
+Accepted · User · 2026-11-12
+**Decision:** Dodo Payments, the website, pricing, signing, licensing keys and release engineering come **after** the product is developed. Engineering continues to follow the portability rules so packaging stays possible.
+**Consequences:** `TODO.md` Track B and K7 are marked deferred; K1b (the early installer test) stays until the user says otherwise.
+
+## D-044 Spec finalized as the baseline
+Accepted · User ("finalize the spec and proceed") · 2026-11-12
+**Decision:** `SPEC.md` is the **v1.0 baseline** for K0 to K3. Entries marked Provisional in this log are promoted to Accepted, except those that exist to be validated by a spike, which stay open until it runs: D-014 (pets overlay, K4), D-035 (K1b), D-036 (built-in voice, K2) and the egress rule in D-025 (confirmed at K1 start). Changes after this point go through new decisions.
+**Consequences:** D-029 Task Guide and OCR watch are parked (not deleted). Yuri's config examples were included verbatim in the seed commit so the inherited tests stay green, then rewritten in K0-06 (a refinement of D-028).

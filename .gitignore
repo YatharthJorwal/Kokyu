@@ -47,6 +47,10 @@ public/vrm/*
 public/vrm-animations/*
 !public/vrm-animations/README.txt
 
+# --- premade companion assets ARE committed (D-041); everything else above stays ignored ---
+!assets/premade/
+!assets/premade/**
+
 # --- external backends live outside the repo ---
 tts-backend/
 gpt-sovits/

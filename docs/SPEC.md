@@ -5,7 +5,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 - **MUST / SHOULD / MAY** follow RFC 2119 usage.
 - **TARGET** marks a number that is a goal to be *measured and calibrated* in the named phase; it is not a verified fact.
 - **Phase** column says when the requirement is delivered (T, K0 to K7; D = deferred).
-- Version: spec v0.1, 2026-11-11.
+- Version: **spec v1.0 baseline**, 2026-11-12 (finalized for K0 to K3, D-044). Later phases may be revised through new decisions.
 
 ## 1. Definitions
 
@@ -35,6 +35,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-W-4 | `id` is an immutable slug (`[a-z0-9-]{2,32}`). The display `name` (1 to 32 chars) MAY be renamed. | K0 |
 | FR-W-5 | Deleting a waifu MUST remove her pack and sprites. Existing messages keep a **snapshot of her name** and render as "(deleted)" if needed. | K3 |
 | FR-W-6 | Waifu packs MUST be validated on load; an invalid pack is skipped and reported in the UI and log, never crashing the kernel. | K0 |
+| FR-W-7 | **Premade companions:** the app ships **Luna** and **Yuri** as built-in, read-only packs (`assets/premade/<id>/`, resolved through `KASANE/paths.py`), loaded together with user waifus from `data/waifus/`. Ids are unique across both; a user waifu cannot shadow a premade one. The user MAY duplicate a premade pack into `data/waifus/` to edit it. (D-041) | K0 |
 
 ### 2.2 Chat (FR-C)
 

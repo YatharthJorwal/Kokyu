@@ -55,7 +55,7 @@ These are never traded away for convenience. Full list with rationale: `docs/RUL
 6. **No hard-coded paths.** Use `KASANE/paths.py` (dev: `./data`; packaged: `%APPDATA%\Kokyu`).
 7. **Never block** the kernel's asyncio loop or the render loop.
 8. **Honest verification.** No claim without running it.
-9. **No code goes public before the license is decided** (LIC-1, D-032). Deliver code by bundle and warn the user if a push would publish it.
+9. **The code is proprietary** (D-040): keep the repo private; record provenance for anything copied in or out.
 
 ## 4. Repository map
 

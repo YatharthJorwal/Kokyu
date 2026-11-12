@@ -1,21 +1,27 @@
-MIT License
+Kōkyū — Proprietary Software License
 
-Copyright (c) 2026 Yatharth Jorwal
+Copyright (c) 2026 Yatharth Jorwal. All rights reserved.
 
-Permission is hereby granted, free of charge, to any person obtaining a copy
-of this software and associated documentation files (the "Software"), to deal
-in the Software without restriction, including without limitation the rights
-to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-copies of the Software, and to permit persons to whom the Software is
-furnished to do so, subject to the following conditions:
+This repository and everything in it, including source code, documentation,
+designs, character models, voice recordings, animations, scenes and every other
+file (together, "the Software"), is proprietary. It is NOT open source.
 
-The above copyright notice and this permission notice shall be included in all
-copies or substantial portions of the Software.
+No license or permission is granted to use, copy, modify, merge, publish,
+distribute, sublicense, sell, or create derivative works from the Software, in
+whole or in part, except as expressly allowed by a separate written agreement
+with the copyright holder.
+
+Third-party components are used under their own licenses. Those licenses remain
+in force and are listed in docs/THIRD-PARTY.md. Nothing in this file limits any
+right you hold under them.
+
+Documentation-only history: commits up to and including 346f0c3 were published
+under the MIT License. That grant applies only to those versions of those files
+and does not extend to any later commit.
 
 THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
 IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
 FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE
-SOFTWARE.
+COPYRIGHT HOLDER BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER LIABILITY, WHETHER
+IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM, OUT OF OR IN
+CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN THE SOFTWARE.

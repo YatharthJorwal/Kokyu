@@ -11,9 +11,9 @@ Execution order (D-034): T (parallel), K0, K1, K1b, K2, K3, W, K6, K7, then K4 a
 | Phase | Goal | Release | Status |
 |---|---|---|---|
 | Docs | Spec set, README, product direction | n/a | Done; session-1 bundle pending merge |
-| **LIC-1** | Decide the license before any code is pushed publicly | gate | **Open** (D-032) |
+| ~~LIC-1~~ | License decided: proprietary (D-040) | done | **Done** |
 | **T** | GPT-SoVITS component recipe by a CLI agent (parallel track) | 1.0 | Not started |
-| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | 1.0 | In progress: K0-00 to K0-02 done; K0-03 onward awaits plan approval and LIC-1 for pushes |
+| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | 1.0 | **In progress** (session 2) |
 | K1 | Chat shell, waifu switcher, model switcher, API providers | 1.0 | Not started |
 | **K1b** | Installer walking skeleton on a clean machine (D-035) | 1.0 | Not started |
 | K2 | Stage view, voice providers, senses | 1.0 | Not started |
@@ -32,8 +32,8 @@ Execution order (D-034): T (parallel), K0, K1, K1b, K2, K3, W, K6, K7, then K4 a
 - [x] Scope v0.3, SPEC, ARCHITECTURE, RULES, DECISIONS, STATE, HANDOFF, TODO, TTS brief, README, LICENSE, `.gitignore`
 - [x] DOC-1 User reviewed the docs (confirmed: shared memory, name Kōkyū, KASANE folder stays uppercase)
 - [x] DOC-2 First commit pushed to `main` (`704c05d`)
-- [ ] LIC-1 **User decides the license** (`PRODUCT.md` §5, D-032). Until then no product code is pushed to the public repo; the sandbox can keep working and hand over bundles
-- [ ] PROD-1 User reviews `PRODUCT.md`: release boundaries (D-034), voice tiers (D-036), providers and key storage (D-037), premade-asset plan (D-039)
+- [x] LIC-1 License decided: proprietary, not open source (D-040)
+- [x] PROD-1 Product direction and spec finalized as the baseline (D-044)
 
 ## Track T: TTS backend (parallel, separate agent) — brief: `TTS-BACKEND.md`
 
@@ -47,11 +47,11 @@ Execution order (D-034): T (parallel), K0, K1, K1b, K2, K3, W, K6, K7, then K4 a
 - [ ] T-8 `component.json` manifest so Kōkyū's component manager can reproduce the install: URLs, versions, SHA-256, sizes, Python/CUDA versions, start command, health URL, hardware requirements; the install must be scriptable and non-interactive
 - **Gate T:** smoke test passes on this machine; parameters and VRAM numbers recorded in `STATE.md`.
 
-## Track B: business and content (non-code, user-owned)
+## Track B: business and content (non-code, user-owned): DEFERRED (D-043)
 
-Tracked here so nothing is forgotten; none of it blocks engineering except LIC-1.
+Dodo Payments, website, pricing and release work come after the product is developed. Kept here so nothing is forgotten.
 
-- [ ] B-1 License decision (LIC-1) and, if proprietary or source-available, replace `LICENSE` and the README license section
+- [x] B-1 License decided (D-040)
 - [ ] B-2 Price and free-trial policy (demo limits)
 - [ ] B-3 Dodo Payments account; **read its acceptable-use and prohibited-business rules** against a companion product; confirm whether it is the Merchant of Record for VAT/sales tax
 - [ ] B-4 Name and domain check for "Kokyu" / "Kōkyū" (basic trademark search)
@@ -68,7 +68,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K0-00 Environment: sandbox baseline verified (Yuri: 641 pytest, 65 frontend, tsc, vite build). **User machine still unverified:** run the command block in `HANDOFF.md` §5 and paste the output into `STATE.md` §2
 - [x] K0-01 Docs committed and pushed (`704c05d`)
 - [x] K0-02 Yuri and Luna inventory: `docs/notes/yuri-inventory.md`; `ARCHITECTURE.md` §2, 3, 4.1, 5, 7.1, 9.1, 11 corrected; D-024 to D-031 recorded
-- [ ] K0-03 (**no public push before LIC-1**) Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded
+- [ ] K0-03 Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded
 - [ ] K0-04 Rename and rebrand in small reviewed steps (no bulk replace): `orchestrator/` → `KASANE/` (`git mv`), `conftest.py`, scripts, Rust paths; product name Kokyu, identifier `io.github.yatharthjorwal.kokyu`, window title, tray text, `YURI_*` → `KOKYU_*`, log prefixes, npm package name; kernel port 8765 → 8780 in Python, Rust, `ws-client.ts`; no hard-coded ports left in Rust
 - [ ] K0-05 `KASANE/paths.py` (dev `./data`, packaged `%APPDATA%\Kokyu`); replace `repo_path("data/…")` and other hard-coded locations; tests
 - [ ] K0-06 Config v3: strip machine paths from the example, move the TTS reference clip and transcript out of config (they become waifu data), add `waifus.dir` and `kernel.port`, TTS block becomes `tts.backend` (URL plus optional launch); update `config.example.yaml`; add `models.example.yaml`

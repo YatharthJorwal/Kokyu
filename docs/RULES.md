@@ -63,7 +63,7 @@ Binding rules for everyone (human or agent) working in this repo. A rule can cha
 
 - **R-37 User assets are user assets.** VRM models, voice clips, VRMA animations and model weights are never committed or redistributed. Respect their licenses; the app may remind the user to check a VRM's usage terms at upload.
 - **R-38 Dependencies are logged.** Every new dependency gets a row in `docs/THIRD-PARTY.md` (created in K0) with its license, checked before adoption. Dependencies must permit closed-source commercial distribution (permissive licenses); copyleft, non-commercial or unclear licenses need a `DECISIONS.md` entry first.
-- **R-39 License is undecided** (D-032). MIT covers only the documentation-only history. Do not push product code publicly before LIC-1, and do not add code or dependencies whose license blocks closed-source commercial distribution.
+- **R-39 The code is proprietary** (D-040). Keep the repository private. Do not copy code or assets into or out of this repo without recording provenance. Do not add code or dependencies whose license blocks closed-source commercial distribution.
 - **R-51 Shipped assets have a rights record.** Anything in the installer (premade characters, voices, animations, scenes, icons, fonts) is listed in `docs/THIRD-PARTY.md` with its source and license or written permission. No record, no shipping (D-039).
 
 ## 9. Windows and packaging readiness
