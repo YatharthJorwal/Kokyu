@@ -1,8 +1,8 @@
 {
   "$schema": "https://schema.tauri.app/config/2",
-  "productName": "Yuri",
+  "productName": "Kokyu",
   "version": "0.1.0",
-  "identifier": "com.yuri.companion.app",
+  "identifier": "io.github.yatharthjorwal.kokyu",
   "build": {
     "beforeDevCommand": "npm run dev:ui",
     "beforeBuildCommand": "npm run build",
@@ -13,7 +13,7 @@
     "windows": [
       {
         "label": "main",
-        "title": "Yuri",
+        "title": "Kokyu",
         "width": 340,
         "height": 480,
         "minWidth": 220,

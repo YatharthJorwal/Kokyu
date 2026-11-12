@@ -1,10 +1,10 @@
 // `npm run dev`: the page AND the backend, so a plain browser tab works end to end.
 //
-//   npm run dev        backend (orchestrator/app.py) + vite on http://localhost:1420
+//   npm run dev        backend (KASANE/app.py) + vite on http://localhost:1420
 //   npm run dev:ui     vite only. This is what `npm run tauri dev` runs: the Tauri shell starts
-//                      the backend itself, and a second copy would fight it for port 8765.
+//                      the backend itself, and a second copy would fight it for port 8780.
 //
-// If a backend is already listening on 8765 it is reused, not duplicated. Ctrl+C asks the backend
+// If a backend is already listening on 8780 it is reused, not duplicated. Ctrl+C asks the backend
 // to shut down gracefully (it finishes the session-end memory pass), then force-kills it if it
 // takes more than a few seconds. Backend output is also written to logs/orchestrator.log.
 import { spawn, spawnSync } from "node:child_process";
@@ -15,7 +15,7 @@ import { portOpen } from "./doctor-lib.mjs";
 import { backendPlan, lineSplitter, venvPython } from "./dev-lib.mjs";
 
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
-const BACKEND_PORT = 8765;
+const BACKEND_PORT = 8780;
 const GRACEFUL_WAIT_MS = 8000;
 let stopping = false;
 const say = (msg) => console.log(`\x1b[35m[dev]\x1b[0m ${msg}`);
@@ -33,7 +33,7 @@ if (plan === "reuse") {
   const logFile = createWriteStream(join(root, "logs", "orchestrator.log"), { flags: "w" });
   const started = Date.now();
   backend = spawn(python, ["app.py"], {
-    cwd: join(root, "orchestrator"),
+    cwd: join(root, "KASANE"),
     env: { ...process.env, PYTHONUNBUFFERED: "1", PYTHONIOENCODING: "utf-8" },
     stdio: ["ignore", "pipe", "pipe"],
   });

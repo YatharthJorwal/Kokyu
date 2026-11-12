@@ -347,7 +347,7 @@ vision:
 # Persona. Speech rules live in the persona file; speech.py enforces them.
 # ─────────────────────────────────────────────────────────────────────────────
 persona:
-  # Empty for now: the prompt is inline in orchestrator/persona.py. P5 moves it
+  # Empty for now: the prompt is inline in KASANE/persona.py. P5 moves it
   # to a swappable file so the tsundere voice and the reasoning stay separate.
   file: ''
   name: 'Yuri'

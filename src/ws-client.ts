@@ -1,4 +1,4 @@
-// Talks to the Python orchestrator (orchestrator/app.py) over a small JSON
+// Talks to the Python orchestrator (KASANE/app.py) over a small JSON
 // protocol. Phase 1 only needed two message shapes; Phase 2.5 adds voice
 // input (user_audio / transcript); a later round adds a "stop" button;
 // Phase 8 adds `emotion` on `turn_end`; the full-body sandbox round adds a
@@ -24,7 +24,7 @@
 //   <- { type: "request_camera_frame" }
 //
 // `request_camera_frame` (Phase 5's capture_camera tool, see
-// orchestrator/camera.py) is the one message the orchestrator sends
+// KASANE/camera.py) is the one message the orchestrator sends
 // specifically expecting an answer back over this same connection rather
 // than just broadcasting state -- the frontend replies with `camera_frame`
 // as soon as it can (a captured frame's base64, or null if the camera
@@ -39,7 +39,7 @@
 // `user_text`/`user_audio`, these aren't gated by driver/observer status
 // (see below) -- the log is one shared, persistent record, not something
 // tied to a single connection's in-memory `history`, so either window can
-// read or clear it freely. Server-side: orchestrator/memory/store.py's
+// read or clear it freely. Server-side: KASANE/memory/store.py's
 // `transcript_log` table, written once per turn from `app.py`'s
 // `_run_turn` (see its own comment for exactly what gets logged and what
 // doesn't).
@@ -52,7 +52,7 @@
 // and hide the stop button, since queued audio finishing playback isn't the
 // same signal (more chunks could still be on the way when audio catches up).
 // `emotion`, when present, is one of the six VRM expression names main.ts's
-// emotion-blend system knows about (see orchestrator/persona.py's
+// emotion-blend system knows about (see KASANE/persona.py's
 // VALID_EMOTIONS) -- omitted (not a guessed default) whenever the LLM's own
 // reply didn't produce a recognizable tag, or the turn never got that far
 // (LLM unreachable, stopped mid-generation) -- the frontend leaves whatever
@@ -78,7 +78,7 @@
 // driver's mid-conversation state -- a known, accepted limitation, not an
 // oversight; see docs/DECISIONS.md.
 
-const ORCHESTRATOR_URL = "ws://127.0.0.1:8765/ws";
+const ORCHESTRATOR_URL = "ws://127.0.0.1:8780/ws";
 // Reconnect backs off 250 ms -> 500 -> 1000 -> 2000 (then stays at 2 s) and resets once
 // connected. A flat 2 s meant the window noticed a freshly started orchestrator up to
 // 2 s late; most of a cold start is spent in the first few retries.
@@ -374,7 +374,7 @@ export class WsClient {
   }
 
   /** Quick-action menu's Continuous OCR toggle -- ambient screen-watching
-   * (see orchestrator/ocr_watch.py), independent of Task Guide Mode.
+   * (see KASANE/ocr_watch.py), independent of Task Guide Mode.
    * Fire-and-forget, same reasoning as sendSetTempMode above. */
   sendSetOcrWatch(enabled: boolean): void {
     if (this.socket?.readyState !== WebSocket.OPEN) return;

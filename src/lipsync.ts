@@ -107,7 +107,7 @@ export function getMouthOpenValue(): number {
 // This is what lets main.ts approximate per-word caption timing against
 // GPT-SoVITS's *actual* clip length instead of guessing a fixed
 // words-per-second rate -- GPT-SoVITS's API returns finished WAV bytes
-// with no per-word timestamps (confirmed against orchestrator/tts.py),
+// with no per-word timestamps (confirmed against KASANE/tts.py),
 // so real phoneme-level sync isn't available; this is the best signal
 // there is to sync against.
 let currentSpeechEl: HTMLAudioElement | null = null;

@@ -295,7 +295,7 @@ fn read_launcher_config() -> HashMap<String, String> {
 ///
 /// Working directories below are relative to src-tauri/ (this binary's
 /// cwd in `cargo run`/`tauri dev`) -- ../orchestrator and ../logs both
-/// resolve to the repo root's orchestrator/ and logs/ as intended from
+/// resolve to the repo root's KASANE/ and logs/ as intended from
 /// there. Not verified for a packaged release build, where the cwd may
 /// differ -- worth rechecking when packaging is actually on the table.
 fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
@@ -309,7 +309,7 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
     if config.contains_key("GPT_SOVITS_DIR") {
         kill_stale_listeners(9880, "GPT-SoVITS");
     }
-    kill_stale_listeners(8765, "orchestrator");
+    kill_stale_listeners(8780, "orchestrator");
 
     if let Some(sovits_dir) = config.get("GPT_SOVITS_DIR") {
         // Spawning runtime\python.exe directly, not through `cmd /C`, is
@@ -352,7 +352,7 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
     // to wait here (up to 60 s) for GPT-SoVITS's port, which meant the window
     // sat on "connecting" for as long as GPT-SoVITS took to load its models even
     // though chat and the UI do not need it. Voice does: tts.py is told (via
-    // YURI_SHELL_STARTS_TTS) that this shell owns that server, so it waits for it
+    // KOKYU_SHELL_STARTS_TTS) that this shell owns that server, so it waits for it
     // instead of launching a second copy, and gives the first spoken lines a few
     // seconds of grace before falling back to the placeholder voice. Runs on its
     // own thread so it never holds up window creation; the frontend's WebSocket
@@ -360,13 +360,13 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
     let orchestrator_children = children;
     std::thread::spawn(move || {
         // The virtualenv lives at the repo root (.venv), not inside
-        // orchestrator/ -- one environment for the whole repo.
+        // KASANE/ -- one environment for the whole repo.
         let python = PathBuf::from("../.venv/Scripts/python.exe");
         if !python.exists() {
             eprintln!(
                 "[yuri] {} not found -- the Python venv is not set up yet. \
                  Run `python -m venv .venv` and `pip install -r \
-                 orchestrator/requirements-dev.txt` from the repo root \
+                 KASANE/requirements-dev.txt` from the repo root \
                  first (see README).",
                 python.display()
             );
@@ -383,7 +383,7 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
 
         let mut cmd = Command::new(&python);
         cmd.arg("app.py")
-            .current_dir("../orchestrator")
+            .current_dir("../KASANE")
             // Same reasoning as GPT-SoVITS's spawn above -- app.py's own
             // print() calls (including ones with flush=True already, but
             // no reason to depend on every call site remembering that)
@@ -394,7 +394,7 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
         if shell_starts_tts {
             // Tells tts.py that this shell owns GPT-SoVITS: never launch a second
             // copy, wait for ours (it is still loading models, in parallel).
-            cmd.env("YURI_SHELL_STARTS_TTS", "1");
+            cmd.env("KOKYU_SHELL_STARTS_TTS", "1");
         }
         spawn_logged(
             "orchestrator",
@@ -707,7 +707,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 ///
 /// Tries a graceful shutdown of the orchestrator first -- a fire-and-
 /// forget POST to its own `/shutdown` endpoint (see
-/// orchestrator/app.py's `shutdown_endpoint()` docstring) -- because
+/// KASANE/app.py's `shutdown_endpoint()` docstring) -- because
 /// `child.kill()` alone (`TerminateProcess` on Windows) gives Python's
 /// own `finally` block, and therefore Phase 3's `consolidate_session()`,
 /// no chance to run at all. Every quit was silently losing that
@@ -722,7 +722,7 @@ fn build_tray(app: &tauri::App) -> tauri::Result<()> {
 fn graceful_shutdown_then_kill(children: &Arc<Mutex<Vec<(String, Child)>>>) {
     request_orchestrator_shutdown();
 
-    // Matched to orchestrator/app.py's own ~5s bounded wait for its
+    // Matched to KASANE/app.py's own ~5s bounded wait for its
     // connections to finish tearing down -- if that window's ever too
     // short for a slow consolidation LLM call, it's a mismatch to widen
     // on both sides together, not just one.
@@ -768,13 +768,13 @@ fn graceful_shutdown_then_kill(children: &Arc<Mutex<Vec<(String, Child)>>>) {
 /// way -- silently returning here on any connect error is deliberate, not
 /// an oversight.
 fn request_orchestrator_shutdown() {
-    let addr: SocketAddr = "127.0.0.1:8765"
+    let addr: SocketAddr = "127.0.0.1:8780"
         .parse()
         .expect("hardcoded loopback address is always valid");
     let Ok(mut stream) = TcpStream::connect_timeout(&addr, Duration::from_millis(500)) else {
         return;
     };
     let _ = stream.write_all(
-        b"POST /shutdown HTTP/1.1\r\nHost: 127.0.0.1:8765\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
+        b"POST /shutdown HTTP/1.1\r\nHost: 127.0.0.1:8780\r\nContent-Length: 0\r\nConnection: close\r\n\r\n",
     );
 }

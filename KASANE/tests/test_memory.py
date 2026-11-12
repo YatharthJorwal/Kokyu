@@ -16,7 +16,7 @@ Both are monkeypatched at the function-call boundary, same pattern
 previous phases used for llm.py/tts.py stub servers.
 
 Run with: python -m pytest tests/test_memory.py -v
-(from orchestrator/, with requirements-dev.txt installed)
+(from KASANE/, with requirements-dev.txt installed)
 
 The writer pass, contradiction handling, decay and the importer have their own
 files (test_writer.py, test_contradiction.py, test_decay_profile.py, test_migrate.py).

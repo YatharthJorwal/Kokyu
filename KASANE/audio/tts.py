@@ -148,12 +148,12 @@ async def synthesize(text: str) -> bytes:
 #
 # Shell-managed mode: the Tauri shell starts GPT-SoVITS and this process at the
 # same time (GPT-SoVITS takes tens of seconds to load models; nothing else should
-# wait for it) and sets YURI_SHELL_STARTS_TTS=1. In that mode this module never
+# wait for it) and sets KOKYU_SHELL_STARTS_TTS=1. In that mode this module never
 # launches a server, because a port that is closed *right now* just means the
 # shell's copy is still loading, and a second launch would fight it for the port
 # and the GPU. It waits for the shell's server instead.
 
-SHELL_MANAGED_ENV = "YURI_SHELL_STARTS_TTS"
+SHELL_MANAGED_ENV = "KOKYU_SHELL_STARTS_TTS"
 _STARTUP_GRACE_WINDOW_S = 90.0  # only this long after process start...
 _STARTUP_GRACE_PER_LINE_S = 8.0  # ...a spoken line waits up to this for the server
 _PROCESS_STARTED = time.monotonic()

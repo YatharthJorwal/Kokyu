@@ -160,7 +160,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 app = FastAPI(lifespan=_lifespan)
 
 HOST = "127.0.0.1"
-PORT = 8765
+PORT = 8780
 
 # Set by /shutdown, watched by every open connection's main loop (see
 # ws_endpoint) so it can close itself gracefully -- letting `finally` run
@@ -1630,8 +1630,8 @@ if __name__ == "__main__":
     from memory import db as memory_db
 
     # Repo-root-relative regardless of cwd (Tauri's spawn sets cwd to
-    # orchestrator/ via current_dir("../orchestrator"); a manually-run
-    # `python app.py` from inside orchestrator/ lands at the same cwd;
+    # KASANE/ via current_dir("../orchestrator"); a manually-run
+    # `python app.py` from inside KASANE/ lands at the same cwd;
     # __file__-relative means this doesn't depend on either being true).
     _take_over_stale_orchestrator(Path(__file__).resolve().parent.parent / "logs" / "orchestrator.pid")
 

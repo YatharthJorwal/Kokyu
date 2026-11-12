@@ -1,5 +1,5 @@
 // Phase 5 -- webcam capture for the capture_camera tool (see
-// orchestrator/camera.py and tools/__init__.py). Same "plain Web APIs, no
+// KASANE/camera.py and tools/__init__.py). Same "plain Web APIs, no
 // Tauri-specific plugin" spirit as mic.ts -- WebView2 supports
 // getUserMedia() for video the same as it does for audio.
 //

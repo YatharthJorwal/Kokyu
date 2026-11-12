@@ -1,5 +1,5 @@
 """
-Maintenance CLI for memory.db. Run from orchestrator/:
+Maintenance CLI for memory.db. Run from KASANE/:
 
     python -m memory --facts                  # live facts (add --all to include superseded/forgotten)
     python -m memory --events 30              # the last 30 audit events

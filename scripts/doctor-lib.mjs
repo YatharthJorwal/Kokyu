@@ -9,7 +9,7 @@ import { fileURLToPath } from "node:url";
 const root = join(dirname(fileURLToPath(import.meta.url)), "..");
 const win = process.platform === "win32";
 const DEV_PORT = 1420; // fixed: src-tauri/tauri.conf.json devUrl and vite strictPort
-const BACKEND_PORT = 8765;
+const BACKEND_PORT = 8780;
 const OLLAMA_PORT = 11434;
 
 /** True if nothing is listening on `port` for any of the addresses `localhost` can resolve to. */
@@ -84,7 +84,7 @@ export async function runChecks({ brief = false } = {}) {
       add(
         "warn",
         "no Python venv at .venv, so the shell cannot start the backend (the window will sit on \"connecting\")",
-        "from the repo root:  python -m venv .venv   then:  .venv\\Scripts\\pip install -r orchestrator\\requirements-dev.txt",
+        "from the repo root:  python -m venv .venv   then:  .venv\\Scripts\\pip install -r KASANE\\requirements-dev.txt",
       );
   });
 

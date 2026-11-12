@@ -75,7 +75,7 @@ function applyIdlePose(vrm: VRM): void {
   rightLowerArm?.rotation.set(0, 0.15, 0);
 }
 
-// Matches orchestrator/persona.py's VALID_EMOTIONS exactly -- the app-
+// Matches KASANE/persona.py's VALID_EMOTIONS exactly -- the app-
 // facing emotion tags the LLM chooses from and setTargetEmotion() below
 // accepts. Module-level (not just local to boot()'s emotion-blend
 // system) so setupHud's manual expression-test button below can cycle
@@ -608,7 +608,7 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
   // time with the currently-playing clip -- not the whole sentence
   // slammed onto screen at once. GPT-SoVITS's API returns finished WAV
   // bytes with no per-word timestamps (confirmed against
-  // orchestrator/tts.py), so there's no ground truth to sync against
+  // KASANE/tts.py), so there's no ground truth to sync against
   // frame-perfectly; instead each word is allotted a share of the clip's
   // real duration proportional to its own character length (a longer
   // word gets more of the clip's time than "a" does) -- a common
@@ -893,7 +893,7 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
   });
 
   // Continuous OCR -- quick-action menu's own toggle (see
-  // orchestrator/ocr_watch.py: ambient screen-watching, independent of
+  // KASANE/ocr_watch.py: ambient screen-watching, independent of
   // Task Guide Mode). Same shape as Temp Chat's own toggle right above --
   // a local boolean, a badge update, one fire-and-forget message. No
   // HUD-level border/glow the way Temp Chat gets -- this doesn't change
@@ -1017,7 +1017,7 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
   });
 
   // Streaming mic: 20 ms PCM frames go to the orchestrator's VAD, which decides
-  // when the user started and stopped talking (orchestrator/vad.py). The old
+  // when the user started and stopped talking (KASANE/vad.py). The old
   // whole-clip path could only react after release, so she could not be
   // interrupted and end-of-speech depended on a button.
   const mic = new MicStream({
@@ -1153,7 +1153,7 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
 
 // Phase 2's orchestrator sends one reply as several `speak` messages --
 // one per sentence, streamed as the LLM produces them (see
-// orchestrator/app.py / chunking.py) -- instead of Phase 1's one message
+// KASANE/app.py / chunking.py) -- instead of Phase 1's one message
 // per reply. Without a queue, a second chunk arriving while the first is
 // still playing would call speakWithLipsync() again, starting a second
 // Audio element/AnalyserNode racing the first one. This plays each queued

@@ -1,5 +1,5 @@
 // Streaming microphone: raw 20 ms PCM16 frames at 16 kHz, straight to the
-// orchestrator's VAD (orchestrator/vad.py). Replaces the old MediaRecorder
+// orchestrator's VAD (KASANE/vad.py). Replaces the old MediaRecorder
 // whole-clip path, which could only react after the user released the mic.
 //
 // Echo cancellation is requested here, in the browser, because that is where a

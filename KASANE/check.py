@@ -1,9 +1,9 @@
 """
 Config and router check -- no app window, no model calls.
 
-    python orchestrator/check.py            # cached catalog, no network
-    python orchestrator/check.py --refresh  # fetch /v1/models now
-    python orchestrator/check.py --check    # same as no args
+    python KASANE/check.py            # cached catalog, no network
+    python KASANE/check.py --refresh  # fetch /v1/models now
+    python KASANE/check.py --check    # same as no args
 
 Prints the resolved chain for every role, whether the AI Router key resolved,
 whether the model catalog is usable, and the spend against each cap. This is the
@@ -18,7 +18,7 @@ import pathlib
 import sys
 
 # Make `import config` / `import router` work no matter which cwd the user ran
-# this from (repo root and orchestrator/ are both common).
+# this from (repo root and KASANE/ are both common).
 sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent))
 
 import config  # noqa: E402

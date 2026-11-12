@@ -16,7 +16,7 @@ matters: **every key has a code default**. A missing key is
 never a startup crash.
 
 Search order when no path is given:
-    orchestrator/config.yaml
+    KASANE/config.yaml
     config/config.yaml
     config/config.example.yaml      (ships with the repo, so a fresh clone runs)
     built-in defaults               (a config-less process still starts)
@@ -274,7 +274,7 @@ class LatencyConfig:
 @dataclass(frozen=True)
 class PersonaConfig:
     # Where the swappable persona will live (P5). The prompt is inline in
-    # orchestrator/persona.py today, so this may be empty.
+    # KASANE/persona.py today, so this may be empty.
     file: str = ""
     name: str = "Yuri"
     emotion_tag: str = "[emotion]"

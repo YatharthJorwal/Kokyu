@@ -30,9 +30,9 @@ function* pycaches(dir) {
 const targets = [
   join(root, "dist"),
   join(root, ".pytest_cache"),
-  join(root, "orchestrator", ".pytest_cache"),
+  join(root, "KASANE", ".pytest_cache"),
   join(root, "node_modules", ".cache"),
-  ...(existsSync(join(root, "orchestrator")) ? pycaches(join(root, "orchestrator")) : []),
+  ...(existsSync(join(root, "KASANE")) ? pycaches(join(root, "KASANE")) : []),
 ];
 if (all) targets.push(join(root, "src-tauri", "target"));
 
