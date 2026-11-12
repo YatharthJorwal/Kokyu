@@ -16,6 +16,11 @@ venv/
 # --- runtime data (never committed) ---
 data/
 logs/
+cache/
+audio_cache/
+image_cache/
+models/
+*.tsbuildinfo
 *.db
 *.db-journal
 *.sqlite
@@ -26,9 +31,12 @@ logs/
 .env.*
 !.env.example
 config/config.yaml
+KASANE/config.yaml
+orchestrator/config.yaml
 config/secrets.local.yaml
 src-tauri/launcher.local.txt
 *.local.*
+!*.local.*.example
 
 # --- user assets and model weights (never committed, never redistributed) ---
 *.vrm
@@ -44,8 +52,6 @@ src-tauri/launcher.local.txt
 *.onnx
 public/vrm/*
 !public/vrm/README.txt
-public/vrm-animations/*
-!public/vrm-animations/README.txt
 
 # --- premade companion assets ARE committed (D-041); everything else above stays ignored ---
 !assets/premade/
