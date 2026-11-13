@@ -51,7 +51,9 @@ from functools import partial
 from pathlib import Path
 from typing import Any
 
-from fastapi import FastAPI, WebSocket, WebSocketDisconnect
+from fastapi import FastAPI, HTTPException, WebSocket, WebSocketDisconnect
+from fastapi.middleware.cors import CORSMiddleware
+from fastapi.responses import FileResponse
 
 from senses import camera
 import context_budget
@@ -59,6 +61,7 @@ from audio import arbiter
 from audio import latency
 import llm
 import paths
+import prompting
 import router
 import settings as runtime_settings
 from senses import look_intent
@@ -68,6 +71,7 @@ from audio import speech_stream
 from audio import stt
 from senses import task_guide
 import tools
+import waifus
 from audio import tts
 from audio import vad
 from audio import voice
@@ -159,6 +163,126 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 
 app = FastAPI(lifespan=_lifespan)
+
+# The page (Vite on :1420, or the Tauri webview) fetches each waifu's .vrm from this
+# kernel, which is a different origin. Loopback only, GET only, no credentials.
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=[
+        "http://localhost:1420",
+        "http://127.0.0.1:1420",
+        "tauri://localhost",
+        "http://tauri.localhost",
+        "https://tauri.localhost",
+    ],
+    allow_methods=["GET"],
+    allow_headers=[],
+)
+
+
+@app.get("/waifus/{waifu_id}/vrm")
+async def waifu_vrm(waifu_id: str) -> FileResponse:
+    """The avatar file of a known waifu. The id is looked up in the registry; the path
+    comes from the validated pack, never from the request."""
+    waifu = waifus.get_registry().get(waifu_id)
+    if waifu is None:
+        raise HTTPException(status_code=404, detail="unknown companion")
+    return FileResponse(waifu.vrm_path, media_type="model/gltf-binary")
+
+
+# --- the active waifu (a voice and a persona, nothing more: R-01, D-003) -----------
+
+_background_tasks: set[asyncio.Task] = set()
+
+
+def _waifu_of(websocket: Any) -> "waifus.Waifu | None":
+    waifu = getattr(getattr(websocket, "state", None), "waifu", None)
+    return waifu if isinstance(waifu, waifus.Waifu) else None
+
+
+def _voice_of(websocket: Any) -> "tts.VoiceParams | None":
+    waifu = _waifu_of(websocket)
+    if waifu is None:
+        return None
+    # The waifu speaks the language of her own reference clip.
+    return tts.VoiceParams(
+        ref_audio_path=str(waifu.ref_audio_path),
+        prompt_text=waifu.voice.ref_text,
+        prompt_lang=waifu.voice.ref_lang,
+        text_lang=waifu.voice.ref_lang,
+    )
+
+
+def _system_message(waifu: "waifus.Waifu | None") -> str:
+    """Persona prompt plus the shared app addendum. With no waifu installed the legacy
+    built-in persona is used unchanged, so a fresh checkout still talks."""
+    return SYSTEM_PROMPT if waifu is None else prompting.build_system_prompt(waifu.prompt)
+
+
+def _active_id_path() -> Path:
+    return paths.app_data_dir() / "active_waifu.txt"
+
+
+def _load_active_id() -> str:
+    try:
+        return _active_id_path().read_text(encoding="utf-8").strip()
+    except OSError:
+        return ""
+
+
+def _save_active_id(waifu_id: str) -> None:
+    try:
+        path = _active_id_path()
+        path.parent.mkdir(parents=True, exist_ok=True)
+        path.write_text(waifu_id, encoding="utf-8")
+    except OSError as exc:
+        print(f"[kokyu] could not remember the active companion: {exc}", file=sys.stderr)
+
+
+async def _send_waifu_state(websocket: Any, registry: "waifus.WaifuRegistry", pending: str | None = None) -> None:
+    active = _waifu_of(websocket)
+    payload: dict[str, Any] = {
+        "type": "waifu_state",
+        "active": active.id if active else None,
+        "waifus": registry.describe(),
+        "problems": [p.message for p in registry.problems],
+    }
+    if pending:
+        payload["pending"] = pending
+    await websocket.send_json(payload)
+
+
+async def _apply_waifu_switch(
+    websocket: Any, history: list[dict[str, str]], registry: "waifus.WaifuRegistry", waifu_id: str
+) -> "waifus.Waifu | None":
+    """Changes ONLY the persona text and the voice. History, model, effort, memory and
+    tools are untouched (FR-W-3, FR-S-5). Returns None for an unknown id."""
+    target = registry.get(waifu_id)
+    if target is None:
+        return None
+    websocket.state.waifu = target
+    history[0]["content"] = _system_message(target)
+    _save_active_id(target.id)
+    await _send_waifu_state(websocket, registry)
+    voice_params = _voice_of(websocket)
+    if voice_params is not None:
+        task = asyncio.create_task(tts.prewarm(voice_params))  # FR-S-3; never raises
+        _background_tasks.add(task)
+        task.add_done_callback(_background_tasks.discard)
+    return target
+
+
+async def _synthesize_for(websocket: Any, spoken: str) -> bytes:
+    """Speak in the active waifu's voice. A dead TTS backend yields empty audio: the
+    caption still shows and the reply stays text-only (FR-V-7)."""
+    voice_params = _voice_of(websocket)
+    try:
+        if voice_params is None:
+            return await tts.synthesize(spoken)
+        return await tts.synthesize(spoken, voice_params)
+    except tts.TTSUnreachableError as exc:
+        print(f"[kokyu] voice backend unavailable, reply stays text-only: {exc}", file=sys.stderr)
+        return b""
 
 HOST = "127.0.0.1"
 PORT = 8780
@@ -328,7 +452,7 @@ async def _send_speak(websocket: WebSocket, text: str) -> None:
     prepared = speech.prepare(text)
     if not prepared.spoken:
         return
-    await _send_audio(websocket, prepared.display, await tts.synthesize(prepared.spoken))
+    await _send_audio(websocket, prepared.display, await _synthesize_for(websocket, prepared.spoken))
 
 
 async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp: bool = False) -> None:
@@ -539,6 +663,7 @@ async def _run_turn(
 
     stream = speech_stream.SpeechStream(
         send=lambda display, audio: _send_audio(websocket, display, audio),
+        synth=lambda spoken: _synthesize_for(websocket, spoken),
         on_first_audio=_first_audio,
     )
     # Everything actually sent to _send_speak this turn, in order --
@@ -1002,7 +1127,15 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     # value, and the router is the thing that actually obeys it.
     await websocket.send_json({"type": "settings", **runtime_settings.describe(router.get_router(), CONFIG)})
 
-    history: list[dict[str, str]] = [{"role": "system", "content": SYSTEM_PROMPT}]
+    # The active waifu (persona + voice) lives on the connection; it starts as the one the
+    # user last used. With no packs installed this stays None and the legacy persona runs.
+    waifu_registry = waifus.get_registry()
+    websocket.state.waifu = waifu_registry.get(_load_active_id()) or waifu_registry.get(
+        waifu_registry.default_id() or ""
+    )
+    history: list[dict[str, str]] = [{"role": "system", "content": _system_message(_waifu_of(websocket))}]
+    pending_waifu_id: str | None = None   # a switch asked for mid-turn; applied after the turn
+    await _send_waifu_state(websocket, waifu_registry)
     # Quick-action menu's Temp Chat toggle -- per-connection, unlike
     # task_guide's module-level state, since it's about this window's own
     # conversation rather than anything shared. temp_turn_flags is kept
@@ -1211,6 +1344,26 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 await shutdown_task
             data = receive_task.result()
             msg_type = data.get("type")
+
+            # A switch requested while a turn was running takes effect now, between turns
+            # (FR-S-2: the turn in flight finishes with the old waifu).
+            if pending_waifu_id and (current_turn_task is None or current_turn_task.done()):
+                await _apply_waifu_switch(websocket, history, waifu_registry, pending_waifu_id)
+                pending_waifu_id = None
+
+            if msg_type == "switch_waifu":
+                target_id = str(data.get("id") or "")
+                if waifu_registry.get(target_id) is None:
+                    await websocket.send_json(
+                        {"type": "error", "code": "unknown_waifu", "message": f"There is no companion called {target_id!r}."}
+                    )
+                elif current_turn_task is not None and not current_turn_task.done():
+                    pending_waifu_id = target_id
+                    await _send_waifu_state(websocket, waifu_registry, pending=target_id)
+                else:
+                    pending_waifu_id = None
+                    await _apply_waifu_switch(websocket, history, waifu_registry, target_id)
+                continue
 
             if msg_type == "stop":
                 # No-op if nothing's actually running -- a stray/late
