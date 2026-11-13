@@ -213,6 +213,12 @@ def _voice_of(websocket: Any) -> "tts.VoiceParams | None":
     )
 
 
+def _speaker_of(websocket: Any) -> str | None:
+    """The name recorded with a turn so shared memory knows who spoke (FR-MEM-2)."""
+    active = _waifu_of(websocket)
+    return active.name if active else None
+
+
 def _system_message(waifu: "waifus.Waifu | None") -> str:
     """Persona prompt plus the shared app addendum. With no waifu installed the legacy
     built-in persona is used unchanged, so a fresh checkout still talks."""
@@ -455,13 +461,13 @@ async def _send_speak(websocket: WebSocket, text: str) -> None:
     await _send_audio(websocket, prepared.display, await _synthesize_for(websocket, prepared.spoken))
 
 
-async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp: bool = False) -> None:
+async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp: bool = False, speaker: str | None = None) -> None:
     """Best-effort -- a DB hiccup here shouldn't take down the turn itself
     (turn_end still needs to reach the frontend either way), same
     degrade-gracefully pattern recall.py/forget.py already use for the
     same underlying DB."""
     try:
-        await asyncio.to_thread(partial(store.add_transcript_turn, user_text, assistant_text, temp=temp))
+        await asyncio.to_thread(partial(store.add_transcript_turn, user_text, assistant_text, temp=temp, speaker=speaker))
     except MemoryUnavailableError as exc:
         print(f"[yuri] transcript log: write failed, skipping: {exc}", file=sys.stderr)
 
@@ -813,7 +819,7 @@ async def _run_turn(
         # just on normal completion) so the log panel matches reality even
         # for a stopped-mid-sentence turn, same reasoning as the
         # history.append() above.
-        await _log_transcript_turn_safely(user_text, " ".join(spoken_parts), temp_mode)
+        await _log_transcript_turn_safely(user_text, " ".join(spoken_parts), temp_mode, speaker=_speaker_of(websocket))
 
     # Tells the frontend nothing more is coming for this turn (so it can
     # hide the stop button, re-enable input, etc.) -- only reached on a
@@ -945,7 +951,7 @@ async def _run_task_guide_check(
     # matching "user" turn precedes it -- nobody said anything -- which
     # is a legitimate shape for an unprompted comment, not a bug.
     _record_unprompted(history, " ".join(reply_parts), temp_mode, temp_turn_flags, unprompted)
-    await _log_transcript_turn_safely("", " ".join(apply_persona_pass(p) for p in reply_parts), temp_mode)
+    await _log_transcript_turn_safely("", " ".join(apply_persona_pass(p) for p in reply_parts), temp_mode, speaker=_speaker_of(websocket))
     await websocket.send_json({"type": "turn_end", "emotion": detected_emotion})
 
 
@@ -1057,7 +1063,7 @@ async def _run_ocr_watch_check(
     # that's legitimate here too, not a bug.
     ocr_watch.mark_commented()
     _record_unprompted(history, " ".join(reply_parts), temp_mode, temp_turn_flags, unprompted)
-    await _log_transcript_turn_safely("", " ".join(apply_persona_pass(p) for p in reply_parts), temp_mode)
+    await _log_transcript_turn_safely("", " ".join(apply_persona_pass(p) for p in reply_parts), temp_mode, speaker=_speaker_of(websocket))
     await websocket.send_json({"type": "turn_end", "emotion": detected_emotion})
 
 

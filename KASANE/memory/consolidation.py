@@ -58,7 +58,11 @@ or retracted something they said before ("actually I...", "I no longer...", \
 "that's wrong, it's..."); otherwise false. If nothing durable came up, use \
 an empty facts list. The episode_summary should read like a memory of \
 what happened, not a transcript -- brief enough to recall at a glance \
-later.\
+later. Several different companions may appear across the transcript: every \
+line that does not start with "User:" begins with the name of the companion \
+who said it. When it matters, name her in the episode_summary ("Luna and the \
+user talked about..."), and never write as if the user spoke with a companion \
+who did not take part.\
 """
 
 

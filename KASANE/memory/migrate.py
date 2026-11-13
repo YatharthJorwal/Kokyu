@@ -18,7 +18,7 @@ import sqlite3
 import struct
 import sys
 
-SCHEMA_VERSION = 2
+SCHEMA_VERSION = 3
 
 # Sentinels stored in `superseded_by`. Positive values are the id of the row
 # that replaced this one; these are the "no replacement" reasons.
@@ -46,6 +46,8 @@ _V2_EPISODE_COLUMNS = (
     ("superseded_by", "INTEGER"),
 )
 _V2_TRANSCRIPT_COLUMNS = (("temp", "INTEGER NOT NULL DEFAULT 0"),)
+# v3 (Kokyu): who spoke the assistant side. NULL for rows written before waifus existed.
+_V3_TRANSCRIPT_COLUMNS = (("speaker", "TEXT"),)
 
 
 def _columns(conn: sqlite3.Connection, table: str) -> set[str]:
@@ -105,6 +107,8 @@ def run(conn: sqlite3.Connection, dim: int) -> None:
                 "UPDATE episodes SET created_ts = COALESCE(created_ts, CAST(strftime('%s', created_at) AS REAL)), "
                 "decayed_at = COALESCE(decayed_at, CAST(strftime('%s', created_at) AS REAL))"
             )
+        if get_version(conn) < 3:
+            _add_columns(conn, "transcript_log", _V3_TRANSCRIPT_COLUMNS)
         # These are all IF NOT EXISTS, so they also repair a half-migrated file.
         conn.execute(f"CREATE VIRTUAL TABLE IF NOT EXISTS facts_vec USING vec0(embedding float[{dim}])")
         conn.execute(

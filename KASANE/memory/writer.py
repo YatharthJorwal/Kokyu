@@ -40,7 +40,7 @@ from .embeddings import EmbeddingUnreachableError, embed
 MAX_CHUNKS_PER_RUN = 6
 MAX_TURN_CHARS = 1500
 BACKFILL_BATCH = 50
-SPEAKER = "Yuri"
+SPEAKER = "Yuri"   # only for rows written before waifus existed (no speaker recorded)
 
 BASE_SALIENCE = 0.5
 CORRECTION_SALIENCE = 0.8
@@ -89,7 +89,7 @@ def _format_turn(row: dict) -> str:
     if row["user"]:
         lines.append(f"User: {row['user'][:MAX_TURN_CHARS]}")
     if row["assistant"]:
-        lines.append(f"{SPEAKER}: {row['assistant'][:MAX_TURN_CHARS]}")
+        lines.append(f"{row.get('speaker') or SPEAKER}: {row['assistant'][:MAX_TURN_CHARS]}")
     return "\n".join(lines)
 
 

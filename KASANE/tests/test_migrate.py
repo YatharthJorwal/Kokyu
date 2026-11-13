@@ -41,7 +41,7 @@ def test_v1_database_migrates_in_place_without_losing_rows(tmp_path):
 
     conn = db._open_connection(path=path, dimension=4)
     try:
-        assert migrate.get_version(conn) == 2
+        assert migrate.get_version(conn) == migrate.SCHEMA_VERSION
         row = conn.execute("SELECT content, source, confidence, pinned, superseded_by, created_ts FROM facts").fetchone()
         assert row[:5] == ("likes pizza", "writer_pass", 0.7, 0, None)
         assert row[5] and row[5] > 1.7e9  # stamped from the old text timestamp
@@ -64,13 +64,13 @@ def test_migration_is_idempotent(tmp_path):
         cols = _columns(conn, "facts")
         assert len(cols) == len(set(cols))
         assert conn.execute("SELECT count(*) FROM facts").fetchone() == (1,)
-        assert migrate.get_version(conn) == 2
+        assert migrate.get_version(conn) == migrate.SCHEMA_VERSION
     finally:
         conn.close()
 
 
-def test_fresh_database_lands_on_v2_with_dimension_recorded(memory_db):
-    assert migrate.get_version(memory_db) == 2
+def test_fresh_database_lands_on_current_version_with_dimension_recorded(memory_db):
+    assert migrate.get_version(memory_db) == migrate.SCHEMA_VERSION
     assert store.get_meta("embedding_dim") == "4"
 
 
@@ -83,7 +83,7 @@ def test_corrupt_file_is_quarantined_not_deleted(tmp_path, capsys):
     try:
         moved = list(tmp_path.glob("memory.db.corrupt-*"))
         assert len(moved) == 1 and moved[0].read_bytes() == garbage
-        assert migrate.get_version(conn) == 2  # fresh, usable
+        assert migrate.get_version(conn) == migrate.SCHEMA_VERSION  # fresh, usable
         assert "corrupt" in capsys.readouterr().err.lower()
     finally:
         conn.close()

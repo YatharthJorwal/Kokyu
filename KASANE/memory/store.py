@@ -432,20 +432,22 @@ def retire_episodes(episode_ids: list[int], marker: int = DECAYED) -> None:
 
 
 @_locked
-def add_transcript_turn(user_text: str, assistant_text: str, *, temp: bool = False) -> None:
+def add_transcript_turn(user_text: str, assistant_text: str, *, temp: bool = False, speaker: str | None = None) -> None:
     """One row per turn. It is both the user's reviewable log and the durable
     buffer the writer pass reads. `temp=True` (Temp Chat) still shows in the log
     but is never read by the writer, so a temporary chat leaves no memory. A turn
     with nothing on either side is not worth a row; a user line with no reply
-    (cut off before a word was spoken) still is."""
+    (cut off before a word was spoken) still is. `speaker` is the name of the companion
+    who said the assistant side; memory is shared by all waifus, so the writer needs it
+    to keep one companion's words from being remembered as another's (FR-MEM-2)."""
     user_text = user_text.strip()
     assistant_text = assistant_text.strip()
     if not user_text and not assistant_text:
         return
     conn = db.get_connection()
     conn.execute(
-        "INSERT INTO transcript_log (user_text, assistant_text, temp) VALUES (?, ?, ?)",
-        (user_text, assistant_text, int(temp)),
+        "INSERT INTO transcript_log (user_text, assistant_text, temp, speaker) VALUES (?, ?, ?, ?)",
+        (user_text, assistant_text, int(temp), (speaker or "").strip() or None),
     )
     db.commit(conn)
 
@@ -465,14 +467,17 @@ def get_transcript_after(after_id: int, limit: int | None = None) -> list[dict[s
     """Rows newer than `after_id`, oldest first, temp rows included and flagged
     so the writer can skip them while still moving its checkpoint past them."""
     query = (
-        "SELECT id, user_text, assistant_text, created_at, temp FROM transcript_log WHERE id > ? ORDER BY id"
+        "SELECT id, user_text, assistant_text, created_at, temp, speaker FROM transcript_log WHERE id > ? ORDER BY id"
     )
     params: list[Any] = [after_id]
     if limit is not None:
         query += " LIMIT ?"
         params.append(limit)
     rows = db.get_connection().execute(query, params).fetchall()
-    return [{"id": r[0], "user": r[1], "assistant": r[2], "ts": r[3], "temp": bool(r[4])} for r in rows]
+    return [
+        {"id": r[0], "user": r[1], "assistant": r[2], "ts": r[3], "temp": bool(r[4]), "speaker": r[5]}
+        for r in rows
+    ]
 
 
 @_locked
