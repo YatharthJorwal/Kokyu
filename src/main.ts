@@ -3,7 +3,16 @@ import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 import { listen } from "@tauri-apps/api/event";
 import { invoke } from "@tauri-apps/api/core";
-import { WsClient, type ConnectionState, type SpeakMessage, type TranscriptMessage, type LogMessage, type SettingsMessage } from "./ws-client";import { speakWithLipsync, getMouthOpenValue, getSpeechProgress } from "./lipsync";
+import { WsClient, KERNEL_HTTP_URL, type ConnectionState, type SpeakMessage, type TranscriptMessage, type LogMessage, type SettingsMessage } from "./ws-client";
+import {
+  WAIFU_STORAGE_KEY,
+  captionOnlyDurationMs,
+  needsAvatarReload,
+  resolveModelPath,
+  waifuOptions,
+  type WaifuStateMessage,
+} from "./waifu-state";
+import { speakWithLipsync, getMouthOpenValue, getSpeechProgress } from "./lipsync";
 import { logVrmReport } from "./vrm-report";
 import { MicStream } from "./mic-stream";
 import { CameraInput } from "./camera";
@@ -19,8 +28,21 @@ import { ExpressionLife, blendTarget } from "./expression-life";
 // Studio export can be used instead of a Live2D model. Drop your
 // exported .vrm file at MODEL_PATH below -- see README.md for the full
 // walkthrough.
-const MODEL_PATH =
-  (window as unknown as { __YURI_MODEL_PATH__?: string }).__YURI_MODEL_PATH__ ?? "/vrm/yuri.vrm";
+// The avatar of the waifu the kernel last told us was active (kept in localStorage), served
+// by the kernel; with none stored yet, the legacy single-avatar path. One reload on first
+// launch swaps in the real waifu's avatar (see onWaifuState below).
+const LOADED_WAIFU_ID: string | null = (() => {
+  try {
+    return window.localStorage.getItem(WAIFU_STORAGE_KEY);
+  } catch {
+    return null;
+  }
+})();
+const MODEL_PATH = resolveModelPath(
+  LOADED_WAIFU_ID,
+  (window as unknown as { __YURI_MODEL_PATH__?: string }).__YURI_MODEL_PATH__ ?? "/vrm/yuri.vrm",
+  KERNEL_HTTP_URL,
+);
 
 // Hand-tuned starting point for a bust-up framing at roughly a real VRM
 // humanoid's actual scale (VRM models are authored in real-world meters,
@@ -367,6 +389,8 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
   const qaTempModeState = document.getElementById("qa-temp-mode-state") as HTMLSpanElement;
   const qaOcrWatchButton = document.getElementById("qa-ocr-watch") as HTMLButtonElement;
   const qaOcrWatchState = document.getElementById("qa-ocr-watch-state") as HTMLSpanElement;
+  const qaWaifuRow = document.getElementById("qa-waifu-row") as HTMLLabelElement;
+  const qaWaifuSelect = document.getElementById("qa-waifu") as HTMLSelectElement;
   const qaApiModelButton = document.getElementById("qa-api-model") as HTMLButtonElement;
   const qaApiModelState = document.getElementById("qa-api-model-state") as HTMLSpanElement;
   const qaCameraButton = document.getElementById("qa-camera") as HTMLButtonElement;
@@ -759,12 +783,39 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
       // audio ends either.
     },
   });
+  // The companion picker. The kernel is authoritative: the list and the selection come from its
+  // `waifu_state`; a click only asks. A voice and a persona change, nothing else (R-01).
+  function renderWaifuState(msg: WaifuStateMessage): void {
+    qaWaifuRow.hidden = msg.waifus.length < 2;
+    qaWaifuSelect.replaceChildren(
+      ...waifuOptions(msg).map((o) => {
+        const opt = document.createElement("option");
+        opt.value = o.value;
+        opt.textContent = o.label;
+        opt.selected = o.selected;
+        return opt;
+      }),
+    );
+    if (msg.problems.length > 0) console.warn("[kokyu] companion packs skipped:", msg.problems);
+    // The avatar is swapped by a reload so the whole stage (lip-sync, eyes, idle motion) rebinds
+    // to the new model. A switch queued behind a running turn (pending) waits for the kernel.
+    if (!msg.pending && needsAvatarReload(LOADED_WAIFU_ID, msg.active)) {
+      try {
+        window.localStorage.setItem(WAIFU_STORAGE_KEY, msg.active as string);
+      } catch {
+        return; // storage blocked: stay on the current avatar rather than loop
+      }
+      window.location.reload();
+    }
+  }
+
   const client = new WsClient({
     surface: "shell",
     onStateChange: setState,
     // Server-owned switch; see renderApiModel. Fires on connect and after every
     // change, so the tray and the menu badge always agree.
     onSettings: (msg) => renderApiModel(msg),
+    onWaifuState: renderWaifuState,
     // Barge-in: she was talking, the user cut in. The server already cancelled
     // the turn; kill the audio and the queue here too so it stops instantly.
     onBargeIn: () => {
@@ -867,6 +918,8 @@ function setupHud(setTargetEmotion: (emotion?: string) => void): Hud {
   document.addEventListener("keydown", (event) => {
     if (event.key === "Escape" && quickActionMenuOpen) setQuickActionMenuOpen(false);
   });
+
+  qaWaifuSelect.addEventListener("change", () => client.sendSwitchWaifu(qaWaifuSelect.value));
 
   // Temp Chat -- quick-action menu's own toggle (see app.py's
   // temp_mode/temp_turn_flags for what this actually does server-side:
@@ -1192,6 +1245,7 @@ class SpeakQueue {
   private pending: SpeakMessage[] = [];
   private playing = false;
   private currentHandle: ReturnType<typeof speakWithLipsync> | null = null;
+  private captionTimer: number | undefined;
 
   // A short pause between chunks, not zero. Two back-to-back HTMLAudioElements
   // chained on "ended" can have a few ms of overlap at the boundary (the next
@@ -1218,6 +1272,7 @@ class SpeakQueue {
    * this, separately, for the backend-side cancellation. */
   stopAll(): void {
     this.pending = [];
+    window.clearTimeout(this.captionTimer);
     this.currentHandle?.stop();
     this.currentHandle = null;
     this.playing = false;
@@ -1238,6 +1293,16 @@ class SpeakQueue {
     }
     this.playing = true;
     this.opts.onCaptionStart(msg.text);
+
+    // No audio means the voice backend is down: the reply stays text-only. Show the caption for
+    // about as long as it takes to read, then move on (FR-V-7).
+    if (!msg.audio_b64) {
+      this.captionTimer = window.setTimeout(() => {
+        this.opts.onCaptionEnd();
+        window.setTimeout(() => this.playNext(), SpeakQueue.GAP_MS);
+      }, captionOnlyDurationMs(msg.text));
+      return;
+    }
 
     const blob = base64ToBlob(msg.audio_b64, msg.mime);
     const url = URL.createObjectURL(blob);

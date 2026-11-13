@@ -1,3 +1,4 @@
+import { kernelHttpBase, type WaifuStateMessage } from "./waifu-state";
 // Talks to the Python orchestrator (KASANE/app.py) over a small JSON
 // protocol. Phase 1 only needed two message shapes; Phase 2.5 adds voice
 // input (user_audio / transcript); a later round adds a "stop" button;
@@ -79,12 +80,15 @@
 // oversight; see docs/DECISIONS.md.
 
 const ORCHESTRATOR_URL = "ws://127.0.0.1:8780/ws";
+/** Where the kernel serves each waifu's avatar over HTTP (same host and port as the socket). */
+export const KERNEL_HTTP_URL = kernelHttpBase(ORCHESTRATOR_URL);
 // Reconnect backs off 250 ms -> 500 -> 1000 -> 2000 (then stays at 2 s) and resets once
 // connected. A flat 2 s meant the window noticed a freshly started orchestrator up to
 // 2 s late; most of a cold start is spent in the first few retries.
 const RECONNECT_BASE_MS = 250;
 const RECONNECT_MAX_MS = 2000;
 
+export type { WaifuStateMessage } from "./waifu-state";
 export type SpeakMessage = {
   type: "speak";
   text: string;
@@ -178,6 +182,9 @@ interface WsClientOptions {
   /** Fired on connect and whenever the API-model switch changes (the tray and
    * the quick-action menu both drive the same server state). */
   onSettings?: (msg: SettingsMessage) => void;
+  /** The kernel's roster and active waifu (a voice and a persona only). Sent on connect and
+   * after every switch. */
+  onWaifuState?: (msg: WaifuStateMessage) => void;
   /** VAD state changes, for the UI's listening indicator. */
   onSpeechState?: (msg: SpeechStateMessage) => void;
   /** The user interrupted her; drop audio and the reply. */
@@ -236,7 +243,8 @@ export class WsClient {
         | RequestCameraFrameMessage
         | SettingsMessage
         | SpeechStateMessage
-        | BargeInMessage;
+        | BargeInMessage
+        | WaifuStateMessage;
       try {
         parsed = JSON.parse(event.data);
       } catch {
@@ -262,6 +270,8 @@ export class WsClient {
         this.opts.onSpeechState?.(parsed);
       } else if (parsed.type === "barge_in") {
         this.opts.onBargeIn?.();
+      } else if (parsed.type === "waifu_state") {
+        this.opts.onWaifuState?.(parsed);
       }
     });
 
@@ -390,6 +400,13 @@ export class WsClient {
   sendSetApiModel(enabled: boolean): void {
     if (this.socket?.readyState !== WebSocket.OPEN) return;
     this.socket.send(JSON.stringify({ type: "set_api_model", enabled }));
+  }
+
+  /** Ask the kernel to switch the active waifu. It changes only her persona and voice, applies
+   * between turns, and answers with a `waifu_state`; the UI follows that reply, not the click. */
+  sendSwitchWaifu(id: string): void {
+    if (this.socket?.readyState !== WebSocket.OPEN) return;
+    this.socket.send(JSON.stringify({ type: "switch_waifu", id }));
   }
 
   /** One 20 ms PCM16 frame at 16 kHz, base64. Fire-and-forget: the VAD on the
