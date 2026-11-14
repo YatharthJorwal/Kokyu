@@ -82,6 +82,22 @@ def test_an_observer_window_cannot_switch_them(kernel, monkeypatch):
     assert ocr_watch.get_state().active is False
 
 
+def test_the_widgets_old_ocr_toggle_gets_the_same_gate_and_vision_check(kernel, monkeypatch):
+    # Review finding: Yuri's widget still sends set_ocr_watch.
+    client, holder = kernel
+    holder["value"] = ["completion"]
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "screen_companions")
+        ws.send_json({"type": "set_ocr_watch", "enabled": True})
+        assert _until(ws, "error")["data"]["code"] == "vision_unavailable"
+        holder["value"] = ["completion", "vision"]
+        monkeypatch.setattr(app, "_driver", object())   # an observer window
+        ws.send_json({"type": "set_ocr_watch", "enabled": True})
+        ws.send_json({"v": 1, "type": "thread_list", "data": {}})
+        _until(ws, "thread_list")
+    assert ocr_watch.get_state().active is False
+
+
 def test_typing_keeps_ocr_watch_quiet_for_a_while(kernel, monkeypatch):
     # FR-SC-5: no remark while the user is typing.
     client, _ = kernel

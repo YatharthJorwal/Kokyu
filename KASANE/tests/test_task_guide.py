@@ -26,8 +26,9 @@ def _reset_state():
     state into each other, same reasoning app.py's globals would need if
     they were ever tested directly."""
     task_guide.clear_active_task()
+    task_guide.set_enabled(True)   # the classifier only acts while Task Guide is on (FR-SC-1)
     yield
-    task_guide.clear_active_task()
+    task_guide.set_enabled(False)
 
 
 # ---------------------------------------------------------------------------
@@ -223,6 +224,21 @@ async def test_maybe_update_task_start(monkeypatch):
     state = task_guide.get_state()
     assert state.active is True
     assert state.description == "writing the game loop"
+
+
+@pytest.mark.asyncio
+async def test_task_guide_turned_off_while_the_classifier_runs_stays_off(monkeypatch):
+    # Review finding (FR-SC-1): a start detected after the user stopped Task Guide
+    # must not re-arm it.
+    task_guide.set_enabled(True)
+
+    async def fake_stream_reply(messages, **_kw):
+        task_guide.set_enabled(False)          # the chip's x, clicked mid-classify
+        yield '{"action": "start", "description": "writing the game loop"}'
+
+    monkeypatch.setattr(task_guide.llm, "stream_reply", fake_stream_reply)
+    assert await task_guide.maybe_update_task("I'm going to work on the game loop") is None
+    assert task_guide.get_state().active is False
 
 
 @pytest.mark.asyncio

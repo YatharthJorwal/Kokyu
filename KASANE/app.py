@@ -1309,6 +1309,8 @@ async def _run_ocr_watch_check(
         return
 
     allowed, reason = ARBITER.may_speak_ambient()
+    if allowed and _typing_recently():
+        allowed, reason = False, "the user is typing"   # FR-SC-5: the check took seconds
     if not allowed:
         print(f"[yuri] ocr watch: comment suppressed ({reason})", file=sys.stderr)
         return
@@ -1556,7 +1558,10 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             try:
                 await turn
             finally:
-                await _apply_pending_switch()
+                try:
+                    await _apply_pending_switch()
+                except Exception as exc:  # noqa: BLE001 -- a failed switch must not fail the turn or the teardown
+                    print(f"[kokyu] companion switch after the reply failed: {exc}", file=sys.stderr)
 
         return asyncio.create_task(_turn_then_switch())
 
@@ -1658,7 +1663,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         while True:
             await asyncio.sleep(TASK_GUIDE_POLL_SECONDS)
             state = task_guide.get_state()
-            if not state.active:
+            if not state.active or not task_guide.enabled() or websocket is not _driver:
                 continue
             if task_guide.is_idle(state, CONFIG.task_guide.idle_timeout_seconds):
                 # Stepped away -- drop the task silently, no chide.
@@ -1694,7 +1699,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         while True:
             await asyncio.sleep(OCR_WATCH_POLL_SECONDS)
             state = ocr_watch.get_state()
-            if not state.active:
+            if not state.active or websocket is not _driver:
                 pause_announced = False
                 continue
             paused = CONFIG.ocr_watch.pause_during_task and task_guide.get_state().active
@@ -1732,12 +1737,10 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     websocket, history, temp_mode, temp_turn_flags, unprompted_msgs
                 )
 
-    task_guide_task: asyncio.Task | None = (
-        asyncio.create_task(_task_guide_loop()) if is_driver else None
-    )
-    ocr_watch_task: asyncio.Task | None = (
-        asyncio.create_task(_ocr_watch_loop()) if is_driver else None
-    )
+    # Every connection has the loops and only the driver's act, so a window promoted
+    # to driver keeps the screen companions running.
+    task_guide_task: asyncio.Task | None = asyncio.create_task(_task_guide_loop())
+    ocr_watch_task: asyncio.Task | None = asyncio.create_task(_ocr_watch_loop())
 
     try:
         while True:
@@ -1979,25 +1982,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 continue
 
             if msg_type == "set_ocr_watch":
-                # Quick-action menu's Continuous OCR toggle. Unlike
-                # temp_mode, this genuinely is module-level, shared state
-                # (ocr_watch.py, same reasoning task_guide's own state
-                # has for being module-level rather than per-connection)
-                # -- but in practice only the driver's own menu can ever
-                # send this, since it's an observer-window UI element
-                # this build doesn't even show, so no explicit gate is
-                # needed here either.
-                ocr_watch.set_active(bool(data.get("enabled")))
-                await _broadcast_screen_status()
-                # Logged because the shell used to drop this message silently
-                # when its socket wasn't open yet, which looked exactly like
-                # "Continuous OCR does nothing"; a receipt line settles it.
-                print(
-                    f"[yuri] ocr watch: {'enabled' if data.get('enabled') else 'disabled'} "
-                    f"by the shell (interval {CONFIG.ocr_watch.comment_interval_seconds}s)",
-                    file=sys.stderr,
-                )
-                continue
+                # Yuri's widget toggle: the + tray's message in old clothes, so it gets the
+                # same driver gate and local-vision check (FR-SC-3).
+                msg_type, data = "screen_companion", {"mode": "ocr_watch", "on": data.get("enabled")}
 
             if msg_type == "typing":
                 global _last_typed_at
@@ -2258,6 +2245,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        pending_waifu_id = None   # nobody is left to switch for: no divider, no saved choice
         unsubscribe_model_status()
         _active_connections.discard(websocket)
         _connection_surface.pop(websocket, None)
@@ -2284,7 +2272,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         # mutating mid-append.
         if current_turn_task is not None and not current_turn_task.done():
             current_turn_task.cancel()
-            with contextlib.suppress(asyncio.CancelledError):
+            with contextlib.suppress(asyncio.CancelledError, Exception):
                 await current_turn_task
         # Phase 4 Round 2 -- same reasoning as current_turn_task above,
         # for the task-guide background loop: it's an infinite loop by

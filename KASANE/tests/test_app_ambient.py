@@ -90,6 +90,20 @@ async def test_a_real_change_still_gets_a_comment_once_the_gap_has_passed(monkey
 
 
 @pytest.mark.asyncio
+async def test_typing_that_starts_during_the_check_keeps_her_quiet(monkeypatch, _isolate, capsys):
+    # FR-SC-5 (review finding): the check takes seconds; the loop's typing check ran before it.
+    spoken = _isolate
+
+    async def typed_meanwhile(_prev, _img):
+        monkeypatch.setattr(app, "_last_typed_at", app.time.monotonic())
+        return {"comment_worthy": True, "summary": "a spreadsheet", "note": "they are in a spreadsheet"}
+
+    monkeypatch.setattr(app.ocr_watch, "check_for_comment", typed_meanwhile)
+    await app._run_ocr_watch_check(FakeWebSocket(), [{"role": "system", "content": "persona"}], False, [], [])
+    assert spoken == [] and "the user is typing" in capsys.readouterr().err
+
+
+@pytest.mark.asyncio
 async def test_suppression_reason_is_logged(monkeypatch, capsys):
     _vlm(monkeypatch, ["Minecraft gameplay with anime avatar overlay"] * 2)
     ws, history = FakeWebSocket(), [{"role": "system", "content": "persona"}]

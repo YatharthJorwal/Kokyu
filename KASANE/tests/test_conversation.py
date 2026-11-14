@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import inspect
+import time
 
 import pytest
 from fastapi.testclient import TestClient
@@ -257,6 +258,42 @@ def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
     assert [(m.role, m.speaker_name) for m in stored] == [
         ("user", None), ("assistant", "Alpha"), ("divider", "Beta"), ("user", None), ("assistant", "Beta"),
     ]
+
+
+def test_closing_mid_reply_with_a_switch_pending_still_ends_the_session(kernel, monkeypatch):
+    # Review finding: the pending switch used to write to the closed socket, and that
+    # error skipped the rest of the teardown (screen loops, the session-end memory pass).
+    passes = []
+
+    async def slow_stream(role, messages, tools, **kwargs):
+        await asyncio.sleep(5)
+        yield {"type": "content", "text": "late [happy]"}
+
+    class Writer:
+        async def run_pass(self, reason, *_a, **_k):
+            passes.append(reason)
+
+        def preempt(self):
+            return None
+
+    monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
+    monkeypatch.setattr(app.writer, "WRITER", Writer())
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        ws.send_json({"type": "user_text", "text": "first"})
+        _until(ws, "turn_start")
+        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        state, _ = _until(ws, "waifu_state")
+        assert state["pending"] == "beta"
+        ws.close()                         # the window goes; TestClient cancels the endpoint on exit, so wait here
+        for _ in range(200):
+            if passes:
+                break
+            time.sleep(0.01)
+    assert "session_end" in passes
+    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    assert "divider" not in [m.role for m in stored]                    # nobody was there to switch for
 
 
 def test_rename_search_and_delete(kernel):

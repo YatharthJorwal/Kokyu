@@ -323,8 +323,8 @@ async def maybe_update_task(user_text: str) -> str | None:
         return None
 
     parsed = _parse_task_detection(raw_output)
-    if parsed is None or parsed["action"] == "none":
-        return None
+    if parsed is None or parsed["action"] == "none" or not enabled():
+        return None   # not enabled(): turned off while the classifier ran
 
     if parsed["action"] == "start":
         description = parsed["description"] or "an unspecified task"
