@@ -47,7 +47,7 @@
       },
       "devCsp": {
         "default-src": "'self'",
-        "script-src": "'self'",
+        "script-src": "'self' 'unsafe-inline'",
         "style-src": "'self' 'unsafe-inline'",
         "img-src": "'self' data: blob: http://127.0.0.1:8780",
         "media-src": "'self' data: blob: mediastream:",

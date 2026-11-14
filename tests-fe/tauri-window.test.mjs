@@ -21,7 +21,9 @@ for (const key of ["csp", "devCsp"]) {
   test(`${key}: scripts only from the app, the kernel reachable, nothing else`, () => {
     const csp = conf.app.security[key];
     assert.ok(csp && typeof csp === "object", `${key} must be set`);
-    assert.equal(csp["script-src"], "'self'");
+    // Production: app scripts only. Dev: Vite's React plugin injects one inline
+    // module (the fast-refresh preamble, K1-02), so dev alone allows inline scripts.
+    assert.equal(csp["script-src"], key === "csp" ? "'self'" : "'self' 'unsafe-inline'");
     assert.equal(csp["object-src"], "'none'");
     for (const directive of Object.values(csp)) {
       assert.doesNotMatch(directive, /unsafe-eval|\*/);

@@ -347,3 +347,14 @@ Accepted · Default · 2026-11-14
 - **Boot warm-up follows `chat.default_model_ref`** (FR-V-8 targets a warm first token): a llama.cpp default is started and reads the active waifu's system prompt and the tool list once (one-token `chat` call through the router), then the classifier and embedding models are loaded; an Ollama default loads that model (not always `llm.model`); an API default loads nothing. It runs in the background; the kernel serves meanwhile, and a failure is logged and shows up again, with Retry, on the first message. The waifu is only used to pick the prompt (FR-W-3).
 - **Tray Quit (`/shutdown`) stops `llama-server` itself**, because `os._exit` skips the lifespan teardown; the Tauri Job Object stays the backstop.
 **Consequences:** Measured on the PC: warm-up about 110 s after boot (35B) plus 27 s (4B); then the first message's first token in 1.7 s, VRAM 8.4 GB. A "loading model" status in the UI belongs to the model chip (K1-10); until then the kernel log says when the model is ready.
+
+## D-053 K1-02 shell: React chat window now, widget page until K2
+Accepted · User ("Chat now, avatar in K2") · 2026-11-14
+**Context:** D-013 (React + Zustand) was provisional until K1 start. K1-02 replaces Yuri's widget as the main window.
+**Decision:**
+- D-013 confirmed: React 19, Zustand 5, `@vitejs/plugin-react` 4, plain CSS variables.
+- `index.html` is the React chat window (`src/app/`); Yuri's widget moved unchanged to `widget.html` (Vite builds both pages) until the Stage view replaces it in K2. Only one of them should be open at a time (the second connection becomes an observer).
+- All behaviour is a **pure reducer** (`src/app/chat-state.ts`) over v1 frames, Yuri's legacy messages and local events, tested in Node; `store.ts` wraps it in Zustand with the few actions that use the socket (`src/net/kernel.ts`). Components only render.
+- Until v1 equivalents exist, the window still *sends* Yuri's flat `user_text` and `stop`, and plays the legacy `speak` clips (no lip-sync without an avatar). The user's line appears at once and is confirmed by `turn_start`; Retry drops the failed line and resends it.
+- The **dev** CSP allows inline scripts because the React plugin injects its fast-refresh preamble inline; the production CSP stays `script-src 'self'` (the built page has no inline script). A test guards both.
+**Consequences:** K1-03/04/05 extend this shell (sidebar groups and search, Markdown and Regenerate, the `＋` tray and heart). A kernel-side retry/regenerate (no duplicate user line in history) belongs to K1-04.

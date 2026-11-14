@@ -1,0 +1,93 @@
+// The chat window's connection to KASANE (K1-02): one WebSocket, reconnecting
+// with backoff, that splits incoming messages into v1 frames and Yuri's legacy
+// flat messages (D-049) and sends both kinds. No state lives here; the store
+// does that.
+
+import { clientFrame, parseFrame, type ClientData, type ClientType, type Frame } from "./protocol";
+
+export const KERNEL_WS_URL = "ws://127.0.0.1:8780/ws";
+
+export type ConnectionStatus = "connecting" | "online" | "offline";
+export type LegacyMessage = { type: string; [key: string]: unknown };
+
+export interface KernelHandlers {
+  onFrame: (frame: Frame) => void;
+  onLegacy: (msg: LegacyMessage) => void;
+  onStatus: (status: ConnectionStatus) => void;
+  /** A message this window could not understand (wrong protocol version, unknown type). */
+  onProblem: (reason: string) => void;
+}
+
+/** 250 ms, 500, 1000, then 2000 ms between attempts (the widget's schedule). */
+export function backoffMs(attempt: number): number {
+  return Math.min(250 * 2 ** attempt, 2000);
+}
+
+/** Routes one raw message to the right handler. Exported for tests. */
+export function dispatchRaw(raw: string, handlers: KernelHandlers): void {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(raw);
+  } catch {
+    handlers.onProblem("The kernel sent a message this window could not read.");
+    return;
+  }
+  const result = parseFrame(parsed);
+  if (result.kind === "frame") handlers.onFrame(result.frame);
+  else if (result.kind === "legacy") {
+    if (typeof (parsed as { type?: unknown }).type === "string") handlers.onLegacy(parsed as LegacyMessage);
+  } else handlers.onProblem(result.reason);
+}
+
+export class KernelSocket {
+  private socket: WebSocket | null = null;
+  private attempts = 0;
+  private timer: number | undefined;
+  private closed = false;
+
+  constructor(
+    private readonly handlers: KernelHandlers,
+    private readonly url: string = KERNEL_WS_URL,
+  ) {}
+
+  connect(): void {
+    this.closed = false;
+    this.handlers.onStatus("connecting");
+    const socket = new WebSocket(`${this.url}?surface=main`);
+    this.socket = socket;
+    socket.addEventListener("open", () => {
+      this.attempts = 0;
+      this.handlers.onStatus("online");
+      this.send("hello", { client: "main", protocol: 1 });
+    });
+    socket.addEventListener("message", (event) => dispatchRaw(String(event.data), this.handlers));
+    socket.addEventListener("close", () => {
+      if (this.socket !== socket) return;
+      this.socket = null;
+      this.handlers.onStatus("offline");
+      if (!this.closed) this.timer = window.setTimeout(() => this.connect(), backoffMs(this.attempts++));
+    });
+  }
+
+  close(): void {
+    this.closed = true;
+    window.clearTimeout(this.timer);
+    this.socket?.close();
+  }
+
+  /** A v1 frame. Returns false when the socket is not open (nothing is queued). */
+  send<T extends ClientType>(type: T, data: ClientData[T], thread: string | null = null): boolean {
+    return this.sendRaw(clientFrame(type, data, thread));
+  }
+
+  /** One of Yuri's flat messages (`user_text`, `stop`, ...) until they get v1 equivalents. */
+  sendLegacy(msg: LegacyMessage): boolean {
+    return this.sendRaw(msg);
+  }
+
+  private sendRaw(payload: unknown): boolean {
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    this.socket.send(JSON.stringify(payload));
+    return true;
+  }
+}

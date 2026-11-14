@@ -3,11 +3,11 @@
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
 - **Last updated:** 2026-11-14, session 3 (second half)
-- **Current phase:** **K1 in progress** (K1-00 to K1-00d, K1-01 and K1-01b done; next K1-02, the React shell). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
+- **Current phase:** **K1 in progress** (K1-00 to K1-02 done; next K1-03, the sidebar). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
 - **Repo:** `github.com/YatharthJorwal/Kokyu`, `main` pushed directly from the user's PC by Claude this session (no bundle).
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (83), vite build, `cargo check`, pytest (811).
+- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (92), vite build, `cargo check`, pytest (811).
 
 ## 1. What exists
 
@@ -25,7 +25,8 @@
 | Normal app window 1200×800 and an explicit CSP (K1-00d) | Done; `cargo check` and a config test pass; **the window was not looked at** |
 | llama.cpp backend (K1-01, D-051): `local:llamacpp/<preset>`, `llama-server` child managed by the kernel, presets in `config.yaml`, prompt-cache-friendly messages | Done and tested; **live verified** with Qwen3.6-35B-A3B, which is now the default chat model in the user's `config/config.yaml` |
 | Boot warm-up of the default chat model and its helpers; helper roles really use their configured model; Quit stops `llama-server` (K1-01b, D-052) | Done and tested; **live verified** in the real kernel |
-| Chat UI, sidebar, model switcher, creator, pets, 3D | Not started (K1-02 onward) |
+| React chat window (K1-02, D-053): sidebar with New chat and the thread list, streaming thread, Stop, Retry notice, voice clips played; Yuri's widget at `widget.html` | Done and tested; **verified live in a browser** against the real kernel and the 35B (screenshots), not yet inside the Tauri window |
+| Sidebar grouping/search/rename/delete, Markdown, tray, model switcher, creator, pets, 3D | Not started (K1-03 onward) |
 | TTS backend (Track T) | Not started; development uses the existing install (D-042) |
 
 ## 2. Environment
@@ -83,6 +84,8 @@ WebView2 version; where the Luna repo and the VRM files live (`assets/premade/` 
 | llama.cpp with tool calls actually made by the model; thinking on | **Not verified** (the live turns made no tool call; thinking was off) |
 | Real kernel (`app.py`, scratch data folder) with the 35B default: boot warm-up 111 s + 27 s for the 4B helper, kernel serving meanwhile; first WebSocket message after it: first token 1.7 s; classifier ran on `qwen3.5:4b` (Ollama log); VRAM 8.4 GB; `/shutdown` freed ports 8080 and 8780 | **Verified** (user's PC, 2026-11-14) |
 | Before the fix, the same run: first token 49.7 s, because the classifier loaded the 9B and embeddings were cold | Measured, fixed by D-052 |
+| React chat window in a browser (Vite dev + real kernel + 35B): connects, sends, streams token by token with the emotion tag hidden, auto-titles the thread, New chat, switching threads loads saved messages, Stop keeps the partial reply marked Stopped (also after reopening), no console errors | **Verified** (user's PC, built-in browser, 2026-11-14) |
+| The React window inside `tauri dev` / a release build (dev CSP with the inline preamble, voice playback in WebView2) | **Not verified** |
 | Threads: a reply is saved to the open thread, reload returns to it, new/open/rename/search/delete, dividers, the model sees only the open thread | **Verified** (tests over the real WebSocket endpoint, fake model) |
 | Token streaming order and the tag-free `turn_done` text | **Verified** (same) |
 | Threads and streaming with a live model and a real window | **Not verified** |
@@ -97,7 +100,7 @@ WebView2 version; where the Luna repo and the VRM files live (`assets/premade/` 
 
 - **First launch reloads once:** with no stored companion the page loads, the kernel names the active waifu, the page stores it and reloads to get her avatar. Temporary (D-046).
 - **Screen companions:** Task Guide and OCR watch are now v1 features (D-048, FR-SC); their K1 work is K1-05b. Unchanged in code so far.
-- **The window still shows Yuri's widget**, now inside a normal 1200×800 window (K1-00d). The Kokyu chat layout arrives with K1-02 (React shell).
+- **The main window is now the React chat** (K1-02). The avatar is not shown until the Stage view (K2); Yuri's widget is still at `widget.html`. Open only one of them at a time (the second becomes an observer).
 - **The 35B needs about 2 min 20 s after the kernel starts** (warm-up in the background). A message sent before that waits for it; after it, replies start in 1 to 2 s. The UI shows no "loading model" state yet (K1-10).
 - **Helpers in the example config now follow the chat model** (`classifier`/`memory_writer: null`, D-052). Fresh installs keep one model in VRAM; the user's `config.yaml` uses the 4B helpers for the 35B.
 - **The 35B maps ~19.5 GB of RAM** while loaded. With other heavy apps open, generation can drop (one run measured 7 tok/s).

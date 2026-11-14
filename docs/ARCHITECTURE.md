@@ -283,7 +283,7 @@ model tokens → sentence splitter → speech-safe normalizer → TTS adapter �
 
 Yuri's current UI is a **stage-first widget** (340×480 borderless, transparent, always-on-top window; avatar canvas, caption, input, mic, quick-action menu, log panel; inventory §11–12). K0 keeps it untouched apart from a temporary waifu dropdown. The sidebar, Chat view and normal app window arrive in K1; the stage code becomes the Stage view in K2.
 
-React renders chrome: sidebar, thread view, input row, popovers, settings, creator. A **store** (default Zustand, D-013) is fed by WebSocket events. The **engine** (`src/engine/`) is an imperative three.js module mounted into a canvas ref; React never drives per-frame state.
+React renders chrome: sidebar, thread view, input row, popovers, settings, creator. **Since K1-02** (D-053) `index.html` is this window (`src/app/`: `chat-state.ts` pure reducer, `store.ts`, `ui/`; `src/net/kernel.ts` socket) and Yuri's widget lives at `widget.html` until K2. A **store** (default Zustand, D-013) is fed by WebSocket events. The **engine** (`src/engine/`) is an imperative three.js module mounted into a canvas ref; React never drives per-frame state.
 
 Views of one thread: **Chat**, **Stage**, **3D**. All three read the same store.
 

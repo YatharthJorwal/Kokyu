@@ -4,7 +4,8 @@ import { readFileSync } from "node:fs";
 import { join } from "node:path";
 
 // The tests are bundled into node_modules/.cache, so locate the repo by cwd (npm runs them from the root).
-const html = readFileSync(join(process.cwd(), "index.html"), "utf8");
+// Yuri's widget moved to widget.html in K1-02; its heart SVG is ported into the React shell in K1-05.
+const html = readFileSync(join(process.cwd(), "widget.html"), "utf8");
 const block = (id) => {
   const start = html.indexOf(`id="${id}"`);
   assert.ok(start >= 0, `#${id} exists`);
