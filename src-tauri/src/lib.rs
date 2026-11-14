@@ -23,7 +23,7 @@ use tauri::{
     image::Image,
     menu::{CheckMenuItem, Menu, MenuItem},
     tray::{TrayIcon, TrayIconBuilder},
-    Emitter, Manager, PhysicalPosition, Position, WindowEvent,
+    Emitter, Manager, WindowEvent,
 };
 use tauri_plugin_global_shortcut::{Code, GlobalShortcutExt, Shortcut, ShortcutState};
 
@@ -183,7 +183,9 @@ pub fn run() {
                 .get_webview_window("main")
                 .expect("main window must exist -- check the label in tauri.conf.json");
 
-            anchor_bottom_right(&window);
+            // K1-00d: a normal app window, centred (the bottom-right widget
+            // placement went with the widget window).
+            let _ = window.center();
             build_tray(app)?;
             register_push_to_talk_hotkey(app)?;
 
@@ -203,24 +205,6 @@ pub fn run() {
         })
         .run(tauri::generate_context!())
         .expect("error while running Yuri");
-}
-
-/// Places the window in the bottom-right corner of the primary monitor on
-/// first launch, with a small margin, instead of wherever Tauri defaults to.
-fn anchor_bottom_right(window: &tauri::WebviewWindow) {
-    let Ok(Some(monitor)) = window.primary_monitor() else {
-        return;
-    };
-    let Ok(win_size) = window.outer_size() else {
-        return;
-    };
-
-    let screen = monitor.size();
-    let margin: i32 = 24;
-    let x = screen.width as i32 - win_size.width as i32 - margin;
-    let y = screen.height as i32 - win_size.height as i32 - margin;
-
-    let _ = window.set_position(Position::Physical(PhysicalPosition { x, y }));
 }
 
 /// F9 push-to-talk: registered as an OS-level global shortcut, so it works

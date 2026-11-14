@@ -13,29 +13,59 @@
     "windows": [
       {
         "label": "main",
-        "title": "Kokyu",
-        "width": 340,
-        "height": 480,
-        "minWidth": 220,
-        "minHeight": 300,
+        "title": "Kōkyū",
+        "width": 1200,
+        "height": 800,
+        "minWidth": 900,
+        "minHeight": 600,
         "resizable": true,
-        "maximizable": false,
-        "decorations": false,
-        "transparent": true,
-        "alwaysOnTop": true,
+        "maximizable": true,
+        "decorations": true,
+        "transparent": false,
+        "alwaysOnTop": false,
         "skipTaskbar": false,
-        "shadow": false,
+        "shadow": true,
         "visible": true,
-        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required"
+        "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
+        "center": true
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: http://127.0.0.1:8780",
+        "media-src": "'self' data: blob: mediastream:",
+        "font-src": "'self' data:",
+        "worker-src": "'self' blob:",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'",
+        "frame-ancestors": "'none'",
+        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:8780 ws://127.0.0.1:8780"
+      },
+      "devCsp": {
+        "default-src": "'self'",
+        "script-src": "'self'",
+        "style-src": "'self' 'unsafe-inline'",
+        "img-src": "'self' data: blob: http://127.0.0.1:8780",
+        "media-src": "'self' data: blob: mediastream:",
+        "font-src": "'self' data:",
+        "worker-src": "'self' blob:",
+        "object-src": "'none'",
+        "base-uri": "'self'",
+        "form-action": "'none'",
+        "frame-ancestors": "'none'",
+        "connect-src": "'self' ipc: http://ipc.localhost http://127.0.0.1:8780 ws://127.0.0.1:8780 ws://localhost:1420 http://localhost:1420"
+      }
     }
   },
   "bundle": {
     "active": true,
-    "targets": ["nsis"],
+    "targets": [
+      "nsis"
+    ],
     "icon": [
       "icons/32x32.png",
       "icons/64x64.png",
