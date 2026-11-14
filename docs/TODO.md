@@ -94,7 +94,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K1-00c `llm.py` takes a model and an effort/think parameter; `OllamaNativeProvider` honours `model`; `chat` role and the egress policy in `router/decision.py` with tests (D-025, FR-R-4, 5, 7) — **needs the user's OK on D-025 first** (5c7a9ce)
 - [x] K1-00d Normal app window (replace the 340×480 widget window), CSP locked down, Temp Chat flag per thread (FR-MEM-5) (3865ccd; Temp Chat per thread landed in K1-00; the window itself not yet looked at)
 - [x] K1-01 Spike: Qwen3.5-35B-A3B Q4 on llama.cpp with experts on CPU: VRAM, RAM, tokens/s; record numbers. Done with the user's **Qwen3.6**-35B-A3B, and extended into the `llamacpp` provider plus presets so it is the default chat model (D-051) (e05154e)
-- [ ] K1-01b Warm the default chat model at kernel start (load `llama-server`, read the system prompt once) so the first message does not wait 75 to 110 s; report "loading model" to the client while it warms
+- [x] K1-01b Warm the default chat model at kernel start (load `llama-server`, read the system prompt once) so the first message does not wait 75 to 110 s (D-052; the "loading model" UI status moved to K1-10) (bd1de6d)
 - [ ] K1-02 Introduce React shell around the existing engine; Zustand store fed by WebSocket events (D-013)
 - [ ] K1-03 Sidebar: waifu list, history (grouped, search, rename, delete), Settings entry (FR-C-6)
 - [ ] K1-04 Thread view with streaming, Markdown, copy/regenerate, Stop (FR-C-1, 2, 8, 9, 10)
@@ -105,7 +105,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6)
 - [ ] K1-08b Generic `openai_compat` provider (base URL plus key; AI Router, OpenRouter, DeepSeek presets); end-user keys in the Windows Credential Manager through the shell (D-037, FR-R-6)
 - [ ] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-6, ARCHITECTURE §7.3)
-- [ ] K1-10 Model chip + popover (search, Local/API sections, badges, footer meters) (FR-M-1, 2, 5, 7)
+- [ ] K1-10 Model chip + popover (search, Local/API sections, badges, footer meters) (FR-M-1, 2, 5, 7); a "loading model" state while the kernel warms or switches models (D-052)
 - [ ] K1-11 Effort slider with animation and reduced-motion fallback (FR-M-8, 9, 11)
 - [ ] K1-12 Inline API failure UX with Retry / Switch model (FR-R-5)
 - [ ] K1-13 Settings (FR-SET-1, 2), Doctor panel (FR-SET-3), Memory viewer (FR-MEM-4)
