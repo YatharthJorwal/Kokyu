@@ -85,7 +85,7 @@ Today the repository carries **MIT**, and only documentation is published. The u
 
 None of this is code, but several items can block a release.
 
-1. **Premade companions (2 to 3):** each needs a VRM with documented rights to redistribute inside a paid product (commissioned, or self-made; check the terms of the tool used, for example VRoid Studio), plus an original voice recording or a voice you hold commercial rights to. **Do not ship Luna's or Yuri's current assets** unless their provenance is confirmed. Yuri's example reference clip has a file name that suggests a downloaded sample (**unverified**).
+1. **Premade companions (2 to 3):** each needs a VRM with documented rights to redistribute inside a paid product (commissioned, or self-made; check the terms of the tool used, for example VRoid Studio), plus an original voice recording or a voice you hold commercial rights to. **Update 2026-11-12:** the owner confirmed Luna's and Yuri's VRMs are self-made and their reference voices were generated on the ElevenLabs website, so they ship as the premade companions (D-041). Still to verify before a release: the ElevenLabs plan used (commercial rights) and the provenance of the app icons (`docs/THIRD-PARTY.md`).
 2. **Premade personas:** keep them conservative by default. User-created companions are the user's content; what the *product* ships and markets must fit the payment provider's and any store's rules.
 3. **Animations:** Luna tracks an open-licensed VRMA pack with notices; keep the notices, record them in `docs/THIRD-PARTY.md`.
 4. **Dependencies:** closed-source distribution needs permissive licenses (MIT, Apache, BSD). No GPL/AGPL or non-commercial dependency without a decision entry (R-38). Model weights are never bundled.
