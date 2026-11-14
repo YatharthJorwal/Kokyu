@@ -2,31 +2,36 @@
 
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-14, session 3 (second half)
-- **Current phase:** **K1 in progress** (K1-00 to K1-02 done; next K1-03, the sidebar). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main` pushed directly from the user's PC by Claude this session (no bundle).
+- **Last updated:** 2026-11-15 (about 01:30), end of session 3
+- **Current phase:** **K1 in progress.** Done: K1-00 to K1-08b except K1-04b and K1-07b. Left: K1-04b, K1-07b, K1-09, K1-11, K1-12, K1-13, K1-14, then the K1 gate. The K0 manual gate (window, voice) is still open (§6).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, pushed directly from the user's PC by Claude (no bundle). Last code commit `5b04a30` (K1-08b).
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (92), vite build, `cargo check`, pytest (811).
+- **Last green run (the user's PC, 2026-11-15):** `npm run check` with cargo: tsc, frontend tests (121, one of them from the peer's uncommitted effort slider), vite build, `cargo check`, pytest (948). Also `cargo test --lib` (2, plus 7 opt-in live Credential Manager tests).
 
 ## 1. What exists
 
 | Area | State |
 |---|---|
 | Docs, README, proprietary LICENSE, `THIRD-PARTY.md` | Written |
-| Kernel `KASANE/` (flat modules): seeded from Yuri, renamed, port 8780, `paths.py`, waifu packs and registry, `prompting.py`, per-waifu TTS, speaker-tagged memory (schema v3), `switch_waifu`, `GET /waifus/{id}/vrm` | Done and tested |
-| Shell: Yuri's stage widget + a Companion picker in the quick-action menu, caption-only playback, per-waifu avatar by reload | Done; **only built and unit-tested here** |
-| `scripts/build_premade.py` (premade Luna and Yuri packs from the user's files) | Done and tested with fixtures; **not yet run on the real files** |
-| `npm run check` | Done |
-| Premade packs `assets/premade/{luna,yuri}/` | **Do not exist yet**: the VRMs and `.wav` files are on the user's disk, not in git (transcripts are in `KASANE/voice_files/`) |
-| Threads store `threads.db` and conversation manager (K1-00): every connection works in a saved thread; new/open/rename/delete/search; companion dividers; Temp Chat per thread | Done and tested (kernel only; no UI yet) |
-| Typed protocol v1 and token streaming (K1-00b): envelope, validation, `turn_start`/`token`/`turn_done`, TS mirror in `src/net/protocol.ts` | Done and tested (kernel + pure TS; the widget ignores frames) |
-| Per-thread model and effort, `chat` role, D-025 egress rules, Retry/Switch-model error frames (K1-00c, D-050) | Done and tested; live local call verified |
-| Normal app window 1200×800 and an explicit CSP (K1-00d) | Done; `cargo check` and a config test pass; **the window was not looked at** |
-| llama.cpp backend (K1-01, D-051): `local:llamacpp/<preset>`, `llama-server` child managed by the kernel, presets in `config.yaml`, prompt-cache-friendly messages | Done and tested; **live verified** with Qwen3.6-35B-A3B, which is now the default chat model in the user's `config/config.yaml` |
-| Boot warm-up of the default chat model and its helpers; helper roles really use their configured model; Quit stops `llama-server` (K1-01b, D-052) | Done and tested; **live verified** in the real kernel |
-| React chat window (K1-02, D-053): sidebar with New chat and the thread list, streaming thread, Stop, Retry notice, voice clips played; Yuri's widget at `widget.html` | Done and tested; **verified live in a browser** against the real kernel and the 35B (screenshots), not yet inside the Tauri window |
-| Sidebar grouping/search/rename/delete, Markdown, tray, model switcher, creator, pets, 3D | Not started (K1-03 onward) |
+| Kernel `KASANE/` (flat modules): seeded from Yuri, renamed, port 8780, `paths.py`, waifu packs and registry, `prompting.py`, per-waifu TTS, speaker-tagged memory, `switch_waifu` | Done and tested |
+| Threads store, conversation manager, typed protocol v1 with token streaming, per-thread model and effort, D-025 egress rules (K1-00 to K1-00c) | Done and tested; live local calls verified |
+| Normal 1200×800 app window, explicit CSP (K1-00d) | Done; **the window was not looked at** |
+| llama.cpp backend, Qwen3.6-35B-A3B as the default chat model, boot warm-up (K1-01, K1-01b; D-051, D-052) | Done; **live verified** |
+| React chat window (K1-02, D-053); Yuri's widget still at `widget.html` | Done; verified live in a browser |
+| Model chip and popover in the input row: Local (llama.cpp presets, Ollama) and API sections, search, badges, spend footer; one background loader with a "waking up" card, Try again / Switch model; an Ollama pick stops llama-server (K1-10, K1-07a; D-054) | Done; verified live in the browser pane (35B load 109 s, switch to the 9B 54 s) |
+| Sidebar: companions, history grouped by day, search, inline rename, delete (K1-03) | Done; verified live in the browser pane |
+| Markdown replies (in-house parser, no HTML from the model), Copy, kernel-side Regenerate and Retry (K1-04, D-055) | Done; verified live in the browser pane |
+| `＋` tray (Upload file live, the rest disabled until K2), paste/drop attach, status heart (K1-05) | Done; verified live in the browser pane (drop, empty-file alert) |
+| Screen companions: Task Guide and OCR watch in the tray, status chips, local-vision check (K1-05b, D-056) | Done; switched on and off live; a real nudge or OCR remark not seen end to end |
+| Companion chip and "Switched to …" dividers; a switch mid-reply takes effect when the reply ends (K1-06) | Done; verified live with two test packs |
+| Ambient content kept off API models; the kernel websocket refuses foreign Origins (D-057) | Done and tested |
+| AI Router provider: catalog and cache, SSE streaming, spend ledger, budget caps with reservations, audit, redaction (K1-08, D-058) | Done and tested with fakes; **no live API call** (no key on this PC) |
+| One API endpoint at a time (AI Router, OpenRouter, DeepSeek presets, or a custom one in config); key saved in the Windows Credential Manager by the shell, handed to the kernel at spawn and over its stdin when changed; Key form in the model menu (K1-08b, D-059) | Done and tested; live vault tests pass; **the form was not used in the Tauri window** |
+| Premade packs `assets/premade/{luna,yuri}/` (VRM, prompt, voice, `waifu.yaml`) | **Built by a peer session, untracked.** The user decides whether VRM/WAV files get committed (D-041) |
+| Peer work waiting for its TODO item (untracked, do not commit early): `KASANE/vram.py` + `tests/test_vram.py` (K1-09); `src/app/effort-slider.ts`, `ui/EffortSlider.tsx`, `ui/effort-slider.css`, `tests-fe/effort-slider.test.mjs` (K1-11) | Written, not integrated |
+| Design references `docs/reference-images/` (chat UI, stage view, app icon; GPT Image, by the owner) | Stored for later; not used yet |
+| VRAM manager, effort slider, inline API failure UX, Settings/Doctor/Memory viewer | Not started (K1-09, K1-11, K1-12, K1-13) |
 | TTS backend (Track T) | Not started; development uses the existing install (D-042) |
 
 ## 2. Environment
@@ -36,21 +41,17 @@
 | Item | Value |
 |---|---|
 | GPU / CPU / RAM | RTX 3060 12 GB; i5-14400F; 32 GB DDR5-4800 |
-| OS | Windows (PowerShell); local folder `Kokyu.ai` |
+| OS | Windows 11 (PowerShell); repo at `D:\AI\Kokyu.ai` |
 | GPT-SoVITS install | `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (**a space in the path**) |
 | Ollama models | `hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L`, `qwen3.5:9b`, `qwen3.5:4b`, `nomic-embed-text` |
-| llama.cpp | **Qwen3.6**-35B-A3B `UD-Q4_K_XL` (unsloth, ~21 GB) under `D:\AI\hf_cache\hub\models--unsloth--Qwen3.6-35B-A3B-GGUF\...`; no standalone llama.cpp install, the kernel uses the `llama-server.exe` inside Ollama (`%LOCALAPPDATA%\Programs\Ollama\lib\ollama`) |
-| API | AI Router key |
+| llama.cpp | **Qwen3.6**-35B-A3B `UD-Q4_K_XL` (unsloth, ~21 GB) under `D:\AI\hf_cache\hub\models--unsloth--Qwen3.6-35B-A3B-GGUF\...`; the kernel uses the `llama-server.exe` inside Ollama (`%LOCALAPPDATA%\Programs\Ollama\lib\ollama`) |
+| API | An AI Router account; **no key is set up on this PC** (no `.env` key, nothing in the Credential Manager) |
 | Assets | VRMs made by the user; voices generated on the ElevenLabs website (AI-generated) |
 | VR headset | None |
 
-### Sandbox (Claude's session)
-
-Linux, Python 3.12, Node 22. No Rust build, GPU, display, audio, Ollama or GPT-SoVITS.
-
 ### Measured on the user's PC (2026-11-14)
 
-Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; `.venv`, `node_modules` and `src-tauri/launcher.local.txt` (GPT-SoVITS path) exist; `cargo check` passes. Ollama 0.40.16. About 1.2 to 1.4 GB VRAM in use by the desktop; 18 to 19 GB RAM free before loading a model.
+Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.16. About 1.2 to 1.4 GB VRAM in use by the desktop; 18 to 19 GB RAM free before loading a model. `windows-sys` 0.59 was already in `Cargo.lock` (through Tauri), so K1-08b downloaded nothing.
 
 **K1-01 spike: Qwen3.6-35B-A3B Q4 on llama.cpp** (`scripts/spike_llamacpp.py`, ctx 8192, flash attention, `--jinja`, thinking off, 256 generated tokens):
 
@@ -60,84 +61,65 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; `.venv`, `nod
 | 40 | 10 | 3.0 GB | 19.5 / 4.6 GB | 54 | 22.9 |
 | 40 | 10, `--threads-batch 6` | 3.0 GB | 19.5 / 4.6 GB | 58.5 | 23.6 |
 
-Earlier short-prompt runs with 26 and 32 experts on the CPU used more VRAM and were not faster (logs in `logs/spike/`, gitignored). Run-to-run variance is large (the file is memory-mapped and the OS pages it), so treat these as ranges. **Chosen:** `n_cpu_moe 40, threads 10` (D-051).
-
-**Through the real router** (two chat turns, persona plus the real tool list, effort off): server load 43 s; first prompt 1,003 tokens in 29.5 s (34 tok/s, cold pages); first turn 74 s to the first token (111 s in a second run). Second turn (both runs): llama-server re-read only 23 tokens, first token in 0.8 s, 24 to 26 tok/s generation.
-
-### Still unknown
-
-WebView2 version; where the Luna repo and the VRM files live (`assets/premade/` has only its README, so `build_premade.py` has not been run).
+Run-to-run variance is large (the file is memory-mapped), so treat these as ranges. **Chosen:** `n_cpu_moe 40, threads 10` (D-051). Through the real router: first turn 74 to 111 s to the first token cold; with the boot warm-up (D-052) the first message after it starts in 1.7 s; the second turn re-reads 23 tokens, first token 0.8 s, 24 to 26 tok/s. Loading the 35B from the picker took 109 s in K1-10's live run.
 
 ## 3. Verification status
 
 | Claim | Status |
 |---|---|
-| Seed copy is green (641 pytest, 65 frontend, tsc, build) | **Verified** (sandbox) |
-| Current tree: pytest 718, test:fe 76, tsc, vite build | **Verified** (sandbox, `npm run check -- --skip-cargo`) |
-| Real kernel over a real websocket: connect sends `waifu_state`; `switch_waifu` changes the active waifu; unknown id gives an error; choice remembered; `GET /waifus/{id}/vrm` serves the file with the right content type | **Verified** (sandbox, throwaway fixture packs) |
+| Current tree on Windows: pytest 948, test:fe 121, tsc, vite build, cargo check, cargo test | **Verified** (user's PC, 2026-11-15) |
 | Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; router signatures carry no waifu | **Verified** (tests) |
-| `cargo check` / the Rust edits compile | **Verified** (user's PC, 2026-11-14) |
-| Current tree on Windows: pytest 792, test:fe 80, tsc, vite build, cargo check | **Verified** (user's PC, `npm run check`, 2026-11-14) |
-| `chat` role on the real Ollama: `local:ollama/qwen3.5:4b` with effort off, and the default model, both stream a reply through the router; an API model with an ambient capture is refused without any call | **Verified** (user's PC, live script, 2026-11-14; first-token times 50 s / 22 s include a cold model load and are not latency measurements) |
-| A live AI Router call on the `chat` role; `reasoning_effort` accepted by the provider | **Not verified** (no key resolved in this run) |
-| `local:llamacpp/qwen3.6-35b-a3b` through the router: the kernel starts `llama-server`, streams two turns, the second reuses the prompt cache, shutdown stops the server | **Verified** (user's PC, live script, 2026-11-14) |
-| llama.cpp with tool calls actually made by the model; thinking on | **Not verified** (the live turns made no tool call; thinking was off) |
-| Real kernel (`app.py`, scratch data folder) with the 35B default: boot warm-up 111 s + 27 s for the 4B helper, kernel serving meanwhile; first WebSocket message after it: first token 1.7 s; classifier ran on `qwen3.5:4b` (Ollama log); VRAM 8.4 GB; `/shutdown` freed ports 8080 and 8780 | **Verified** (user's PC, 2026-11-14) |
-| Before the fix, the same run: first token 49.7 s, because the classifier loaded the 9B and embeddings were cold | Measured, fixed by D-052 |
-| React chat window in a browser (Vite dev + real kernel + 35B): connects, sends, streams token by token with the emotion tag hidden, auto-titles the thread, New chat, switching threads loads saved messages, Stop keeps the partial reply marked Stopped (also after reopening), no console errors | **Verified** (user's PC, built-in browser, 2026-11-14) |
-| The React window inside `tauri dev` / a release build (dev CSP with the inline preamble, voice playback in WebView2) | **Not verified** |
-| Threads: a reply is saved to the open thread, reload returns to it, new/open/rename/search/delete, dividers, the model sees only the open thread | **Verified** (tests over the real WebSocket endpoint, fake model) |
-| Token streaming order and the tag-free `turn_done` text | **Verified** (same) |
-| Threads and streaming with a live model and a real window | **Not verified** |
-| The window opens, the Companion picker works, the avatar swaps on reload, loads from the kernel | **Not verified** (needs the PC) |
-| Audible voice per waifu with the real clips on the real GPT-SoVITS | **Not verified** (needs the PC) |
-| `build_premade.py` on the real VRMs, wavs, and the Luna repo | **Not verified** (fixtures only) |
-| The Rust launcher reads a `GPT_SOVITS_DIR` containing a space | **Not verified** (Yuri's example says no quotes are needed) |
-| GPT-SoVITS API fields beyond the five in use; Ollama silent install; built-in voice model; Dodo policies | **Unverified** (later phases) |
-| Latency, fps, VRAM numbers | **Targets / estimates** only |
+| Real kernel + 35B: boot warm-up, first WebSocket message's first token 1.7 s, classifier on `qwen3.5:4b`, `/shutdown` frees ports | **Verified** (user's PC, 2026-11-14) |
+| React chat window in a browser against the real kernel: streaming, Stop, threads, sidebar, Markdown, Regenerate, tray upload, model picker loads and switches, companion chip and dividers | **Verified** (built-in browser pane, 2026-11-14) |
+| Anything inside the Tauri window (`npm run tauri dev`): the window itself, voice playback in WebView2, drag-drop, the native file dialog, the Key form | **Not verified** (Claude cannot see the window) |
+| Credential Manager: write, read back, list, replace, delete, keys written by Windows' own tools, bad names refused without echo | **Verified** (`cargo test -- --ignored`, live vault, cleaned up) |
+| The kernel's stdin key pipe: lines parsed, BOM tolerated, a normal exit with the reader running is clean (the old reader crashed with 0xC0000005) | **Verified** (tests and a live repro) |
+| A live API model call (AI Router, OpenRouter or DeepSeek): streaming, billing from reported usage, `reasoning_effort` accepted | **Not verified** (no key on this PC) |
+| llama.cpp with tool calls actually made by the model; thinking on | **Not verified** |
+| Audible voice per waifu with the real clips on GPT-SoVITS; the premade packs loaded in the app | **Not verified** |
+| Latency, fps, VRAM targets | Targets and spot measurements only |
 
 ## 4. Known issues and risks
 
-- **First launch reloads once:** with no stored companion the page loads, the kernel names the active waifu, the page stores it and reloads to get her avatar. Temporary (D-046).
-- **Screen companions:** Task Guide and OCR watch are now v1 features (D-048, FR-SC); their K1 work is K1-05b. Unchanged in code so far.
-- **The main window is now the React chat** (K1-02). The avatar is not shown until the Stage view (K2); Yuri's widget is still at `widget.html`. Open only one of them at a time (the second becomes an observer).
-- **The 35B needs about 2 min 20 s after the kernel starts** (warm-up in the background). A message sent before that waits for it; after it, replies start in 1 to 2 s. The UI shows no "loading model" state yet (K1-10).
-- **Helpers in the example config now follow the chat model** (`classifier`/`memory_writer: null`, D-052). Fresh installs keep one model in VRAM; the user's `config.yaml` uses the 4B helpers for the 35B.
-- **The 35B maps ~19.5 GB of RAM** while loaded. With other heavy apps open, generation can drop (one run measured 7 tok/s).
-- **Tests read the user's `config/config.yaml`** when it exists (inherited loader). The suite passes with the 35B as the default, but it is not isolated from local config.
-- **`memory.db` moved** to `<repo>/data/memory.db` (it used to be inside the kernel folder). Nothing from Yuri's old memory is imported.
-- **Cosmetic leftovers:** Cargo package/binary `yuri`, log file `orchestrator.log`, the old `window.__YURI_MODEL_PATH__` override, some "yuri" log prefixes (K7 / cleanup).
-- Inherited: faster-whisper on CUDA failed on this machine (CPU STT); port 1420 is shared by `dev:ui` and `tauri dev`; killing instead of tray Quit loses that session's memory consolidation.
+- **No API key on this PC**, so nothing on the API side has run against a real provider. The first live check should be: `npm run tauri dev`, model menu → API → Key, save a key, pick an API model, send a message, then look at `data/spend.db` and `logs/audit.jsonl`.
+- **Open questions waiting for the user:** D-058 (unpriced models such as DeepSeek's: block or flag while a cap is on; currently blocked), D-055 (relax the persona's "no markdown" rule), D-057 (move the websocket token check earlier), speaker tags. See `HANDOFF.md` §6.
+- **The 35B needs about 2 minutes to load** (from boot, or after switching back to it). The "waking up" card shows it; the user asked to keep the model selector as documented and offer other models, which K1-10 did.
+- **Custom API endpoints are config-only** until Settings (K1-13). A preset's URLs cannot be overridden: use your own id (D-059).
+- **The 35B maps ~19.5 GB of RAM** while loaded; with other heavy apps open, generation can drop to ~7 tok/s.
+- **Tests read the user's `config/config.yaml`** when it exists. The suite passes with the 35B default, but it is not isolated from local config.
+- **Peer files sit untracked in the tree** (§1): `git add -A` would commit them, and the VRM/WAV files with them. Always stage explicit paths.
+- **Cosmetic leftovers:** Cargo package/binary `yuri`, log file `orchestrator.log`, some `[yuri]` log prefixes (K7 / cleanup).
+- **Inherited:** faster-whisper on CUDA failed on this machine (CPU STT); port 1420 is shared by `dev:ui` and `tauri dev`; killing instead of tray Quit loses that session's memory consolidation.
 - Risks from the scope still apply (`SCOPE.md` §13).
 
 ## 5. Recent issues log
 
 | Date | Area | Issue | Status |
 |---|---|---|---|
+| 2026-11-15 | keys | Review of K1-08b: changing only `preset:` in a copied config would send the new provider's key to the old URL | Fixed before commit (`5b04a30`): presets fix their URLs |
+| 2026-11-15 | kernel | A daemon thread reading `sys.stdin.buffer` crashed any normal interpreter exit | Fixed (`5b04a30`): own unbuffered handle |
+| 2026-11-15 | billing | Tool rounds, Stop and failed streams were not always billed; the cap ignored calls in flight | Fixed (`c54a938`, D-058) |
+| 2026-11-14 | privacy | Ambient content (screen remarks, capture tools) could reach an API model; the websocket accepted any Origin | Fixed (`460aa1f`, D-057) |
 | 2026-11-14 | build | `npm run check` red on Windows: a test built a Linux venv path with the host's `path.join` | Fixed (`baa0b54`) |
-| 2026-11-12 | build | A `tests/__init__.py` made pytest fail to collect 7 files | Removed; shared fixtures are imported as `waifu_fixtures` (no package) |
-| 2026-11-12 | gitignore | `*.local.*` ignored `launcher.local.txt.example`; the animation notices were ignored | Fixed before the seed commit |
-| 2026-11-12 | docs | Early docs assumed a `kasane` package and a draft protocol | Corrected (D-024) |
 
 ## 6. Manual gate: K0 (the user, on the PC)
 
-Commands are in `HANDOFF.md` §5. Tick and date when done.
+Tick and date when done.
 
 - [x] `npm run check` passes on the PC (including `cargo check`) — 2026-11-14
-- [ ] `scripts/build_premade.py` builds Luna and Yuri from the real files
+- [x] Premade Luna and Yuri packs built from the real files — 2026-11-14 (by a peer session; untracked)
 - [ ] `npm run tauri dev` opens the Kokyū window
-- [ ] The Companion picker (quick-action menu) switches Luna ↔ Yuri: the page reloads once and shows the other avatar
-- [ ] Replies change persona; the voice is audibly different per companion (existing GPT-SoVITS)
-- [ ] With GPT-SoVITS stopped: the reply still appears as a caption, no robotic voice
+- [ ] Switching Luna ↔ Yuri changes persona and voice (existing GPT-SoVITS)
+- [ ] With GPT-SoVITS stopped: the reply still appears, no robotic voice
 
 | Gate | Date | Evidence | Signed by |
 |---|---|---|---|
-| K0 (sandbox, automated) | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
+| K0 (automated) | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
 | K0 (manual, PC) | | | |
 
 ## 7. Update checklist (end of every session)
 
-- [ ] Snapshot header rewritten
-- [ ] "What exists" matches the repo
-- [ ] Verification table honest
-- [ ] Issues logged; gate sign-offs recorded
+- [x] Snapshot header rewritten
+- [x] "What exists" matches the repo
+- [x] Verification table honest
+- [x] Issues logged; gate sign-offs recorded
