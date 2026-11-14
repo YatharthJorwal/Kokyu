@@ -66,6 +66,7 @@ import llm
 import paths
 import prompting
 import router
+from router import model_ref as model_refs
 import settings as runtime_settings
 from senses import look_intent
 from senses import ocr_watch
@@ -80,7 +81,7 @@ from audio import vad
 from audio import voice
 from audio.chunking import extract_ready_chunks, flush
 from config import CONFIG
-from memory import forget, recall, store, writer
+from memory import embeddings, forget, recall, store, writer
 from memory.db import MemoryUnavailableError
 from persona import SYSTEM_PROMPT, apply_persona_pass, extract_emotion_tag
 from tools import vision
@@ -94,7 +95,55 @@ ARBITER = arbiter.Arbiter()
 async def _check_chat_model() -> None:
     # Capability report first (cheap, answers fast), then the warm-up load.
     await llm.report_model_capabilities()
-    await llm.warm_up_model()
+    await _warm_default_chat_model()
+
+
+async def _warm_default_chat_model() -> None:
+    """K1-01b (D-052): load the model a new thread will use, not always the Ollama
+    default. A llama.cpp preset is started and reads the active persona and the
+    tool list once, so the first message reuses that prefix; an Ollama model is
+    loaded as before; an API model needs nothing. Never raises."""
+    if not CONFIG.llm.warm_up_on_start:
+        return
+    ref_text = CONFIG.chat.default_model_ref
+    try:
+        ref = model_refs.parse(ref_text) if ref_text else None
+    except model_refs.ModelRefError as exc:
+        print(f"[kokyu] warm-up skipped: chat.default_model_ref is invalid ({exc})", file=sys.stderr)
+        return
+    if ref is None:
+        await llm.warm_up_model()
+        return
+    if ref.provider == "local_ollama":
+        await llm.warm_up_model(ref.model)
+        return
+    if ref.provider != "llamacpp":
+        return
+    registry = waifus.get_registry()
+    waifu = registry.get(_load_active_id()) or registry.get(registry.default_id() or "")
+    messages = [{"role": "system", "content": _system_message(waifu)}, {"role": "user", "content": "(warm-up)"}]
+    started = time.monotonic()
+    try:
+        await router.get_router().warm(str(ref), messages, tools.offered_schemas(already_looked=False))
+    except Exception as exc:  # noqa: BLE001 -- a failed warm-up shows up again, with Retry, on the first message
+        print(f"[kokyu] warm-up of {ref} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+        return
+    print(f"[kokyu] warm-up: {ref} ready in {time.monotonic() - started:.1f}s", file=sys.stderr)
+    await _warm_helpers()
+
+
+async def _warm_helpers() -> None:
+    """The classifier runs before every reply and recall embeds every message, so
+    a cold load of either lands on the first message (about 48 s measured,
+    K1-01b). Loaded after the chat model, which unloads the rest of Ollama."""
+    from router.decision import LOCAL_PROVIDER, model_for
+
+    classifier = model_for(LOCAL_PROVIDER, "classifier", CONFIG.models)
+    await llm.warm_up_model(classifier)
+    try:
+        await embeddings.embed("warm-up")
+    except Exception as exc:  # noqa: BLE001 -- recall reports its own failures per turn
+        print(f"[kokyu] warm-up of the embedding model failed: {exc}", file=sys.stderr)
 
 
 async def _check_tts() -> None:
@@ -1189,6 +1238,12 @@ async def shutdown_endpoint() -> dict:
         if not _active_connections:
             break
         await asyncio.sleep(0.1)
+
+    # K1-01: os._exit below skips the lifespan teardown, so stop the
+    # llama-server child here or it outlives the kernel (and holds ~20 GB of
+    # RAM and its port). Bounded: Tauri's Job Object is the backstop.
+    with contextlib.suppress(Exception):
+        await asyncio.wait_for(router.get_router().shutdown(), timeout=8)
 
     sys.stdout.flush()
     sys.stderr.flush()

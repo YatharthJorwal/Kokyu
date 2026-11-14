@@ -416,6 +416,22 @@ class Router:
         except Exception as exc:  # noqa: BLE001 -- the audit must never hide the real error
             print(f"[kokyu] router: audit of a blocked turn failed: {exc}", flush=True)
 
+    async def warm(self, model_ref: str, messages: list[dict], tools: list[dict]) -> None:
+        """Loads a chat model and has it read `messages` + `tools` once, so the
+        first real turn starts from a cached prefix (K1-01b, D-052). A normal
+        `chat` call through the decision path, capped at one token. Raises like
+        any call; the caller decides what a failure means."""
+        request = ModelRequest(
+            role=decide_mod.CHAT_ROLE,
+            messages=tuple(messages),
+            tools=tuple(tools),
+            stream=True,
+            max_tokens=1,
+            model_ref=model_ref,
+        )
+        async for _chunk in self.complete(request):
+            pass
+
     async def shutdown(self) -> None:
         """Stops child model servers (llama-server) the router started."""
         provider = self._llamacpp_provider

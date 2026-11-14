@@ -24,10 +24,11 @@ class OllamaNativeProvider:
 
     async def complete(self, request: ModelRequest, *, model: str) -> AsyncIterator[ModelChunk]:
         messages = [dict(message) for message in request.messages]
-        # K1-00c: a thread's chosen model and effort reach llm.py only when set,
-        # so calls without a selection keep the exact old shape (and stubs).
+        # The router's choice is the model (K1-01b, D-052). Yuri passed nothing
+        # here, so every local role silently ran on llm.model whatever the
+        # config and the audit log said.
         overrides: dict = {}
-        if request.model_ref:
+        if model:
             overrides["model"] = model
         think = model_refs.ollama_think(request.effort)
         if think is not None:

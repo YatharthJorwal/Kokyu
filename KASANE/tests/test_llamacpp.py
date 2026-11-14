@@ -2,6 +2,7 @@
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 from pathlib import Path
 
@@ -137,14 +138,18 @@ async def test_the_server_starts_once_unloads_ollama_and_restarts_for_another_pr
         if request.url.path == "/health":
             return httpx.Response(200 if health["ok"] else 503)
         if request.url.path == "/api/ps":
-            return httpx.Response(200, json={"models": [{"name": "qwen3.5:9b"}]})
+            names = ["qwen3.5:9b", "qwen3.5:4b", "nomic-embed-text:latest"]
+            return httpx.Response(200, json={"models": [{"name": n} for n in names]})
         if request.url.path == "/api/generate":
             unloaded.append(json.loads(request.content)["model"])
             return httpx.Response(200, json={})
         return httpx.Response(404)
 
     cfg = LlamaCppConfig(server_path=str(server_exe))
-    server = lc.LlamaCppServer(cfg, spawn=spawn, transport=transport(handler), ollama_url="http://ollama", poll_s=0)
+    keep = frozenset({"qwen3.5:4b", "nomic-embed-text"})       # the helpers stay loaded (D-052)
+    server = lc.LlamaCppServer(
+        cfg, spawn=spawn, transport=transport(handler), ollama_url="http://ollama", poll_s=0, keep_loaded=keep,
+    )
     a = preset(tmp_path)
     await server.ensure(a)
     await server.ensure(a)                                   # already up: no second spawn
@@ -247,3 +252,25 @@ def test_two_turns_share_the_same_prefix_so_the_server_cache_is_reused():
     one, two = lc.openai_messages(turn1), lc.openai_messages(turn2)
     assert one[:2] == two[:2]                       # system prompt and first turn are byte-identical
     assert two[-1]["content"].startswith("[Context for this message]\nrecall two")
+
+
+def test_the_helpers_kept_beside_llama_server_come_from_the_config(monkeypatch):
+    models = dataclasses.replace(
+        config.CONFIG.models, local={**config.CONFIG.models.local, "classifier": "small:2b", "memory_writer": None, "reflex": "big:9b"},
+    )
+    monkeypatch.setattr(lc, "CONFIG", dataclasses.replace(config.CONFIG, models=models))
+    keep = lc.helper_models()
+    assert {"small:2b", "big:9b"} <= keep                  # a null helper means "the reflex model", so that one stays
+    assert config.CONFIG.memory.embedding.model in keep
+
+
+def test_a_null_helper_model_means_the_reflex_model(tmp_path):
+    from router.decision import LOCAL_PROVIDER, model_for
+
+    cfg_file = tmp_path / "config.yaml"
+    cfg_file.write_text(
+        "models:\n  local:\n    reflex: 'big:9b'\n    classifier: null\n    memory_writer: 'small:4b'\n", encoding="utf-8",
+    )
+    models = load_config(cfg_file, quiet=True).models
+    assert model_for(LOCAL_PROVIDER, "classifier", models) == "big:9b"       # one model in VRAM on a 9B-only PC
+    assert model_for(LOCAL_PROVIDER, "memory_writer", models) == "small:4b"

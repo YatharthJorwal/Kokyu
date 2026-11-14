@@ -21,7 +21,7 @@ def stub_model(monkeypatch, responder):
     Returns the list of message-lists the model was called with."""
     calls: list[list[dict]] = []
 
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         calls.append(messages)
         text = responder(messages) if callable(responder) else responder
         for ch in text:
@@ -32,7 +32,7 @@ def stub_model(monkeypatch, responder):
 
 
 def stub_model_down(monkeypatch):
-    async def failing(messages):
+    async def failing(messages, **_kw):
         raise llm.LLMUnreachableError("no server")
         yield  # pragma: no cover
 

@@ -152,16 +152,34 @@ def openai_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return out
 
 
-async def unload_ollama(base_url: str, *, transport: httpx.AsyncBaseTransport | None = None) -> list[str]:
-    """Ask Ollama to drop every loaded model (keep_alive 0) so the GPU is free
-    for llama-server. Best effort: an Ollama that is not running is fine."""
+def _bare(name: str) -> str:
+    return name[: -len(":latest")] if name.endswith(":latest") else name
+
+
+def helper_models() -> frozenset[str]:
+    """Ollama models the kernel itself uses beside the chat model (classifier,
+    memory writer, embeddings). They are small and stay loaded next to a MoE
+    whose experts live in system RAM (D-052)."""
+    from router.decision import LOCAL_PROVIDER, model_for
+
+    names = {model_for(LOCAL_PROVIDER, role, CONFIG.models) for role in ("classifier", "memory_writer", "embed")}
+    names.add(CONFIG.memory.embedding.model)
+    return frozenset(_bare(n) for n in names if n)
+
+
+async def unload_ollama(
+    base_url: str, *, keep: frozenset[str] = frozenset(), transport: httpx.AsyncBaseTransport | None = None
+) -> list[str]:
+    """Ask Ollama to drop its loaded models (keep_alive 0) so the GPU is free
+    for llama-server, except the helpers in `keep`. Best effort: an Ollama that
+    is not running is fine."""
     unloaded: list[str] = []
     try:
         async with httpx.AsyncClient(transport=transport, timeout=10.0) as client:
             ps = await client.get(f"{base_url.rstrip('/')}/api/ps")
             for model in (ps.json() or {}).get("models") or []:
                 name = model.get("name") or model.get("model")
-                if not name:
+                if not name or _bare(name) in keep:
                     continue
                 await client.post(f"{base_url.rstrip('/')}/api/generate", json={"model": name, "keep_alive": 0})
                 unloaded.append(name)
@@ -181,8 +199,10 @@ class LlamaCppServer:
         transport: httpx.AsyncBaseTransport | None = None,
         ollama_url: str | None = None,
         poll_s: float = 1.0,
+        keep_loaded: frozenset[str] | None = None,
     ) -> None:
         self.cfg = cfg
+        self._keep = helper_models() if keep_loaded is None else keep_loaded
         self._spawn = spawn
         self._transport = transport
         self._ollama_url = ollama_url or CONFIG.llm.base_url
@@ -227,7 +247,7 @@ class LlamaCppServer:
                     f"another program is already serving on {self.base_url} (often a leftover "
                     "llama-server.exe from a crash: end it in Task Manager), or change llamacpp.port."
                 )
-            await unload_ollama(self._ollama_url, transport=self._transport)
+            await unload_ollama(self._ollama_url, keep=self._keep, transport=self._transport)
             log_path = paths.logs_dir() / LOG_NAME
             log_path.parent.mkdir(parents=True, exist_ok=True)
             log = open(log_path, "ab")  # noqa: SIM115 -- handed to the child, closed in _stop_locked

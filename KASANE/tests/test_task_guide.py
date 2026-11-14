@@ -213,7 +213,7 @@ def test_parse_check_result_missing_note_defaults_empty():
 
 @pytest.mark.asyncio
 async def test_maybe_update_task_start(monkeypatch):
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         yield '{"action": "start", "description": "writing the game loop"}'
 
     monkeypatch.setattr(task_guide.llm, "stream_reply", fake_stream_reply)
@@ -229,7 +229,7 @@ async def test_maybe_update_task_start(monkeypatch):
 async def test_maybe_update_task_stop_when_active(monkeypatch):
     task_guide.set_active_task(True, "something")
 
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         yield '{"action": "stop"}'
 
     monkeypatch.setattr(task_guide.llm, "stream_reply", fake_stream_reply)
@@ -240,7 +240,7 @@ async def test_maybe_update_task_stop_when_active(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_maybe_update_task_stop_when_not_active_returns_none(monkeypatch):
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         yield '{"action": "stop"}'
 
     monkeypatch.setattr(task_guide.llm, "stream_reply", fake_stream_reply)
@@ -250,7 +250,7 @@ async def test_maybe_update_task_stop_when_not_active_returns_none(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_maybe_update_task_none_returns_none(monkeypatch):
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         yield '{"action": "none"}'
 
     monkeypatch.setattr(task_guide.llm, "stream_reply", fake_stream_reply)
@@ -261,7 +261,7 @@ async def test_maybe_update_task_none_returns_none(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_maybe_update_task_llm_unreachable_returns_none(monkeypatch):
-    async def failing_stream_reply(messages):
+    async def failing_stream_reply(messages, **_kw):
         raise task_guide.llm.LLMUnreachableError("no server")
         yield  # pragma: no cover -- makes this an async generator
 
@@ -272,7 +272,7 @@ async def test_maybe_update_task_llm_unreachable_returns_none(monkeypatch):
 
 @pytest.mark.asyncio
 async def test_maybe_update_task_unparseable_returns_none(monkeypatch):
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         yield "sure, sounds like a task I guess"
 
     monkeypatch.setattr(task_guide.llm, "stream_reply", fake_stream_reply)

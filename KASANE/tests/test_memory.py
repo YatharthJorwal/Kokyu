@@ -230,7 +230,7 @@ async def test_recall_degrades_when_db_unavailable(monkeypatch):
 
 
 def _stub_llm_module(monkeypatch, output_text: str):
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         for ch in output_text:
             yield ch
 
@@ -316,7 +316,7 @@ def test_clear_transcript_log_empty_db_is_noop(memory_db):
 
 
 def _stub_forget_llm(monkeypatch, output_text: str):
-    async def fake_stream_reply(messages):
+    async def fake_stream_reply(messages, **_kw):
         for ch in output_text:
             yield ch
 
@@ -330,7 +330,7 @@ async def test_forget_skips_llm_call_with_no_trigger_word(memory_db, monkeypatch
     fail the test, since it's never supposed to be called."""
     store.add_fact("likes pizza")
 
-    async def should_not_be_called(messages):
+    async def should_not_be_called(messages, **_kw):
         raise AssertionError("LLM should never be called without a forget-intent trigger word")
         yield  # pragma: no cover -- unreachable, keeps this an async generator
 
@@ -399,7 +399,7 @@ async def test_forget_falls_back_to_nothing_on_unparseable_output(memory_db, mon
 async def test_forget_survives_llm_unreachable(memory_db, monkeypatch):
     store.add_fact("likes pizza")
 
-    async def failing_stream_reply(messages):
+    async def failing_stream_reply(messages, **_kw):
         raise forget.llm.LLMUnreachableError("no server")
         yield  # pragma: no cover -- unreachable, keeps this an async generator
 

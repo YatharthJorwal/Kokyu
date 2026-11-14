@@ -34,7 +34,7 @@ def _isolate(monkeypatch):
     async def fake_log(*_a, **_k):
         return None
 
-    async def fake_stream(_messages):
+    async def fake_stream(_messages, **_kw):
         yield "Look at that mess. [annoyed]"
 
     monkeypatch.setattr(app, "_send_speak", fake_send_speak)

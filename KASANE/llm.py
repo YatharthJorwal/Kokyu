@@ -455,7 +455,7 @@ async def model_capabilities(model: str) -> list[str] | None:
     return [str(c) for c in caps] if isinstance(caps, list) else None
 
 
-async def warm_up_model() -> None:
+async def warm_up_model(model: str | None = None) -> None:
     """Loads the chat model into VRAM at startup (an empty-prompt
     /api/generate is Ollama's documented way to do that) with the SAME
     num_ctx every real request uses, so the first message doesn't pay for an
@@ -466,8 +466,9 @@ async def warm_up_model() -> None:
     if CONFIG.llm.api_style != "ollama_native" or not CONFIG.llm.warm_up_on_start:
         return
     url = f"{CONFIG.llm.base_url.rstrip('/')}/api/generate"
+    model = model or CONFIG.llm.model
     payload = {
-        "model": CONFIG.llm.model,
+        "model": model,
         "prompt": "",
         "stream": False,
         "options": _ollama_options(),
@@ -483,7 +484,7 @@ async def warm_up_model() -> None:
             )
             return
         print(
-            f"[yuri] warm-up: '{CONFIG.llm.model}' loaded in {time.monotonic() - started:.1f}s "
+            f"[yuri] warm-up: '{model}' loaded in {time.monotonic() - started:.1f}s "
             f"(num_ctx {CONFIG.llm.num_ctx})",
             file=sys.stderr,
         )

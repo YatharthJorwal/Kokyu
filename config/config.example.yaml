@@ -58,8 +58,11 @@ models:
   local:
     reflex: 'qwen3.5:9b'          # Q4_K_M, 6.55 GB, vision + tools
     vision: null                  # null = use reflex (it reports vision)
-    classifier: 'qwen3.5:4b'      # intent, task, JSON
-    memory_writer: 'qwen3.5:4b'   # summarization; local by policy (D-015)
+    # Helpers that run beside every reply. null = the reflex model, so a 9B-only
+    # setup keeps ONE model in VRAM (9B + 4B + embeddings fill 12 GB, D-052). With
+    # a llama.cpp chat model set them to a small model, e.g. 'qwen3.5:4b'.
+    classifier: null              # intent, task, JSON
+    memory_writer: null           # summarization; local by policy (D-015)
     embed: 'nomic-embed-text'     # 768-dim; sqlite-vec width is fixed to this
     mind: 'qwen3.5:9b'            # local fallback for the mind role
   cloud:

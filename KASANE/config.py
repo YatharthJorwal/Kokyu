@@ -110,8 +110,8 @@ class ModelsConfig:
         default_factory=lambda: {
             "reflex": "qwen3.5:9b",
             "vision": None,              # None = same as reflex
-            "classifier": "qwen3.5:4b",
-            "memory_writer": "qwen3.5:4b",
+            "classifier": None,          # None = same as reflex: one model in VRAM (D-052)
+            "memory_writer": None,
             "embed": "nomic-embed-text",
             "mind": "qwen3.5:9b",
         }
@@ -613,9 +613,10 @@ def _normalize_models(raw: Mapping[str, Any], llm_raw: Mapping[str, Any]) -> Mod
 
     defaults = ModelsConfig()
     merged_local = {**defaults.local, **{k: v for k, v in local.items() if v is not None}}
-    # An explicit null for vision is meaningful: "same as reflex".
-    if local.get("vision", "unset") is None:
-        merged_local["vision"] = None
+    # An explicit null is meaningful for these: "same as reflex" (D-052).
+    for role in ("vision", "classifier", "memory_writer"):
+        if local.get(role, "unset") is None:
+            merged_local[role] = None
     return ModelsConfig(local=merged_local, cloud={**defaults.cloud, **{k: v for k, v in cloud.items() if v}})
 
 

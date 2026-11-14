@@ -156,7 +156,7 @@ async def test_a_failing_api_model_is_an_error_not_a_local_answer(tmp_path):
 
 
 @pytest.mark.asyncio
-async def test_ollama_gets_the_chosen_model_and_effort_only_when_set(monkeypatch):
+async def test_ollama_gets_the_routed_model_always_and_effort_only_when_set(monkeypatch):
     seen = []
 
     async def fake_tools(messages, tools, **kwargs):
@@ -169,7 +169,8 @@ async def test_ollama_gets_the_chosen_model_and_effort_only_when_set(monkeypatch
     base = dict(role="chat", messages=({"role": "user", "content": "hi"},), tools=tools)
     [c async for c in provider.complete(ModelRequest(**base), model="qwen3.5:9b")]
     [c async for c in provider.complete(ModelRequest(**base, model_ref=LOCAL, effort="off"), model="qwen3.5:4b")]
-    assert seen == [{}, {"model": "qwen3.5:4b", "think": False}]
+    # the router's model is always passed (D-052): helper roles no longer fall back to llm.model
+    assert seen == [{"model": "qwen3.5:9b"}, {"model": "qwen3.5:4b", "think": False}]
 
 
 def test_the_api_payload_carries_reasoning_effort():

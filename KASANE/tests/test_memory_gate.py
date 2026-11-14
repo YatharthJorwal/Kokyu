@@ -50,7 +50,7 @@ _CHILD = textwrap.dedent(
     def reply(messages):
         return '{{"facts": [{{"text": "likes tea", "subject": "user", "correction": false}}], "episode_summary": "Tea chat."}}'
 
-    async def good_stream(messages):
+    async def good_stream(messages, **_kw):
         yield reply(messages)
     llm.stream_reply = good_stream
 
@@ -62,7 +62,7 @@ _CHILD = textwrap.dedent(
 
         store.add_transcript_turn("turn after the first pass", "ok")
         if mode == "mid_model":
-            async def hang(messages):
+            async def hang(messages, **_kw):
                 print("WAITING", flush=True)
                 await asyncio.sleep(3600)
                 yield ""
@@ -74,7 +74,7 @@ _CHILD = textwrap.dedent(
                 print("IN_TX", flush=True)
                 time.sleep(3600)
             store.add_episode = stall
-            async def other_stream(messages):
+            async def other_stream(messages, **_kw):
                 yield '{{"facts": [{{"text": "likes coffee", "subject": "user", "correction": false}}], "episode_summary": "Coffee."}}'
             llm.stream_reply = other_stream
         await writer.MemoryWriter().run_pass("session_end")

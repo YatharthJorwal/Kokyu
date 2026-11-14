@@ -327,7 +327,7 @@ async def test_session_end_pass_respects_the_config_switch(memory_db, monkeypatc
 async def test_preempting_a_timer_pass_leaves_nothing_half_written(memory_db, monkeypatch, w):
     stub_embed(monkeypatch)
 
-    async def slow_stream(messages):
+    async def slow_stream(messages, **_kw):
         await asyncio.sleep(5)
         yield distilled(["never lands"], "never")
 
