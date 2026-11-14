@@ -24,6 +24,9 @@ function dispatch(event: ChatEvent): void {
 
 const voice = new VoicePlayer();
 
+const TYPING_EVERY_MS = 4000;
+let lastTypingSent = 0;
+
 const socket = new KernelSocket({
   onFrame: (frame) => dispatch({ kind: "frame", frame }),
   onLegacy: (msg) => {
@@ -115,6 +118,19 @@ export const actions = {
   switchWaifu(id: string): void {
     if (useChat.getState().companion?.id === id) return;
     socket.sendLegacy({ type: "switch_waifu", id });
+  },
+
+  /** FR-SC-5: tells the kernel the user is typing (OCR watch keeps quiet); at most every few seconds. */
+  typing(): void {
+    const now = Date.now();
+    if (now - lastTypingSent < TYPING_EVERY_MS) return;
+    lastTypingSent = now;
+    socket.send("typing", {});
+  },
+
+  /** Task Guide (with the task in the user's words) or OCR watch, on or off (FR-SC-1, 4). */
+  setScreenCompanion(mode: "task_guide" | "ocr_watch", on: boolean, task = ""): void {
+    socket.send("screen_companion", task ? { mode, on, task } : { mode, on });
   },
 
   // ── the model chip (K1-10) ──────────────────────────────────────────

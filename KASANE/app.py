@@ -395,6 +395,45 @@ async def _send_thread_list(websocket: Any, query: str = "") -> None:
     )
 
 
+# FR-SC-5: OCR watch keeps quiet while the user is typing. The chat window sends a
+# `typing` frame at most every few seconds while keys go down.
+TYPING_QUIET_SECONDS = 10.0
+_last_typed_at = 0.0
+
+
+def _typing_recently(now: float | None = None) -> bool:
+    return ((now if now is not None else time.monotonic()) - _last_typed_at) < TYPING_QUIET_SECONDS
+
+
+def _screen_status() -> dict[str, Any]:
+    """K1-05b (FR-SC-2): which screen companion is on, and Task Guide's task."""
+    task = task_guide.get_state()
+    return {
+        "task_guide": {"on": task_guide.enabled(), "task": task.description if task.active else None},
+        "ocr_watch": {"on": ocr_watch.get_state().active},
+    }
+
+
+async def _broadcast_screen_status() -> None:
+    """The state is kernel-wide, so every window's chip follows it."""
+    frame = protocol.frame("screen_companions", _screen_status())
+    for ws in list(_active_connections):
+        with contextlib.suppress(Exception):
+            await ws.send_json(frame)
+
+
+async def _vision_problem() -> str | None:
+    """FR-SC-3: screen companions run on the local vision model only (the `vision`
+    role is local_only). None when it reports that it can see images."""
+    name = llm.vision_model_name()
+    caps = await llm.model_capabilities(name)
+    if caps is None:
+        return f"Screen companions need a local vision model, and Ollama did not answer for '{name}'. Is Ollama running?"
+    if "vision" not in caps:
+        return f"Screen companions need a local model that can see images, and '{name}' cannot. Set llm.vision_model to one that can."
+    return None
+
+
 async def _send_thread_opened(websocket: Any, thread: Any) -> None:
     messages = await _conversations().messages(thread.id)
     await websocket.send_json(
@@ -772,7 +811,10 @@ async def _run_turn(
         # own set_active_task tool call: real testing showed the latter
         # doesn't fire reliably for this model. Same ephemeral-hint treatment
         # as forget_hint right above.
-        task_hint = await task_guide.maybe_update_task(user_text)
+        # FR-SC-1: only while the user has Task Guide on.
+        task_hint = await task_guide.maybe_update_task(user_text) if task_guide.enabled() else None
+        if task_hint:
+            await _broadcast_screen_status()
         memory_block = await recall.build_recall_context(user_text, CONFIG.memory.recall_top_k)
     # Explicit "look at my screen / camera" requests, handled here in Python
     # instead of trusting the model to call capture_screen/capture_camera
@@ -1324,6 +1366,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     # frontend preference: a second window (or a reconnect) must see the same
     # value, and the router is the thing that actually obeys it.
     await websocket.send_json({"type": "settings", **runtime_settings.describe(router.get_router(), CONFIG)})
+    await websocket.send_json(protocol.frame("screen_companions", _screen_status()))
 
     # The active waifu (persona + voice) lives on the connection; it starts as the one the
     # user last used. With no packs installed this stays None and the legacy persona runs.
@@ -1543,6 +1586,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 # Per ARCHITECTURE.md: "the task stays active until ...
                 # an idle timeout is hit." Nobody's there to hear a nudge.
                 task_guide.clear_active_task()
+                await _broadcast_screen_status()
                 continue
             if not task_guide.due_for_check(state, CONFIG.task_guide.capture_interval_seconds):
                 continue
@@ -1600,6 +1644,8 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 continue
             if current_turn_task is not None and not current_turn_task.done():
                 continue
+            if _typing_recently():
+                continue                                 # FR-SC-5: never talk over someone typing
             if ambient_speak_lock.locked():
                 continue
             async with ambient_speak_lock:
@@ -1863,6 +1909,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 # this build doesn't even show, so no explicit gate is
                 # needed here either.
                 ocr_watch.set_active(bool(data.get("enabled")))
+                await _broadcast_screen_status()
                 # Logged because the shell used to drop this message silently
                 # when its socket wasn't open yet, which looked exactly like
                 # "Continuous OCR does nothing"; a receipt line settles it.
@@ -1871,6 +1918,32 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     f"by the shell (interval {CONFIG.ocr_watch.comment_interval_seconds}s)",
                     file=sys.stderr,
                 )
+                continue
+
+            if msg_type == "typing":
+                global _last_typed_at
+                _last_typed_at = time.monotonic()
+                continue
+
+            if msg_type == "screen_companion":
+                # K1-05b (FR-SC-1..4, D-048): the + tray's Task Guide and OCR watch.
+                # Kernel-wide state, so only the driver changes it; every window sees it.
+                if websocket is not _driver:
+                    continue
+                on = bool(data.get("on"))
+                problem = await _vision_problem() if on else None
+                if problem:
+                    await websocket.send_json(protocol.error_frame("vision_unavailable", problem))
+                    await websocket.send_json(protocol.frame("screen_companions", _screen_status()))
+                    continue
+                if data.get("mode") == "task_guide":
+                    task_guide.set_enabled(on)
+                    task = str(data.get("task") or "").strip()
+                    if on and task:
+                        task_guide.set_active_task(True, task)   # a new task replaces the old one
+                else:
+                    ocr_watch.set_active(on)
+                await _broadcast_screen_status()
                 continue
 
             if msg_type == "set_api_model":

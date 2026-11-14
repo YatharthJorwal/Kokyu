@@ -25,7 +25,8 @@ import sys
 import time
 from dataclasses import dataclass, replace
 
-import llm
+import llm
+
 import router
 
 
@@ -87,6 +88,22 @@ def set_active_task(active: bool, description: str = "") -> str:
         return f"Task tracking started: now watching for progress on '{clean_description}'."
     _state = TaskState(active=False, description="", updated_at=now)
     return "Task tracking stopped."
+
+
+# FR-SC-1 (D-048): Task Guide is opt-in and off at every launch. While off, the
+# classifier and the tool start nothing; turning it off ends the task.
+_enabled = False
+
+
+def enabled() -> bool:
+    return _enabled
+
+
+def set_enabled(on: bool) -> None:
+    global _enabled
+    _enabled = on
+    if not on:
+        clear_active_task()
 
 
 def clear_active_task() -> None:

@@ -10,6 +10,7 @@ import {
   type Frame,
   type ModelListData,
   type ModelStatus,
+  type ScreenCompanions,
   type ThreadInfo,
   type ThreadMessage,
 } from "../net/protocol";
@@ -65,6 +66,8 @@ export interface ChatState {
   /** The kernel's chat-model load: the "waking up" card and the chip (FR-M-6). */
   modelStatus: ModelStatus | null;
   pickerOpen: boolean;
+  /** Task Guide / OCR watch (K1-05b); null until the kernel says. */
+  screen: ScreenCompanions | null;
 }
 
 export type LegacyMessage = { type: string; [key: string]: unknown };
@@ -96,6 +99,7 @@ export const initialState: ChatState = {
   models: null,
   modelStatus: null,
   pickerOpen: false,
+  screen: null,
 };
 
 let localCounter = 0;
@@ -249,6 +253,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, models: frame.data as ModelListData };
     case "model_status":
       return { ...state, modelStatus: frame.data as ModelStatus };
+    case "screen_companions":
+      return { ...state, screen: frame.data as ScreenCompanions };
     case "error": {
       const data = frame.data as { code: ErrorCode; message: string; actions?: ("retry" | "switch_model")[] };
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [] };
@@ -304,7 +310,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // and re-sends its model status on reconnect.
       return event.status === "online"
         ? next
-        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null };
+        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };

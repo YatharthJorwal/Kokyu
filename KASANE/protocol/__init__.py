@@ -54,6 +54,15 @@ class ThreadSearch(_Data):
     query: str = Field(default="", max_length=QUERY_MAX)
 
 
+class ScreenCompanion(_Data):
+    """K1-05b (FR-SC-1..4): turn Task Guide or OCR watch on or off; Task Guide may
+    carry the task in the user's words."""
+
+    mode: Literal["task_guide", "ocr_watch"]
+    on: bool
+    task: str = Field(default="", max_length=TITLE_MAX)
+
+
 class SetModel(_Data):
     model_ref: str | None = None      # null = the local default model
 
@@ -90,6 +99,8 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "model_list": ModelListRequest,   # K1-10: what the chip's popover lists
     "model_load": Empty,              # K1-10: Try again after a failed load
     "regenerate": Empty,              # K1-04: run the last exchange again (FR-C-9, Retry)
+    "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
+    "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
 }
 
 # Kernel -> client, versioned.
@@ -105,6 +116,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "error",
     "model_list",     # K1-10 (FR-M-3, 4, 7)
     "model_status",   # K1-10 (FR-M-6): loading / ready / failed
+    "screen_companions",  # K1-05b (FR-SC-2): what is watching the screen
 )
 
 ERROR_CODES: tuple[str, ...] = (
@@ -116,6 +128,7 @@ ERROR_CODES: tuple[str, ...] = (
     "threads_unavailable",
     "model_blocked",
     "model_failed",
+    "vision_unavailable",   # K1-05b (FR-SC-3): no local model can see the screen
 )
 
 

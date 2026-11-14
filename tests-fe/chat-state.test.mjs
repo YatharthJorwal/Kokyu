@@ -201,3 +201,10 @@ test("a file send waits for the kernel's wording of the line (K1-05, FR-C-3)", (
   s = reduce(run(online, { kind: "sent", text: null }), { kind: "legacy", msg: { type: "turn_end" } });
   assert.equal(s.turn, "idle");
 });
+
+test("the screen companions' state comes from the kernel and goes on disconnect (K1-05b)", () => {
+  let s = run(online, frame("screen_companions", { task_guide: { on: true, task: "essay" }, ocr_watch: { on: false } }, null));
+  assert.equal(s.screen.task_guide.task, "essay");
+  s = reduce(s, { kind: "status", status: "offline" });
+  assert.equal(s.screen, null); // a restarted kernel starts with both off (FR-SC-1)
+});

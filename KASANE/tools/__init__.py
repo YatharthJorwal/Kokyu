@@ -146,6 +146,8 @@ def offered_schemas(already_looked: bool = False) -> list[dict[str, Any]]:
 
 
 async def _set_active_task_tool(active: bool = False, description: str = "", **_ignored: Any) -> str:
+    if not task_guide.enabled():
+        return "(Task Guide is off; the user turns it on from the + menu)"
     if not CONFIG.task_guide.model_can_start_tasks:
         # Not offered, but a model can still emit a tool it wasn't given.
         return "(task tracking is started and stopped automatically from what the user says; it isn't a tool you can call)"

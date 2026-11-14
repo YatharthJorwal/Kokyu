@@ -155,11 +155,14 @@ def model_may_start_tasks(monkeypatch):
     refused by default (task_guide.model_can_start_tasks is off)."""
     import dataclasses
 
+    from senses import task_guide
+
     cfg = tools.CONFIG
     monkeypatch.setattr(
         tools, "CONFIG",
         dataclasses.replace(cfg, task_guide=dataclasses.replace(cfg.task_guide, model_can_start_tasks=True)),
     )
+    monkeypatch.setattr(task_guide, "_enabled", True)     # K1-05b: Task Guide is off until the user turns it on
 
 
 @pytest.mark.asyncio
@@ -324,7 +327,7 @@ async def test_a_task_tool_call_is_refused_by_default_and_changes_nothing():
 
     task_guide.clear_active_task()
     result = await tools.dispatch_tool_call("set_active_task", {"active": True, "description": "fix the browser"})
-    assert "automatically" in result
+    assert "Task Guide is off" in result            # off by default (FR-SC-1); with it on, "automatically"
     assert task_guide.get_state().active is False
 
 
@@ -343,3 +346,14 @@ def test_look_tools_are_withheld_once_the_gate_has_looked():
 def test_look_tools_are_offered_when_the_gate_did_not_look():
     names = _names(tools.offered_schemas(already_looked=False))
     assert {"capture_screen", "capture_camera", "read_clipboard"} <= set(names)
+
+
+@pytest.mark.asyncio
+async def test_set_active_task_does_nothing_while_task_guide_is_off(model_may_start_tasks, monkeypatch):
+    # FR-SC-1 (D-048): off by default; the model cannot switch it on by itself.
+    from senses import task_guide
+
+    monkeypatch.setattr(task_guide, "_enabled", False)
+    task_guide.clear_active_task()
+    result = await tools.dispatch_tool_call("set_active_task", {"active": True, "description": "x"})
+    assert "off" in result and task_guide.get_state().active is False

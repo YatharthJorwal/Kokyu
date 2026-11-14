@@ -23,6 +23,8 @@ export const CLIENT_TYPES = [
   "model_list",
   "model_load",
   "regenerate",
+  "screen_companion",
+  "typing",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -37,6 +39,7 @@ export const SERVER_TYPES = [
   "error",
   "model_list",
   "model_status",
+  "screen_companions",
 ] as const;
 
 export const ERROR_CODES = [
@@ -48,7 +51,14 @@ export const ERROR_CODES = [
   "threads_unavailable",
   "model_blocked",
   "model_failed",
+  "vision_unavailable",
 ] as const;
+
+/** K1-05b (FR-SC-2): what is watching the screen right now. */
+export interface ScreenCompanions {
+  task_guide: { on: boolean; task: string | null };
+  ocr_watch: { on: boolean };
+}
 
 export type ClientType = (typeof CLIENT_TYPES)[number];
 export type ServerType = (typeof SERVER_TYPES)[number];
@@ -154,6 +164,7 @@ export interface ServerData {
   };
   model_list: ModelListData;
   model_status: ModelStatus;
+  screen_companions: ScreenCompanions;
 }
 
 export interface ClientData {
@@ -169,6 +180,8 @@ export interface ClientData {
   model_list: { refresh?: boolean };
   model_load: Record<string, never>;
   regenerate: Record<string, never>;
+  screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
+  typing: Record<string, never>;
 }
 
 export type Effort = "off" | "low" | "medium" | "high";
