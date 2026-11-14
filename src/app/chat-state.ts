@@ -58,8 +58,6 @@ export interface ChatState {
   roster: Companion[];
   /** The sidebar's search results (K1-03); null when not searching. */
   search: { query: string; threads: ThreadInfo[] } | null;
-  /** The last line the user sent, for Retry. */
-  lastUserText: string | null;
   /** What a thread with no model or effort of its own uses (from the kernel's hello). */
   defaults: { model_ref: string | null; effort: string | null } | null;
   /** What the model picker lists (K1-10); null until first asked. */
@@ -77,7 +75,7 @@ export type ChatEvent =
   | { kind: "status"; status: ConnectionStatus }
   | { kind: "problem"; reason: string }
   | { kind: "sent"; text: string }
-  | { kind: "retrying" }
+  | { kind: "regenerating" }
   | { kind: "dismiss_notice" }
   | { kind: "picker"; open: boolean };
 
@@ -93,7 +91,6 @@ export const initialState: ChatState = {
   companion: null,
   roster: [],
   search: null,
-  lastUserText: null,
   defaults: null,
   models: null,
   modelStatus: null,
@@ -222,7 +219,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         last && last.role === "user" && last.pending && last.text === user_text
           ? [...state.messages.slice(0, -1), { ...last, pending: false }]
           : [...state.messages, { key: localKey(), role: "user" as const, text: user_text, speaker: null }];
-      return { ...state, messages, turn: "thinking", streamRaw: "", lastUserText: user_text };
+      return { ...state, messages, turn: "thinking", streamRaw: "" };
     }
     case "token": {
       if (!forCurrentThread(state, frame)) return state;
@@ -316,14 +313,16 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
         messages: [...state.messages, { key: localKey(), role: "user", text: event.text, speaker: null, pending: true }],
         turn: "thinking",
         notice: null,
-        lastUserText: event.text,
         pickerOpen: false,
       };
-    case "retrying": {
-      // Drop the failed line; the resend adds it again.
-      const idx = state.messages.map((m) => m.failed === true).lastIndexOf(true);
-      const messages = idx >= 0 ? state.messages.filter((_, i) => i !== idx) : state.messages;
-      return { ...state, messages, notice: null };
+    case "regenerating": {
+      // The kernel runs the last exchange again (Regenerate, or Retry after a
+      // failure): the reply goes, the user line waits for turn_start to confirm it.
+      let messages = state.messages;
+      if (messages[messages.length - 1]?.role === "assistant") messages = messages.slice(0, -1);
+      const last = messages[messages.length - 1];
+      if (last?.role === "user") messages = [...messages.slice(0, -1), { ...last, pending: true, failed: false }];
+      return { ...state, messages, notice: null, turn: "thinking", streamRaw: "" };
     }
     case "dismiss_notice":
       return { ...state, notice: null };

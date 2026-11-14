@@ -1921,7 +1921,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 camera.resolve_pending_frame(data.get("image_b64"))
                 continue
 
-            if msg_type in ("user_text", "user_audio", "user_file") and websocket is not _driver:
+            if msg_type in ("user_text", "user_audio", "user_file", "regenerate") and websocket is not _driver:
                 # Observer window trying to start a turn -- the frontend
                 # should already have disabled its own input for this
                 # (see onSurfaceStatus in main.ts/sandbox.ts), so this is
@@ -1945,6 +1945,35 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
             if msg_type == "audio_end":
                 await _on_voice_event(voice_input.flush())
+                continue
+
+            if msg_type == "regenerate":
+                # K1-04 (FR-C-9): Regenerate the last reply, or Retry a failed turn. The
+                # last exchange leaves the thread and the history first, so the user
+                # line is never stored twice.
+                if current_turn_task is not None and not current_turn_task.done():
+                    await websocket.send_json(
+                        protocol.error_frame("turn_running", "Wait for the reply to finish, or press Stop.")
+                    )
+                    continue
+                if current_thread is None:
+                    await websocket.send_json(
+                        protocol.error_frame("threads_unavailable", "Conversation history is unavailable right now.")
+                    )
+                    continue
+                popped = await manager.pop_last_exchange(current_thread.id)
+                if popped is None:
+                    await websocket.send_json(protocol.error_frame("bad_message", "There is no reply to regenerate."))
+                    continue
+                again, had_reply = popped
+                # A failed turn already left the history; a finished one is still its tail.
+                if had_reply and len(history) > 2 and history[-1]["role"] == "assistant" and history[-2]["content"] == again:
+                    del history[-2:]
+                    if temp_turn_flags is not None:
+                        del temp_turn_flags[-2:]
+                current_turn_task = asyncio.create_task(
+                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
+                )
                 continue
 
             if msg_type == "user_text":

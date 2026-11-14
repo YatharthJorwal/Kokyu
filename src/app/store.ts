@@ -52,11 +52,14 @@ export const actions = {
     socket.sendLegacy({ type: "stop" });
   },
 
-  retry(): void {
-    const { lastUserText } = useChat.getState();
-    if (!lastUserText) return;
-    dispatch({ kind: "retrying" });
-    actions.send(lastUserText);
+  /** Regenerate the last reply, or Retry a failed turn (FR-C-9): the kernel replaces
+   * the last exchange, so the user line is not stored twice. */
+  regenerate(): void {
+    const state = useChat.getState();
+    if (!canSend(state) || !state.messages.some((m) => m.role === "user")) return;
+    if (!socket.send("regenerate", {})) return;
+    voice.stop();
+    dispatch({ kind: "regenerating" });
   },
 
   dismissNotice(): void {

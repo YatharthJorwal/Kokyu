@@ -106,10 +106,20 @@ test("a failed model is shown with Retry and Switch model, never silently swappe
   assert.equal(s.messages.at(-1).failed, true);
   assert.equal(s.messages.filter((m) => m.role === "assistant").length, 0); // no fake reply
 
-  s = reduce(s, { kind: "retrying" });
+  // Retry: the kernel runs the exchange again; the line is confirmed, not duplicated
+  s = reduce(s, { kind: "regenerating" });
   assert.equal(s.notice, null);
-  assert.equal(s.messages.length, 0); // the failed line goes; the resend adds it back
-  assert.equal(s.lastUserText, "hi");
+  assert.deepEqual(s.messages.map((m) => [m.role, m.text, m.pending, m.failed]), [["user", "hi", true, false]]);
+  s = reduce(s, frame("turn_start", { user_text: "hi" }));
+  s = reduce(s, frame("turn_done", { text: "hello", stopped: false }));
+  assert.deepEqual(s.messages.map((m) => [m.role, m.text]), [["user", "hi"], ["assistant", "hello"]]);
+
+  // Regenerate: the reply is replaced, the user line stays once
+  s = reduce(s, { kind: "regenerating" });
+  assert.equal(s.turn, "thinking");
+  s = reduce(s, frame("turn_start", { user_text: "hi" }));
+  s = reduce(s, frame("turn_done", { text: "hello again", stopped: false }));
+  assert.deepEqual(s.messages.map((m) => [m.role, m.text]), [["user", "hi"], ["assistant", "hello again"]]);
 });
 
 test("turn_running while busy does not end the turn; other errors show a notice", () => {

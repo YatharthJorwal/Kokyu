@@ -1,13 +1,17 @@
-// The open thread (K1-02): saved messages, companion dividers, the reply being
-// streamed. Plain text for now; Markdown, Copy and Regenerate are K1-04.
+// The open thread (K1-02, K1-04): saved messages, companion dividers, the reply
+// being streamed. Replies render as Markdown (FR-C-8) with Copy, and the last one
+// with Regenerate (FR-C-9). The user's own lines stay plain text.
 
 import { useEffect, useRef } from "react";
 
-import { visibleStream, type ChatMessage } from "../chat-state";
-import { useChat } from "../store";
+import { canSend, visibleStream, type ChatMessage } from "../chat-state";
+import { actions, useChat } from "../store";
+import { CopyButton } from "./CopyButton";
+import { Markdown } from "./Markdown";
 import { WakingCard } from "./WakingCard";
 
-function Message({ m }: { m: ChatMessage }) {
+function Message({ m, last }: { m: ChatMessage; last: boolean }) {
+  const canRegenerate = useChat((s) => last && m.role === "assistant" && canSend(s));
   if (m.role === "divider") {
     return (
       <div className="divider" role="separator">
@@ -19,9 +23,19 @@ function Message({ m }: { m: ChatMessage }) {
   return (
     <div className={classes}>
       {m.role === "assistant" && m.speaker ? <div className="speaker">{m.speaker}</div> : null}
-      <div className="bubble">{m.text}</div>
+      <div className="bubble">{m.role === "assistant" ? <Markdown text={m.text} /> : m.text}</div>
       {m.stopped ? <div className="meta">Stopped</div> : null}
       {m.failed ? <div className="meta">Not answered</div> : null}
+      {m.role === "assistant" ? (
+        <div className="msg-actions">
+          <CopyButton text={m.text} label="Copy reply" />
+          {canRegenerate ? (
+            <button type="button" className="msg-action" onClick={() => actions.regenerate()} title="Ask for another reply">
+              Regenerate
+            </button>
+          ) : null}
+        </div>
+      ) : null}
     </div>
   );
 }
@@ -60,15 +74,15 @@ export function ThreadView() {
           <p className="muted">Your conversations are saved on this PC.</p>
         </div>
       ) : null}
-      {messages.map((m) => (
-        <Message key={m.key} m={m} />
+      {messages.map((m, i) => (
+        <Message key={m.key} m={m} last={i === messages.length - 1} />
       ))}
       <WakingCard />
       {turn !== "idle" ? (
         <div className="msg assistant streaming">
           {companion ? <div className="speaker">{companion}</div> : null}
           <div className="bubble">
-            {streaming || <span className="typing" aria-label="Thinking">•••</span>}
+            {streaming ? <Markdown text={streaming} /> : <span className="typing" aria-label="Thinking">•••</span>}
           </div>
         </div>
       ) : null}

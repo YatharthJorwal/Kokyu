@@ -22,6 +22,7 @@ export const CLIENT_TYPES = [
   "set_effort",
   "model_list",
   "model_load",
+  "regenerate",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -167,6 +168,7 @@ export interface ClientData {
   set_effort: { effort: Effort | null };
   model_list: { refresh?: boolean };
   model_load: Record<string, never>;
+  regenerate: Record<string, never>;
 }
 
 export type Effort = "off" | "low" | "medium" | "high";

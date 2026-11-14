@@ -14,7 +14,7 @@ export function NoticeBar() {
       <span className="notice-text">{notice.text}</span>
       <span className="notice-actions">
         {notice.actions.includes("retry") ? (
-          <button type="button" onClick={() => actions.retry()}>
+          <button type="button" onClick={() => actions.regenerate()}>
             Retry
           </button>
         ) : null}

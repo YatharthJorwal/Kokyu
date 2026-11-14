@@ -56,6 +56,23 @@ async def test_exchanges_are_recorded_with_speaker_model_effort_and_stop(manager
 
 
 @pytest.mark.asyncio
+async def test_the_last_exchange_can_be_taken_back_to_run_again(manager):
+    # K1-04 (FR-C-9): Regenerate drops the line and its reply; Retry after a
+    # failure drops the lone line. Either way the line is not stored twice.
+    yuri = Speaker("yuri", "Yuri")
+    t = await manager.new_thread(waifu_id="yuri")
+    assert await manager.pop_last_exchange(t.id) is None                      # nothing yet
+    await manager.record_exchange(t.id, "hi", "hey", speaker=yuri)
+    await manager.record_exchange(t.id, "joke?", "Why did…", speaker=yuri)
+    assert await manager.pop_last_exchange(t.id) == ("joke?", True)
+    await manager.record_exchange(t.id, "again?", "", speaker=yuri)          # a failed turn
+    assert await manager.pop_last_exchange(t.id) == ("again?", False)
+    assert [m.content for m in await manager.messages(t.id)] == ["hi", "hey"]
+    await manager.record_companion_change(t.id, Speaker("luna", "Luna"))
+    assert await manager.pop_last_exchange(t.id) is None                      # a divider ends it: nothing to redo
+
+
+@pytest.mark.asyncio
 async def test_a_companion_change_writes_a_divider_and_moves_the_thread(manager):
     t = await manager.new_thread(waifu_id="luna")
     divider = await manager.record_companion_change(t.id, Speaker("yuri", "Yuri"))
@@ -230,3 +247,36 @@ def test_rename_search_and_delete(kernel):
         ws.send_json({"type": "thread_open", "id": tid})
         err, _ = _until(ws, "error")
         assert err["data"]["code"] == "unknown_thread"
+
+
+def test_regenerate_replaces_the_last_reply_without_repeating_the_line(kernel, monkeypatch):
+    seen = []
+    replies = iter(["first try [happy]", "second try [happy]"])
+
+    async def recording_stream(role, messages, tools, **kwargs):
+        seen.append([m["content"] for m in messages if m["role"] in ("user", "assistant")])
+        yield {"type": "content", "text": next(replies)}
+
+    monkeypatch.setattr(app.router, "stream_with_tools", recording_stream)
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _chat(ws, "tell me something")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        start, _ = _until(ws, "turn_start")
+        assert start["data"]["user_text"] == "tell me something"
+        done, _ = _until(ws, "turn_done")
+        assert done["data"]["text"] == "second try"
+        _until(ws, "turn_end")
+    # the model saw the line once and not the replaced reply; the thread keeps one copy
+    assert seen[1] == ["tell me something"]
+    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    assert [(m.role, m.content) for m in stored] == [("user", "tell me something"), ("assistant", "second try")]
+
+
+def test_regenerate_with_nothing_to_redo_is_refused(kernel):
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        err, _ = _until(ws, "error")
+    assert err["data"]["code"] == "bad_message"

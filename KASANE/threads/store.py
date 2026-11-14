@@ -270,6 +270,10 @@ class ThreadStore:
                 db.execute("DELETE FROM kv WHERE key = 'last_thread'")
         return cur.rowcount > 0
 
+    def delete_messages(self, ids: list[int]) -> None:
+        with self._connect() as db:
+            db.executemany("DELETE FROM messages WHERE id = ?", [(i,) for i in ids])
+
     def search(self, query: str, *, limit: int = SEARCH_LIMIT) -> list[Thread]:
         """Threads whose title or any message contains `query` (case-insensitive), newest first."""
         needle = query.strip()

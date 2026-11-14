@@ -172,6 +172,21 @@ class ConversationManager:
             )
         return user, reply
 
+    async def pop_last_exchange(self, thread_id: str) -> tuple[str, bool] | None:
+        """Removes the thread's last exchange so it can run again (K1-04: Regenerate,
+        and Retry after a failure). Returns the user line and whether a reply went
+        with it, or None when the thread does not end in an exchange. A failed turn
+        left only its user line; a finished one, the line and the reply."""
+        last = await self._run(self.store.messages, thread_id, limit=2)
+        if last and last[-1].role == "user":
+            drop = [last[-1]]
+        elif len(last) == 2 and last[-1].role == "assistant" and last[0].role == "user":
+            drop = last
+        else:
+            return None
+        await self._run(self.store.delete_messages, [m.id for m in drop])
+        return drop[0].content, len(drop) == 2
+
     async def record_companion_change(self, thread_id: str, speaker: Speaker) -> Message:
         """FR-S-2: a divider marks where another companion took over; the thread
         remembers her so reopening it brings her back."""

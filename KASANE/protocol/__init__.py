@@ -89,6 +89,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "set_effort": SetEffort,
     "model_list": ModelListRequest,   # K1-10: what the chip's popover lists
     "model_load": Empty,              # K1-10: Try again after a failed load
+    "regenerate": Empty,              # K1-04: run the last exchange again (FR-C-9, Retry)
 }
 
 # Kernel -> client, versioned.
