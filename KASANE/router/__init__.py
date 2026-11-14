@@ -23,7 +23,8 @@ from router.audit import AuditWriter
 from router.budget import SpendLedger, actual_cost, estimate_cost
 from router.decision import decide
 from router.discovery import ModelCatalog, repo_path
-from router.errors import ProviderError, RouterError
+from router.errors import ProviderError, RouteBlockedError, RouterError
+from router import model_ref as model_refs
 from router.providers import AirouterProvider, OllamaNativeProvider
 from router.redact import redact_messages
 from router.types import (
@@ -52,6 +53,22 @@ __all__ = [
 ]
 
 _MODEL_FALLBACKS = {"reflex": "qwen3.5:9b"}
+
+
+BLOCKED_MESSAGES = {
+    decide_mod.MODEL_UNSUPPORTED: "This model can't be used yet. Switch to another model.",
+    decide_mod.ROLE_PINNED_LOCAL: "Chat is set to local models only in the config. Switch to a local model.",
+    decide_mod.PRIVACY_LOCAL_ONLY: "This message has something that must stay on this PC, so it can't go to an API model. Switch to a local model.",
+    decide_mod.AMBIENT_CONTEXT: "Screen and camera captures never leave this PC. Switch to a local model for this message.",
+    decide_mod.CLOUD_DISABLED: "The API model isn't available: there is no key, or the provider is turned off. Add a key in Settings or switch model.",
+    decide_mod.OFFLINE: "The API provider didn't answer a moment ago. Retry, or switch model.",
+    decide_mod.BUDGET_EXHAUSTED: "Your spending cap is reached. Raise it in Settings, or switch model.",
+}
+
+
+def blocked_message(reason: str) -> str:
+    """What the user is told when their chosen model may not run (FR-R-5)."""
+    return BLOCKED_MESSAGES.get(reason, "This model can't answer right now. Retry, or switch model.")
 
 
 def _default_role(role: str) -> RoleConfig:
@@ -111,6 +128,10 @@ class Router:
         role_cfg = self.config.roles.get(role) or _default_role(role)
         if role_cfg.local_only:
             return False
+        if role == decide_mod.CHAT_ROLE:
+            # D-025 rule 6: the user's model selection is always enforced; the
+            # shadow/enforce rollout and the old API toggle do not apply to chat.
+            return True
         if self.use_api_model_override is False:
             return False
         if self.use_api_model_override is True:
@@ -200,7 +221,18 @@ class Router:
         except Exception:  # noqa: BLE001 -- estimation must never block a turn
             return max(1, sum(len(str(m.get("content") or "")) for m in request.messages) // 4)
 
-    def _anticipated_cloud_cost(self, role: str, prompt_tokens: int, max_tokens: int) -> float:
+    def _anticipated_cloud_cost(
+        self, role: str, prompt_tokens: int, max_tokens: int, model_ref: str | None = None
+    ) -> float:
+        if role == decide_mod.CHAT_ROLE:
+            try:
+                ref = model_refs.parse(model_ref or "")
+            except model_refs.ModelRefError:
+                return 0.0
+            if ref.is_local:
+                return 0.0
+            price_in, price_out = self.catalog.price(ref.model)
+            return estimate_cost(prompt_tokens, max_tokens, price_in, price_out)
         worst = 0.0
         role_cfg = self.config.roles.get(role) or _default_role(role)
         for provider in role_cfg.chain:
@@ -226,7 +258,7 @@ class Router:
         state = dataclasses.replace(
             self.state,
             est_prompt_tokens=prompt_tokens,
-            est_cost_usd=self._anticipated_cloud_cost(request.role, prompt_tokens, max_tokens),
+            est_cost_usd=self._anticipated_cloud_cost(request.role, prompt_tokens, max_tokens, request.model_ref),
             tool_count=len(request.tools),
         )
         decision = decide(
@@ -267,6 +299,9 @@ class Router:
     async def complete(self, request: ModelRequest) -> AsyncIterator[ModelChunk]:
         await self._ensure_started()
         decision = self.route(request)
+        if decision.blocked:
+            self._audit_blocked(request, decision)
+            raise RouteBlockedError(decision.reason, blocked_message(decision.reason), request.model_ref)
         chain = self._execution_chain(decision)
         first = chain[0]
         executed_decision = dataclasses.replace(decision, executed=first)
@@ -347,6 +382,30 @@ class Router:
                 fallback_used=fallback_used,
                 error=error,
             )
+
+    def _audit_blocked(self, request: ModelRequest, decision: RouteDecision) -> None:
+        try:
+            trace_id = self.audit.start(
+                decision=decision,
+                privacy_class=self._effective_privacy(request),
+                trust=request.trust,
+                redactions={},
+                mode=self.config.routing.mode,
+                job_id=request.job_id,
+            )
+            self.audit.finish(
+                trace_id,
+                role=request.role,
+                latency_ms=0.0,
+                prompt_tokens=None,
+                completion_tokens=None,
+                cost_usd=None,
+                estimated=False,
+                fallback_used=False,
+                error=f"blocked: {decision.reason}",
+            )
+        except Exception as exc:  # noqa: BLE001 -- the audit must never hide the real error
+            print(f"[kokyu] router: audit of a blocked turn failed: {exc}", flush=True)
 
     def _redact_for_cloud(self, request: ModelRequest) -> tuple[ModelRequest, dict[str, int]]:
         if any(message.get("images") for message in request.messages):

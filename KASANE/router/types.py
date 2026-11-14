@@ -46,6 +46,11 @@ class ModelRequest:
     max_tokens: int | None = None
     temperature: float | None = None
     schema: dict[str, Any] | None = None
+    # K1-00c (D-025): the thread's chosen model and effort for the `chat` role,
+    # and whether the turn carries ambient captures (camera, screen, OCR).
+    model_ref: str | None = None
+    effort: str | None = None
+    ambient: bool = False
 
     def with_privacy(self, privacy_class: str) -> "ModelRequest":
         return ModelRequest(
@@ -61,6 +66,9 @@ class ModelRequest:
             max_tokens=self.max_tokens,
             temperature=self.temperature,
             schema=self.schema,
+            model_ref=self.model_ref,
+            effort=self.effort,
+            ambient=self.ambient,
         )
 
 
@@ -94,6 +102,9 @@ class RouteDecision:
     est_prompt_tokens: int = 0
     est_cost_usd: float = 0.0
     executed: str | None = None      # filled in by the router after the call
+    # K1-00c: a user-selected model that may not run now (no fallback, D-025);
+    # the router raises RouteBlockedError with `reason` instead of executing.
+    blocked: bool = False
 
     def described(self) -> str:
         return f"{self.role}: {self.reason} -> {self.chosen}" + (" (shadow)" if self.shadow else "")

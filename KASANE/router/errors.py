@@ -22,3 +22,14 @@ class ProviderError(RouterError):
 
 class DiscoveryError(RouterError):
     """The model catalog could not be read and there was no usable cache."""
+
+
+class RouteBlockedError(RouterError):
+    """The user's chosen model may not run this turn (D-025, FR-R-5, FR-R-7).
+    Never a silent fallback: the caller shows `reason` with Retry / Switch model."""
+
+    def __init__(self, reason: str, message: str, model_ref: str | None = None) -> None:
+        super().__init__(message)
+        self.reason = reason
+        self.message = message
+        self.model_ref = model_ref

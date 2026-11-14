@@ -585,6 +585,9 @@ def _normalize_roles(raw: Mapping[str, Any], never_escalate: tuple[str, ...]) ->
         "embed": RoleConfig(chain=("local_ollama",), local_only=True),
         "memory_writer": RoleConfig(chain=("local_ollama",), local_only=True, max_tokens=800),
         "mind": RoleConfig(chain=("airouter", "local_ollama"), local_only=False, max_tokens=2000),
+        # K1-00c (D-025): the conversation itself, on the thread's chosen model.
+        # The chain only names the providers a user may pick; there is no fallback.
+        "chat": RoleConfig(chain=("airouter", "local_ollama"), local_only=False, max_tokens=1200),
     }
     out: dict[str, RoleConfig] = {}
     for name, default in defaults.items():

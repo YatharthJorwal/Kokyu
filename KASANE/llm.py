@@ -162,21 +162,30 @@ def _request_error(url: str, exc: httpx.RequestError) -> LLMUnreachableError:
     return LLMUnreachableError(f"couldn't reach {url}: {exc}")
 
 
-async def stream_reply(messages: list[dict[str, str]]) -> AsyncIterator[str]:
+async def stream_reply(
+    messages: list[dict[str, str]], *, model: str | None = None, think: bool | None = None
+) -> AsyncIterator[str]:
     """Streams content-delta strings from the configured LLM server as they
     arrive. Raises LLMUnreachableError if the server can't be reached or
-    errors out."""
+    errors out.
+
+    `model` and `think` (K1-00c) override the configured model and thinking
+    flag for this one call: the thread's model choice and effort."""
     if CONFIG.llm.api_style == "ollama_native":
-        gen = _stream_ollama_native(messages)
+        gen = _stream_ollama_native(messages, model=model, think=think)
     else:
-        gen = _stream_openai(messages)
+        gen = _stream_openai(messages, model=model)
 
     async for delta in gen:
         yield delta
 
 
 async def stream_reply_with_tools(
-    messages: list[dict[str, Any]], tools: list[dict[str, Any]]
+    messages: list[dict[str, Any]],
+    tools: list[dict[str, Any]],
+    *,
+    model: str | None = None,
+    think: bool | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Like stream_reply() above, but for turns that have tools available
     -- currently only app.py's main conversation loop. consolidation.py
@@ -219,16 +228,19 @@ async def stream_reply_with_tools(
 
     messages = fold_system_messages(messages)
     url = f"{CONFIG.llm.base_url.rstrip('/')}/api/chat"
+    use_model = model or CONFIG.llm.model
     payload: dict[str, Any] = {
-        "model": CONFIG.llm.model,
+        "model": use_model,
         "messages": messages,
         "tools": tools,
         "stream": True,
         "options": _ollama_options(),
     }
-    if CONFIG.llm.think is not None:
+    if think is not None:
+        payload["think"] = think
+    elif CONFIG.llm.think is not None:
         payload["think"] = CONFIG.llm.think
-    if CONFIG.llm.model in _NO_TOOLS_MODELS:
+    if use_model in _NO_TOOLS_MODELS:
         payload.pop("tools", None)
 
     # Debug visibility while this is still unverified against a real
@@ -631,11 +643,11 @@ async def describe_image(
     return (message.get("content") or "").strip()
 
 
-async def _stream_openai(messages: list[dict[str, str]]) -> AsyncIterator[str]:
+async def _stream_openai(messages: list[dict[str, str]], model: str | None = None) -> AsyncIterator[str]:
     messages = fold_system_messages(messages)
     url = f"{CONFIG.llm.base_url.rstrip('/')}/v1/chat/completions"
     payload = {
-        "model": CONFIG.llm.model,
+        "model": model or CONFIG.llm.model,
         "messages": messages,
         "temperature": CONFIG.llm.temperature,
         "max_tokens": CONFIG.llm.max_tokens,
@@ -665,16 +677,20 @@ async def _stream_openai(messages: list[dict[str, str]]) -> AsyncIterator[str]:
         raise _request_error(url, exc) from exc
 
 
-async def _stream_ollama_native(messages: list[dict[str, str]]) -> AsyncIterator[str]:
+async def _stream_ollama_native(
+    messages: list[dict[str, str]], model: str | None = None, think: bool | None = None
+) -> AsyncIterator[str]:
     messages = fold_system_messages(messages)
     url = f"{CONFIG.llm.base_url.rstrip('/')}/api/chat"
     payload: dict[str, Any] = {
-        "model": CONFIG.llm.model,
+        "model": model or CONFIG.llm.model,
         "messages": messages,
         "stream": True,
         "options": _ollama_options(),
     }
-    if CONFIG.llm.think is not None:
+    if think is not None:
+        payload["think"] = think
+    elif CONFIG.llm.think is not None:
         payload["think"] = CONFIG.llm.think
 
     try:

@@ -18,6 +18,7 @@ from typing import Any, AsyncIterator
 import httpx
 
 from config import ProviderConfig
+from router import model_ref as model_refs
 from router.errors import ProviderError
 from router.types import ModelChunk, ModelRequest, Usage
 
@@ -58,6 +59,9 @@ class AirouterProvider:
             payload["tool_choice"] = "auto"
         if request.schema:
             payload["response_format"] = {"type": "json_object"}
+        reasoning = model_refs.openai_reasoning_effort(request.effort)
+        if reasoning:
+            payload["reasoning_effort"] = reasoning
         return payload
 
     async def health(self) -> bool:

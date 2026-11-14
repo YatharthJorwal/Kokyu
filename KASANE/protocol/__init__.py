@@ -18,7 +18,9 @@ from __future__ import annotations
 import uuid
 from typing import Any, Literal
 
-from pydantic import BaseModel, ConfigDict, Field, ValidationError
+from pydantic import BaseModel, ConfigDict, Field, ValidationError, field_validator
+
+from router import model_ref as model_refs
 
 PROTOCOL_VERSION = 1
 
@@ -52,6 +54,24 @@ class ThreadSearch(_Data):
     query: str = Field(default="", max_length=QUERY_MAX)
 
 
+class SetModel(_Data):
+    model_ref: str | None = None      # null = the local default model
+
+    @field_validator("model_ref")
+    @classmethod
+    def _valid_ref(cls, value: str | None) -> str | None:
+        if value is None or value == "":
+            return None
+        try:
+            return str(model_refs.parse(value))
+        except model_refs.ModelRefError as exc:
+            raise ValueError(str(exc)) from None
+
+
+class SetEffort(_Data):
+    effort: Literal["off", "low", "medium", "high"] | None = None
+
+
 # Client -> kernel, versioned. The data model for each type.
 CLIENT_TYPES: dict[str, type[_Data]] = {
     "hello": Hello,
@@ -61,6 +81,8 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "thread_open": ThreadRef,
     "thread_delete": ThreadRef,
     "thread_rename": ThreadRename,
+    "set_model": SetModel,
+    "set_effort": SetEffort,
 }
 
 # Kernel -> client, versioned.
@@ -69,6 +91,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "thread_opened",
     "thread_list",
     "thread_message",
+    "thread_updated",
     "turn_start",
     "token",
     "turn_done",
@@ -82,6 +105,8 @@ ERROR_CODES: tuple[str, ...] = (
     "unknown_waifu",
     "turn_running",
     "threads_unavailable",
+    "model_blocked",
+    "model_failed",
 )
 
 
@@ -112,6 +137,34 @@ def error_frame(code: str, message: str, *, thread: str | None = None, reply_to:
     if code not in ERROR_CODES:
         raise ValueError(f"unknown error code: {code}")
     return frame("error", {"code": code, "message": message, "reply_to": reply_to}, thread=thread)
+
+
+def model_failure(exc: BaseException) -> dict[str, Any] | None:
+    """The `error` frame data for a failed chat model (FR-R-5), or None for an
+    error that is not about the user's model choice (e.g. the local server is
+    down and no model was chosen: the existing spoken line covers that).
+    `actions` tells the chat view which buttons to show."""
+    from router.errors import ProviderError, RouteBlockedError
+
+    if isinstance(exc, RouteBlockedError):
+        return {
+            "code": "model_blocked",
+            "reason": exc.reason,
+            "message": exc.message,
+            "model_ref": exc.model_ref,
+            "actions": ["retry", "switch_model"],
+            "reply_to": None,
+        }
+    if isinstance(exc, ProviderError):
+        return {
+            "code": "model_failed",
+            "reason": "PROVIDER_ERROR",
+            "message": "The API model returned an error. Retry, or switch model.",
+            "model_ref": None,
+            "actions": ["retry", "switch_model"],
+            "reply_to": None,
+        }
+    return None
 
 
 def is_versioned(raw: Any) -> bool:

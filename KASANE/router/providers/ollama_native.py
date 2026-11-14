@@ -11,6 +11,7 @@ from __future__ import annotations
 from typing import AsyncIterator
 
 import llm
+from router import model_ref as model_refs
 from router.types import ModelChunk, ModelRequest
 
 
@@ -23,14 +24,22 @@ class OllamaNativeProvider:
 
     async def complete(self, request: ModelRequest, *, model: str) -> AsyncIterator[ModelChunk]:
         messages = [dict(message) for message in request.messages]
+        # K1-00c: a thread's chosen model and effort reach llm.py only when set,
+        # so calls without a selection keep the exact old shape (and stubs).
+        overrides: dict = {}
+        if request.model_ref:
+            overrides["model"] = model
+        think = model_refs.ollama_think(request.effort)
+        if think is not None:
+            overrides["think"] = think
         if request.tools:
-            async for event in llm.stream_reply_with_tools(messages, list(request.tools)):
+            async for event in llm.stream_reply_with_tools(messages, list(request.tools), **overrides):
                 if event["type"] == "content":
                     yield ModelChunk.content(event["text"])
                 elif event["type"] == "tool_calls":
                     yield ModelChunk.tool_calls(event["calls"])
         else:
-            async for delta in llm.stream_reply(messages):
+            async for delta in llm.stream_reply(messages, **overrides):
                 yield ModelChunk.content(delta)
         yield ModelChunk.done()
 

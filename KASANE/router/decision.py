@@ -18,6 +18,7 @@ from config import (
     RoleConfig,
     RoutingConfig,
 )
+from router import model_ref as model_refs
 from router.types import ModelRequest, RouteDecision, RouterState, SECRET, UNTRUSTED
 
 # Reason codes. These strings are the audit log's vocabulary.
@@ -31,6 +32,12 @@ EXPLICIT_ESCALATION = "EXPLICIT_ESCALATION"
 BACKGROUND_JOB = "BACKGROUND_JOB"
 COMPLEXITY_THRESHOLD = "COMPLEXITY_THRESHOLD"
 LOCAL_DEFAULT = "LOCAL_DEFAULT"
+# K1-00c (D-025): the `chat` role runs on the user's selection.
+USER_SELECTED = "USER_SELECTED"
+AMBIENT_CONTEXT = "AMBIENT_CONTEXT"
+MODEL_UNSUPPORTED = "MODEL_UNSUPPORTED"
+
+CHAT_ROLE = "chat"
 
 LOCAL_PROVIDER = "local_ollama"
 
@@ -109,6 +116,69 @@ def _escalation_reason(request: ModelRequest, routing: RoutingConfig, state: Rou
     return None
 
 
+def decide_chat(
+    *,
+    role_cfg: RoleConfig,
+    request: ModelRequest,
+    budget: BudgetConfig,
+    state: RouterState,
+    models: ModelsConfig,
+    providers: Mapping[str, ProviderConfig],
+    now: float = 0.0,
+) -> RouteDecision:
+    """D-025 for the `chat` role. The user's selection is executed or refused,
+    never swapped: a refused API model is a *blocked* decision (shown with Retry /
+    Switch model), not a reroute to local. No selection means the local default.
+
+    1. no model chosen            -> local default model (as `reflex` used to)
+    2. unparseable / unsupported  -> blocked MODEL_UNSUPPORTED
+    3. a local model              -> that model
+    4. API model, role pinned     -> blocked ROLE_PINNED_LOCAL
+    5. API model, secret content  -> blocked PRIVACY_LOCAL_ONLY
+    6. API model, ambient capture -> blocked AMBIENT_CONTEXT (FR-R-7)
+    7. provider off / no key      -> blocked CLOUD_DISABLED
+    8. recently unreachable       -> blocked OFFLINE
+    9. over a spending cap        -> blocked BUDGET_EXHAUSTED
+    10. otherwise                 -> that API model. User-attached files
+        (trust=untrusted, not ambient) may go (D-025 rule 4).
+    """
+
+    def decision(reason: str, target: str, *, blocked: bool = False) -> RouteDecision:
+        return RouteDecision(
+            role=CHAT_ROLE,
+            reason=reason,
+            candidates=(target,),
+            chosen=target,
+            est_prompt_tokens=state.est_prompt_tokens,
+            est_cost_usd=state.est_cost_usd,
+            blocked=blocked,
+        )
+
+    if not request.model_ref:
+        return decision(LOCAL_DEFAULT, _local_chain(CHAT_ROLE, models)[0])
+    try:
+        ref = model_refs.parse(request.model_ref)
+    except model_refs.ModelRefError:
+        return decision(MODEL_UNSUPPORTED, request.model_ref, blocked=True)
+    target = f"{ref.provider}:{ref.model}"
+    if ref.is_local:
+        return decision(USER_SELECTED, target)
+    if role_cfg.local_only:
+        return decision(ROLE_PINNED_LOCAL, target, blocked=True)
+    if request.privacy_class == SECRET:
+        return decision(PRIVACY_LOCAL_ONLY, target, blocked=True)
+    if request.ambient:
+        return decision(AMBIENT_CONTEXT, target, blocked=True)
+    cfg = providers.get(ref.provider)
+    if cfg is None or not cfg.enabled or not state.cloud_available:
+        return decision(CLOUD_DISABLED, target, blocked=True)
+    if state.offline_until and now < state.offline_until:
+        return decision(OFFLINE, target, blocked=True)
+    if _budget_exhausted(budget, state):
+        return decision(BUDGET_EXHAUSTED, target, blocked=True)
+    return decision(USER_SELECTED, target)
+
+
 def decide(
     *,
     role: str,
@@ -121,6 +191,12 @@ def decide(
     providers: Mapping[str, ProviderConfig],
     now: float = 0.0,
 ) -> RouteDecision:
+    if role == CHAT_ROLE:
+        return decide_chat(
+            role_cfg=role_cfg, request=request, budget=budget, state=state,
+            models=models, providers=providers, now=now,
+        )
+
     local = _local_chain(role, models)
     cloud = _cloud_chain(role, role_cfg, models, providers, state.cloud_available)
 

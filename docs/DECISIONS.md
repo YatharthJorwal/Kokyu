@@ -313,3 +313,13 @@ Accepted · Default · 2026-11-14
 **Context:** ARCHITECTURE §5.3 asks for versioned frames `{v, type, id, thread, data}`. The current widget (`src/ws-client.ts`) speaks Yuri's flat messages (`user_text`, `speak`, `turn_end`, ...); rewriting it now would be thrown away when the K1 React shell replaces it (K1-02).
 **Decision:** Every message added from K1 on is a v1 frame, validated by pydantic in `KASANE/protocol/` (mirrored in `src/net/protocol.ts`, a test keeps the type lists equal). A frame with the wrong `v` gets `error {code:"protocol_version"}`; an invalid one gets `bad_message`. Messages without `v` are the legacy set and are handled exactly as before. Replies stream as `turn_start`, `token` (raw model text) and `turn_done` (the reply without the emotion tag, and whether Stop cut it); clients hide a trailing or half-written `[tag]` with `stripTrailingTag`. The legacy `speak`/`turn_end` messages are still sent, so voice and the widget keep working.
 **Consequences:** K1-02 moves the client onto v1 and the flat messages are retired one by one (each with a decision when removed). Tokens are sent per model chunk; batching is a K6 tuning item if it ever shows up in profiles.
+
+## D-050 K1-00c implementation of D-025
+Accepted · Default · 2026-11-14
+- **The conversation runs as the `chat` role** (new default role, `local_only: false`, chain `[airouter, local_ollama]` = the providers a user may pick). `decide_chat` in `router/decision.py` executes the thread's `model_ref` or returns a **blocked** decision; the router raises `RouteBlockedError` (audited, no provider called). There is no fallback chain for `chat`, and shadow/enforce and the old API toggle do not apply to it.
+- **No selection = the local default model**, so a fresh install and every existing call keep working.
+- **Ambient = a camera/screen capture taken this turn** (`look_intent`). Task Guide and OCR watch already run on local-only roles.
+- **Images are still treated as secret** by the router (Yuri's rule), so an attached image blocks an API model with a plain message until K2-07 implements the attachment path and its badge (D-025 rule 4).
+- **Effort:** `off|low|medium|high`. Ollama gets `think` (off = false, otherwise true; nothing when unset); OpenAI-style providers get `reasoning_effort` for low/medium/high. The calibrated, per-model effort UI is K1-11.
+- **Failures show, never swap:** a blocked selection sends `error {code:"model_blocked", reason, message, actions:["retry","switch_model"]}`; a provider error sends `model_failed`. The spoken/captioned line is the plain message, not a persona line.
+- **llama.cpp and generic OpenAI-compatible refs** are rejected as unsupported until K1-01 / K1-08b.

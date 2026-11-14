@@ -612,6 +612,8 @@ async def _run_turn(
     temp_turn_flags: list[bool] | None = None,
     on_finished: "Callable[[str, str, bool], Awaitable[None]] | None" = None,
     thread_id: str | None = None,
+    model_ref: str | None = None,
+    effort: str | None = None,
 ) -> None:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, speak each sentence chunk as it's ready, commit (or roll back)
@@ -735,9 +737,16 @@ async def _run_turn(
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             saw_tool_call = False
-            async for event in router.stream_with_tools("reflex", 
+            # K1-00c (D-025): the conversation runs as the `chat` role on the
+            # thread's chosen model and effort. A camera/screen capture this
+            # turn is ambient content and may only go to a local model.
+            async for event in router.stream_with_tools(
+                "chat",
                 _fit_for_llm(messages_for_llm, offered_tools, tool_messages) + tool_messages,
                 offered_tools,
+                model_ref=model_ref,
+                effort=effort,
+                ambient=bool(look_hint),
             ):
                 if event["type"] == "tool_calls":
                     saw_tool_call = True
@@ -808,6 +817,14 @@ async def _run_turn(
         # like "server not running" and left nothing to diagnose from.
         print(f"[yuri] LLM call failed ({type(exc).__name__}): {exc}", file=sys.stderr)
         line = llm_failure_line(exc)
+        # FR-R-5: the chosen model failed or may not run. Say so plainly with a
+        # typed error the chat view turns into Retry / Switch model; never
+        # quietly answer from another model.
+        failure = protocol.model_failure(exc)
+        if failure is not None:
+            line = failure["message"]
+            with contextlib.suppress(Exception):
+                await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
         # Flush whatever was already generated before the failure -- she may
         # have said half the reply, and dropping it would look like a cut.
         await stream.close()
@@ -1275,6 +1292,11 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     def _thread_id() -> str | None:
         return current_thread.id if current_thread is not None else None
 
+    def _thread_model() -> dict[str, str | None]:
+        if current_thread is None:
+            return {"model_ref": None, "effort": None}
+        return {"model_ref": current_thread.model_ref, "effort": current_thread.effort}
+
     def _saver() -> "Callable[[str, str, bool], Awaitable[None]] | None":
         """Binds the turn to the thread it started in."""
         thread = current_thread
@@ -1354,7 +1376,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         if current_turn_task is not None and not current_turn_task.done():
             current_turn_task.cancel()
         current_turn_task = asyncio.create_task(
-            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
+            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
         )
 
     # Phase 4 Round 2 -- Task Guide Mode's scheduled-capture loop, one
@@ -1572,6 +1594,23 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 await _send_thread_list(websocket, str(data.get("query") or ""))
                 continue
 
+            if msg_type in ("set_model", "set_effort"):
+                # K1-00c: per-thread model and effort (FR-M-1, FR-M-8). Already
+                # validated as a v1 frame; applied from the next turn on.
+                if current_thread is None:
+                    await websocket.send_json(
+                        protocol.error_frame("threads_unavailable", "Conversation history is unavailable right now.")
+                    )
+                    continue
+                field_name = "model_ref" if msg_type == "set_model" else "effort"
+                current_thread = await asyncio.to_thread(
+                    manager.store.update_thread, current_thread.id, **{field_name: data.get(field_name)}
+                )
+                await websocket.send_json(
+                    protocol.frame("thread_updated", {"thread": current_thread.to_dict()}, thread=current_thread.id)
+                )
+                continue
+
             if msg_type == "thread_rename":
                 renamed = await manager.rename(str(data.get("id") or ""), str(data.get("title") or ""))
                 if renamed is None:
@@ -1745,7 +1784,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # in flight; this is just defense in depth regardless.
                     continue
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
                 )
 
             elif msg_type == "user_audio":
@@ -1796,7 +1835,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # reply to, and nothing worth adding to history.
                     continue
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
                 )
             elif msg_type == "user_file":
                 # Quick-action menu's Upload Image/File item
@@ -1854,7 +1893,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 user_text = f"{shared_line}\n\n{caption}" if caption else shared_line
 
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
                 )
             else:
                 continue

@@ -18,6 +18,8 @@ export const CLIENT_TYPES = [
   "thread_open",
   "thread_delete",
   "thread_rename",
+  "set_model",
+  "set_effort",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -25,6 +27,7 @@ export const SERVER_TYPES = [
   "thread_opened",
   "thread_list",
   "thread_message",
+  "thread_updated",
   "turn_start",
   "token",
   "turn_done",
@@ -38,6 +41,8 @@ export const ERROR_CODES = [
   "unknown_waifu",
   "turn_running",
   "threads_unavailable",
+  "model_blocked",
+  "model_failed",
 ] as const;
 
 export type ClientType = (typeof CLIENT_TYPES)[number];
@@ -76,10 +81,18 @@ export interface ServerData {
   thread_opened: { thread: ThreadInfo; messages: ThreadMessage[] };
   thread_list: { query: string; threads: ThreadInfo[] };
   thread_message: { message: ThreadMessage };
+  thread_updated: { thread: ThreadInfo };
   turn_start: { user_text: string };
   token: { text: string };
   turn_done: { text: string; stopped: boolean };
-  error: { code: ErrorCode; message: string; reply_to: string | null };
+  error: {
+    code: ErrorCode;
+    message: string;
+    reply_to: string | null;
+    reason?: string;
+    model_ref?: string | null;
+    actions?: ("retry" | "switch_model")[];
+  };
 }
 
 export interface ClientData {
@@ -90,7 +103,11 @@ export interface ClientData {
   thread_open: { id: string };
   thread_delete: { id: string };
   thread_rename: { id: string; title: string };
+  set_model: { model_ref: string | null };
+  set_effort: { effort: Effort | null };
 }
+
+export type Effort = "off" | "low" | "medium" | "high";
 
 export interface Frame<T extends ServerType = ServerType> {
   v: number;
