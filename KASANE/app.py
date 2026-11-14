@@ -756,11 +756,12 @@ async def _run_turn(
     user_text: str,
     temp_mode: bool = False,
     temp_turn_flags: list[bool] | None = None,
-    on_finished: "Callable[[str, str, bool, int | None], Awaitable[None]] | None" = None,
+    on_finished: "Callable[[str, str, bool, dict[str, Any]], Awaitable[None]] | None" = None,
     thread_id: str | None = None,
     model_ref: str | None = None,
     effort: str | None = None,
     unprompted: list[dict[str, str]] | None = None,
+    attachment: str | None = None,
 ) -> None:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, speak each sentence chunk as it's ready, commit (or roll back)
@@ -787,8 +788,12 @@ async def _run_turn(
         temp_turn_flags.append(temp_mode)
     # K1-00b: the chat view streams the reply token by token (FR-C-2); the
     # spoken clauses below are unchanged.
+    local_model = _is_local_ref(model_ref)
+    # FR-R-7: an attached file or image may go to the chosen API model, with a badge saying so.
+    # shortcut: badged before the router decides, so a blocked call is badged too (over-warns); fine until routing reports back.
+    sent_to = model_listing.effective_ref(model_ref, CONFIG) if attachment and not local_model else None
     with contextlib.suppress(Exception):
-        await websocket.send_json(protocol.frame("turn_start", {"user_text": user_text}, thread=thread_id))
+        await websocket.send_json(protocol.frame("turn_start", {"user_text": user_text, "sent_to": sent_to}, thread=thread_id))
     timings = LATENCY.begin()
     ARBITER.on_turn_started()
     writer.WRITER.preempt()  # a timer-driven memory pass must not hold the model during a reply
@@ -890,7 +895,6 @@ async def _run_turn(
     spoken_parts: list[str] = []
     detected_emotion: str | None = None
     tool_messages: list[dict[str, Any]] = []
-    local_model = _is_local_ref(model_ref)
     if unprompted and not local_model:
         # Her Task Guide and OCR remarks were written from screen captures: ambient
         # content an API model never sees (FR-SC-3, FR-R-7). `unprompted` holds them by identity.
@@ -1058,7 +1062,8 @@ async def _run_turn(
         if on_finished is not None:
             stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
             try:
-                await on_finished(user_text, " ".join(reply_parts), stopped, log_id)
+                meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to}
+                await on_finished(user_text, " ".join(reply_parts), stopped, {k: v for k, v in meta.items() if v is not None})
             except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                 print(f"[kokyu] could not save the exchange to the thread: {exc}", file=sys.stderr)
         with contextlib.suppress(Exception):
@@ -1494,13 +1499,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             "effort": effort or CONFIG.chat.default_effort,
         }
 
-    def _saver() -> "Callable[[str, str, bool, int | None], Awaitable[None]] | None":
+    def _saver() -> "Callable[[str, str, bool, dict[str, Any]], Awaitable[None]] | None":
         """Binds the turn to the thread it started in."""
         thread = current_thread
         if thread is None:
             return None
 
-        async def _save(user_text: str, reply: str, stopped: bool, log_id: int | None = None) -> None:
+        async def _save(user_text: str, reply: str, stopped: bool, meta: dict[str, Any]) -> None:
             await manager.record_exchange(
                 thread.id,
                 user_text,
@@ -1509,13 +1514,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 model_ref=thread.model_ref or CONFIG.chat.default_model_ref,
                 effort=thread.effort or CONFIG.chat.default_effort,
                 stopped=stopped,
-                log_id=log_id,
+                meta=meta,
             )
             await _send_thread_list(websocket)
 
         return _save
 
-    def _replacing(old_ids: list[int], old_log_id: int | None) -> "Callable[[str, str, bool, int | None], Awaitable[None]] | None":
+    def _replacing(old_ids: list[int], old_log_id: int | None) -> "Callable[[str, str, bool, dict[str, Any]], Awaitable[None]] | None":
         """Regenerate's saver: the old exchange gives way only once a new reply exists,
         so a failure or a Stop before the first word loses nothing (K1-04)."""
         save = _saver()
@@ -1523,7 +1528,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         if save is None or thread is None:
             return None
 
-        async def _replace(user_text: str, reply: str, stopped: bool, log_id: int | None = None) -> None:
+        async def _replace(user_text: str, reply: str, stopped: bool, meta: dict[str, Any]) -> None:
             if not reply:
                 # The thread keeps the old exchange, so the model's context gets it back too.
                 history[:] = await manager.history(thread, _system_message(_waifu_of(websocket)))
@@ -1533,7 +1538,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             await manager.delete_messages(old_ids)
             if old_log_id is not None:
                 await _drop_transcript_turn_safely(old_log_id)
-            await save(user_text, reply, stopped, log_id)
+            await save(user_text, reply, stopped, meta)
 
         return _replace
 
@@ -2111,14 +2116,15 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 if found is None:
                     await websocket.send_json(protocol.error_frame("bad_message", "There is no reply to regenerate."))
                     continue
-                again, old_ids, old_log_id = found
+                again, old_ids, old_meta = found
+                old_log_id = old_meta.get("log_id")
                 # The history is rebuilt from the thread without the old exchange, so a
                 # remark or a divider after it cannot leave it in the model's context.
                 history[:] = await manager.history(current_thread, _system_message(_waifu_of(websocket)), exclude=old_ids)
                 temp_turn_flags[:] = [temp_mode] * (len(history) - 1)
                 unprompted_msgs.clear()
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids, old_log_id), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
+                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids, old_log_id if isinstance(old_log_id, int) else None), thread_id=_thread_id(), unprompted=unprompted_msgs, attachment=old_meta.get("attachment"), **_thread_model())
                 )
                 continue
 
@@ -2204,6 +2210,8 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 content = data.get("content") or ""
                 caption = (data.get("caption") or "").strip()
                 if not content or kind not in ("image", "text"):
+                    # The client already shows a turn: a refusal has to end it.
+                    await websocket.send_json(protocol.error_frame("bad_message", "That file is empty or of an unknown kind."))
                     continue
                 if current_turn_task is not None and not current_turn_task.done():
                     # Same "already mid-reply, ignore" policy as
@@ -2228,6 +2236,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     except llm.LLMUnreachableError as exc:
                         print(f"[yuri] describe_image failed for upload: {exc}", file=sys.stderr)
                         await _send_speak(websocket, apply_persona_pass(UPLOAD_VISION_UNREACHABLE_LINE))
+                        await websocket.send_json(protocol.error_frame("vision_unavailable", "Couldn't look at that image: the vision model isn't reachable."))
                         await websocket.send_json(
                             {"type": "turn_end", "emotion": EMOTION_UPLOAD_VISION_UNREACHABLE}
                         )
@@ -2242,7 +2251,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 user_text = f"{shared_line}\n\n{caption}" if caption else shared_line
 
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, attachment=kind, **_thread_model())
                 )
             else:
                 continue

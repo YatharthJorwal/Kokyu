@@ -31,6 +31,8 @@ export interface ChatMessage {
   pending?: boolean;
   /** The model call for this user line failed (shown with Retry). */
   failed?: boolean;
+  /** An attachment on this line went to this API model (FR-R-7 badge). */
+  sentTo?: string;
 }
 
 export interface Notice {
@@ -122,6 +124,7 @@ export function fromStored(m: ThreadMessage): ChatMessage {
     text: m.content,
     speaker: m.speaker_name,
     stopped: m.meta?.stopped === true ? true : undefined,
+    sentTo: typeof m.meta?.sent_to === "string" ? m.meta.sent_to : undefined,
   };
 }
 
@@ -247,12 +250,13 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
     }
     case "turn_start": {
       if (!forCurrentThread(state, frame)) return state;
-      const { user_text } = frame.data as { user_text: string };
+      const { user_text, sent_to } = frame.data as { user_text: string; sent_to?: string | null };
+      const sentTo = sent_to ?? undefined;
       const last = state.messages[state.messages.length - 1];
       const messages =
         last && last.role === "user" && last.pending && last.text === user_text
-          ? [...state.messages.slice(0, -1), { ...last, pending: false }]
-          : [...state.messages, { key: localKey(), role: "user" as const, text: user_text, speaker: null }];
+          ? [...state.messages.slice(0, -1), { ...last, pending: false, sentTo }]
+          : [...state.messages, { key: localKey(), role: "user" as const, text: user_text, speaker: null, sentTo }];
       return { ...state, messages, turn: "thinking", streamRaw: "" };
     }
     case "token": {

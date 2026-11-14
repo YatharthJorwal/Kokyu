@@ -334,6 +334,43 @@ def test_an_api_model_is_never_offered_the_screen_or_camera_tools(kernel, monkey
     assert local_only <= offered[0] and not local_only & offered[1]
 
 
+def test_an_attachment_sent_to_an_api_model_is_badged_and_an_empty_one_refused(kernel, monkeypatch):
+    # FR-R-7: an attached file may go to the chosen API model, with a badge on that
+    # message, kept when the thread reopens and when Regenerate runs it again.
+    # An empty upload ends the turn the client already started (review findings).
+    client, _ = kernel
+
+    async def answering(role, messages, tools, **kwargs):
+        yield {"type": "content", "text": "nice [happy]"}
+
+    monkeypatch.setattr(app.router, "stream_with_tools", answering)
+    upload = {"type": "user_file", "filename": "notes.txt", "kind": "text", "content": "milk, eggs"}
+    with client.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        ws.send_json({**upload, "content": ""})
+        refused, _ = _until(ws, "error")
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
+        _until(ws, "thread_updated")
+        ws.send_json(upload)
+        local, _ = _until(ws, "turn_start")
+        _until(ws, "turn_end")
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": API}})
+        _until(ws, "thread_updated")
+        ws.send_json(upload)
+        sent, _ = _until(ws, "turn_start")
+        _until(ws, "turn_end")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        again, _ = _until(ws, "turn_start")
+        _until(ws, "turn_end")
+        ws.send_json({"type": "thread_open", "id": opened["data"]["thread"]["id"]})
+        reopened, _ = _until(ws, "thread_opened")
+    assert refused["data"]["code"] == "bad_message"
+    assert local["data"]["sent_to"] is None and sent["data"]["sent_to"] == API and again["data"]["sent_to"] == API
+    metas = [m["meta"] for m in reopened["data"]["messages"] if m["role"] == "user"]
+    assert metas == [{"attachment": "text"}, {"attachment": "text", "sent_to": API}]
+
+
 @pytest.mark.asyncio
 async def test_screen_remarks_stay_out_of_an_api_models_context(tmp_path, monkeypatch):
     # FR-SC-3 (review finding): a Task Guide or OCR remark was written from a screen

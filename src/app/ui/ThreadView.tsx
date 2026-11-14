@@ -5,6 +5,7 @@
 import { useEffect, useRef } from "react";
 
 import { canRegenerate, lastExchange, visibleStream, type ChatMessage } from "../chat-state";
+import { shortRef } from "../models";
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
@@ -26,6 +27,11 @@ function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
       <div className="bubble">{m.role === "assistant" ? <Markdown text={m.text} /> : m.text}</div>
       {m.stopped ? <div className="meta">Stopped</div> : null}
       {m.failed ? <div className="meta">Not answered</div> : null}
+      {m.sentTo ? (
+        <div className="meta" title="This attachment left your PC for the chosen API model">
+          Sent to {shortRef(m.sentTo)}
+        </div>
+      ) : null}
       {m.role === "assistant" ? (
         <div className="msg-actions">
           <CopyButton text={m.text} label="Copy reply" />

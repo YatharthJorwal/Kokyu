@@ -229,9 +229,18 @@ test("a file send waits for the kernel's wording of the line (K1-05, FR-C-3)", (
   assert.equal(s.messages.length, 0); // no guessed line: the kernel words it ("shared an image…")
   s = reduce(s, frame("turn_start", { user_text: '(shared an image, "cat.png") A cat on a desk.\n\nlook' }));
   assert.deepEqual(s.messages.map((m) => [m.role, m.pending ?? false]), [["user", false]]);
-  // the vision step failed: Yuri's widget message closes the turn without one
-  s = reduce(run(online, { kind: "sent", text: null }), { kind: "legacy", msg: { type: "turn_end" } });
+  assert.equal(s.messages[0].sentTo, undefined); // a local model: nothing left the PC
+  // FR-R-7: an attachment that went to an API model says so, live and when reopened
+  const api = "api:airouter/deepseek/deepseek-v4-flash";
+  s = reduce(run(online, { kind: "sent", text: null }), frame("turn_start", { user_text: "(shared a file)", sent_to: api }));
+  assert.equal(s.messages[0].sentTo, api);
+  s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [stored(1, "user", "(shared a file)", { sent_to: api })] }));
+  assert.equal(s.messages[0].sentTo, api);
+  // the vision step failed: the kernel's notice, then turn_end, close the turn without a line
+  s = run(online, { kind: "sent", text: null }, frame("error", { code: "vision_unavailable", message: "Couldn't look", reply_to: null }, null));
+  s = reduce(s, { kind: "legacy", msg: { type: "turn_end" } });
   assert.equal(s.turn, "idle");
+  assert.equal(s.notice.text, "Couldn't look");
 });
 
 test("the screen companions' state comes from the kernel and goes on disconnect (K1-05b)", () => {

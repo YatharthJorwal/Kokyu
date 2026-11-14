@@ -27,7 +27,8 @@
         "shadow": true,
         "visible": true,
         "additionalBrowserArgs": "--disable-features=msWebOOUI,msPdfOOUI,msSmartScreenProtection --autoplay-policy=no-user-gesture-required",
-        "center": true
+        "center": true,
+        "dragDropEnabled": false
       }
     ],
     "security": {

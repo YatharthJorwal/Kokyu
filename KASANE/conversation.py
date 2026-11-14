@@ -155,13 +155,14 @@ class ConversationManager:
         model_ref: str | None = None,
         effort: str | None = None,
         stopped: bool = False,
-        log_id: int | None = None,
+        meta: dict[str, Any] | None = None,
     ) -> tuple[Message, Message | None]:
         """Stores one user line and the reply to it. A reply cut off by Stop is kept
         (FR-C-2) and flagged; a turn with no reply at all stores only the user line.
-        `log_id`: the turn's transcript_log row, kept so Regenerate can take it back out."""
-        meta = {"log_id": log_id} if log_id is not None else None
-        user = await self._run(self.store.add_message, thread_id, "user", user_text, meta=meta)
+        `meta` rides on the user line: the turn's transcript_log row (log_id, so
+        Regenerate can take it back out), an attachment's kind and the API model it
+        went to (sent_to, FR-R-7)."""
+        user = await self._run(self.store.add_message, thread_id, "user", user_text, meta=meta or None)
         reply = None
         if assistant_text:
             reply = await self._run(
@@ -177,10 +178,10 @@ class ConversationManager:
             )
         return user, reply
 
-    async def last_exchange(self, thread_id: str) -> tuple[str, list[int], int | None] | None:
+    async def last_exchange(self, thread_id: str) -> tuple[str, list[int], dict[str, Any]] | None:
         """The thread's last exchange, for Regenerate and Retry (K1-04): its user line,
         the message ids a new reply replaces (the line, and the reply if one came) and
-        its transcript_log row when known.
+        the user line's meta (see record_exchange).
         A failed turn left only the line. Dividers after it are skipped: a companion
         switch does not end the exchange. None when the thread does not end in one."""
         # A few dozen messages cover any run of dividers a user could click together.
@@ -192,8 +193,7 @@ class ConversationManager:
             drop = tail
         else:
             return None
-        log_id = drop[0].meta.get("log_id")
-        return drop[0].content, [m.id for m in drop], log_id if isinstance(log_id, int) else None
+        return drop[0].content, [m.id for m in drop], dict(drop[0].meta)
 
     async def delete_messages(self, ids: list[int]) -> None:
         await self._run(self.store.delete_messages, ids)

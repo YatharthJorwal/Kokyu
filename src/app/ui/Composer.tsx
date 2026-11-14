@@ -18,6 +18,7 @@ async function readAttachment(file: File): Promise<Attachment | string> {
   if (kind.kind === "unsupported") return kind.reason;
   try {
     const content = kind.kind === "image" ? await resizeImageToBase64Jpeg(file) : await readTextFile(file);
+    if (!content.trim()) return "That file is empty.";
     return { filename: file.name || "pasted image", kind: kind.kind, content };
   } catch {
     return "Couldn't read that file. Try a different one?";
@@ -52,6 +53,7 @@ export function Composer() {
     if (sent) {
       setText("");
       setAttachment(null);
+      setProblem(null);
     }
   };
 
@@ -62,10 +64,11 @@ export function Composer() {
     }
   };
 
-  // A pasted image becomes the attachment; pasted text stays ordinary typing.
+  // A pasted image becomes the attachment; pasted text stays ordinary typing, even
+  // when Excel or OneNote put a picture of it on the clipboard too.
   const onPaste = (e: ClipboardEvent<HTMLTextAreaElement>) => {
     const file = Array.from(e.clipboardData.files)[0];
-    if (file) {
+    if (file && !e.clipboardData.getData("text/plain")) {
       e.preventDefault();
       void attach(file);
     }
@@ -102,7 +105,10 @@ export function Composer() {
           <span>
             {attachment.kind === "image" ? "Image" : "File"}: {attachment.filename}
           </span>
-          <button type="button" aria-label={`Remove ${attachment.filename}`} onClick={() => setAttachment(null)}>
+          <button type="button" aria-label={`Remove ${attachment.filename}`} onClick={() => {
+              setAttachment(null);
+              setProblem(null);
+            }}>
             ×
           </button>
         </div>

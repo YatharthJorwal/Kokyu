@@ -64,15 +64,15 @@ async def test_the_last_exchange_is_found_to_run_again(manager):
     assert await manager.last_exchange(t.id) is None                          # nothing yet
     await manager.record_exchange(t.id, "hi", "hey", speaker=yuri)
     await manager.record_exchange(t.id, "joke?", "Why did…", speaker=yuri)
-    again, ids, log_id = await manager.last_exchange(t.id)
-    assert again == "joke?" and len(ids) == 2 and log_id is None
+    again, ids, meta = await manager.last_exchange(t.id)
+    assert again == "joke?" and len(ids) == 2 and meta == {}
     assert len(await manager.messages(t.id)) == 4                             # nothing deleted yet
     await manager.record_companion_change(t.id, Speaker("luna", "Luna"))
     assert (await manager.last_exchange(t.id))[0] == "joke?"                  # a divider does not end it
     await manager.delete_messages(ids)
-    await manager.record_exchange(t.id, "again?", "", speaker=yuri, log_id=7)   # a failed turn
-    again, ids, log_id = await manager.last_exchange(t.id)
-    assert again == "again?" and len(ids) == 1 and log_id == 7               # its transcript row goes with it
+    await manager.record_exchange(t.id, "again?", "", speaker=yuri, meta={"log_id": 7})   # a failed turn
+    again, ids, meta = await manager.last_exchange(t.id)
+    assert again == "again?" and len(ids) == 1 and meta == {"log_id": 7}               # its transcript row goes with it
     history = await manager.history(await manager.open(t.id), "sys", exclude=ids)
     assert [m["content"] for m in history[1:]] == ["hi", "hey"]
 
