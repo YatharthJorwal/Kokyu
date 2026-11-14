@@ -81,7 +81,7 @@ async def test_the_last_exchange_is_found_to_run_again(manager):
 async def test_a_companion_change_writes_a_divider_and_moves_the_thread(manager):
     t = await manager.new_thread(waifu_id="luna")
     divider = await manager.record_companion_change(t.id, Speaker("yuri", "Yuri"))
-    assert divider.role == "divider" and divider.content == "Yuri joined the conversation"
+    assert divider.role == "divider" and divider.content == "Switched to Yuri"
     assert (await manager.get(t.id)).active_waifu_id == "yuri"
 
 
@@ -223,7 +223,7 @@ def test_switching_companion_adds_a_divider_and_reopening_restores_her(kernel):
         tid = opened["data"]["thread"]["id"]
         ws.send_json({"type": "switch_waifu", "id": "beta"})
         divider, _ = _until(ws, "thread_message")
-        assert divider["data"]["message"]["role"] == "divider" and divider["data"]["message"]["content"] == "Beta joined the conversation"
+        assert divider["data"]["message"]["role"] == "divider" and divider["data"]["message"]["content"] == "Switched to Beta"
         ws.send_json({"type": "thread_new"})
         _until(ws, "thread_opened")
         ws.send_json({"type": "switch_waifu", "id": "alpha"})
@@ -231,6 +231,32 @@ def test_switching_companion_adds_a_divider_and_reopening_restores_her(kernel):
         ws.send_json({"type": "thread_open", "id": tid})
         state, _ = _until(ws, "waifu_state")
         assert state["active"] == "beta"
+
+
+def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
+    # FR-S-2: the turn in flight finishes with the old companion; the chip learns
+    # who comes next; she takes over (divider, voice) as soon as the reply ends.
+    async def slow_stream(role, messages, tools, **kwargs):
+        await asyncio.sleep(0.3)
+        yield {"type": "content", "text": f"{messages[0]['content'][:5]} [happy]"}
+
+    monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        ws.send_json({"type": "user_text", "text": "first"})
+        _until(ws, "turn_start")
+        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        state, _ = _until(ws, "waifu_state")
+        assert state["active"] == "alpha" and state["pending"] == "beta"
+        _until(ws, "turn_end")
+        divider, _ = _until(ws, "thread_message")             # as the reply ends, not at the next message
+        assert divider["data"]["message"]["content"] == "Switched to Beta"
+        _chat(ws, "second")
+    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    assert [(m.role, m.speaker_name) for m in stored] == [
+        ("user", None), ("assistant", "Alpha"), ("divider", "Beta"), ("user", None), ("assistant", "Beta"),
+    ]
 
 
 def test_rename_search_and_delete(kernel):

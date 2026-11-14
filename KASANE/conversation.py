@@ -37,7 +37,7 @@ class Speaker:
 
 
 def divider_text(name: str | None) -> str:
-    return f"{name} joined the conversation" if name else "The companion changed"
+    return f"Switched to {name}" if name else "Switched companion"  # FR-S-2 wording
 
 
 def history_from(messages: list[Message], system_message: str, max_messages: int) -> list[dict[str, str]]:

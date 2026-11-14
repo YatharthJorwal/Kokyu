@@ -1157,6 +1157,26 @@ div.companion,
   font-variant-numeric: tabular-nums;
 }
 
+/* ── companion chip (K1-06) ────────────────────────────── */
+
+.companion-chip .avatar-dot {
+  width: 20px;
+  height: 20px;
+  font-size: 11px;
+}
+
+.companion-popover {
+  width: min(300px, 86vw);
+}
+
+.new-waifu {
+  padding: 4px 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font: inherit;
+}
+
 /* ── "waking up" card (K1-10) ────────────────────────────── */
 
 .waking {

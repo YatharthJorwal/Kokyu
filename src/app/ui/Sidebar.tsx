@@ -11,7 +11,7 @@ import { actions, useChat } from "../store";
 
 const SEARCH_DELAY_MS = 250;
 
-function Initial({ name }: { name: string | null | undefined }) {
+export function Initial({ name }: { name: string | null | undefined }) {
   return (
     <span className="avatar-dot" aria-hidden="true">
       {(name ?? "?").slice(0, 1).toUpperCase()}

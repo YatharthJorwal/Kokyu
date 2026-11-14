@@ -55,6 +55,8 @@ export interface ChatState {
   streamRaw: string;
   notice: Notice | null;
   companion: Companion | null;
+  /** A switch asked for mid-reply; she takes over from the next turn (FR-S-2). */
+  pendingCompanion: Companion | null;
   /** Every installed companion, for the sidebar (K1-03, FR-C-6). */
   roster: Companion[];
   /** The sidebar's search results (K1-03); null when not searching. */
@@ -93,6 +95,7 @@ export const initialState: ChatState = {
   streamRaw: "",
   notice: null,
   companion: null,
+  pendingCompanion: null,
   roster: [],
   search: null,
   defaults: null,
@@ -288,7 +291,8 @@ function reduceLegacy(state: ChatState, msg: LegacyMessage): ChatState {
       const active = msg.active as string | null;
       const roster = ((msg.waifus as Companion[] | undefined) ?? []).map((w) => ({ id: w.id, name: w.name }));
       const found = roster.find((w) => w.id === active);
-      return { ...state, roster, companion: found ?? null };
+      const pending = msg.pending !== active ? roster.find((w) => w.id === msg.pending) : undefined;
+      return { ...state, roster, companion: found ?? null, pendingCompanion: pending ?? null };
     }
     case "surface_status":
       return { ...state, role: msg.role === "observer" ? "observer" : "driver" };
@@ -320,7 +324,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // and re-sends its model status on reconnect.
       return event.status === "online"
         ? next
-        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null };
+        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, pendingCompanion: null };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };

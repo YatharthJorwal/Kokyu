@@ -53,6 +53,18 @@ test("the roster and the active companion come from waifu_state", () => {
   });
   assert.deepEqual(s.roster, [{ id: "yuri", name: "Yuri" }, { id: "luna", name: "Luna" }]); // no extra fields kept
   assert.deepEqual(s.companion, { id: "luna", name: "Luna" });
+  assert.equal(s.pendingCompanion, null);
+});
+
+test("a switch mid-reply shows who comes next until it applies (K1-06, FR-S-2)", () => {
+  const roster = [{ id: "yuri", name: "Yuri" }, { id: "luna", name: "Luna" }];
+  const state = (active, pending) => ({ kind: "legacy", msg: { type: "waifu_state", active, waifus: roster, pending } });
+  let s = reduce(initialState, state("yuri", "luna"));
+  assert.deepEqual([s.companion.name, s.pendingCompanion.name], ["Yuri", "Luna"]);
+  s = reduce(s, state("yuri", "yuri")); // clicked back to her: nothing waits
+  assert.equal(s.pendingCompanion, null);
+  s = reduce(reduce(s, state("yuri", "luna")), state("luna"));
+  assert.deepEqual([s.companion.name, s.pendingCompanion], ["Luna", null]);
 });
 
 test("search results live apart from the history and follow renames and deletes", () => {

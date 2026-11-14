@@ -46,7 +46,7 @@ import subprocess
 import sys
 import time
 import traceback
-from collections.abc import AsyncIterator, Awaitable, Callable
+from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from functools import partial
 from pathlib import Path
 from typing import Any
@@ -1504,6 +1504,24 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
         return _replace
 
+    async def _apply_pending_switch() -> None:
+        nonlocal pending_waifu_id
+        target, pending_waifu_id = pending_waifu_id, None
+        if target:
+            await _switch_companion(target)
+
+    def _start_turn(turn: Coroutine[Any, Any, None]) -> asyncio.Task:
+        """Runs a turn as its own task; a companion switch asked for during it applies
+        the moment it ends, so the chip and the divider do not wait for the next message (FR-S-2)."""
+
+        async def _turn_then_switch() -> None:
+            try:
+                await turn
+            finally:
+                await _apply_pending_switch()
+
+        return asyncio.create_task(_turn_then_switch())
+
     # K1-10: every window hears about model loads (the "waking up" card).
     async def _push_model_status(status: dict[str, Any]) -> None:
         await websocket.send_json(protocol.frame("model_status", status))
@@ -1572,7 +1590,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             return
         if current_turn_task is not None and not current_turn_task.done():
             current_turn_task.cancel()
-        current_turn_task = asyncio.create_task(
+        current_turn_task = _start_turn(
             _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
         )
 
@@ -1736,9 +1754,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
             # A switch requested while a turn was running takes effect now, between turns
             # (FR-S-2: the turn in flight finishes with the old waifu).
+            # (Normally _start_turn already did; this catches one asked for while that ran.)
             if pending_waifu_id and (current_turn_task is None or current_turn_task.done()):
-                await _switch_companion(pending_waifu_id)
-                pending_waifu_id = None
+                await _apply_pending_switch()
 
             if msg_type == "switch_waifu":
                 target_id = str(data.get("id") or "")
@@ -2066,7 +2084,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 history[:] = await manager.history(current_thread, _system_message(_waifu_of(websocket)), exclude=old_ids)
                 temp_turn_flags[:] = [temp_mode] * (len(history) - 1)
                 unprompted_msgs.clear()
-                current_turn_task = asyncio.create_task(
+                current_turn_task = _start_turn(
                     _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids), thread_id=_thread_id(), **_thread_model())
                 )
                 continue
@@ -2081,7 +2099,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # The frontend should disable input while a reply is
                     # in flight; this is just defense in depth regardless.
                     continue
-                current_turn_task = asyncio.create_task(
+                current_turn_task = _start_turn(
                     _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
                 )
 
@@ -2132,7 +2150,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # Silence, noise, or nothing intelligible -- nothing to
                     # reply to, and nothing worth adding to history.
                     continue
-                current_turn_task = asyncio.create_task(
+                current_turn_task = _start_turn(
                     _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
                 )
             elif msg_type == "user_file":
@@ -2190,7 +2208,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 # description/content.
                 user_text = f"{shared_line}\n\n{caption}" if caption else shared_line
 
-                current_turn_task = asyncio.create_task(
+                current_turn_task = _start_turn(
                     _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
                 )
             else:
