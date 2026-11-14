@@ -18,3 +18,14 @@ def _no_real_model_loads(monkeypatch):
     monkeypatch.setattr(model_loader.LOADER, "enabled", False)
     yield
     model_loader.LOADER.reset()
+
+
+@pytest.fixture(autouse=True)
+def _throwaway_data_dir(tmp_path_factory, monkeypatch):
+    """No test writes the developer's real data or logs (audit.jsonl, spend.db,
+    threads): KOKYU_DATA_DIR points at a throwaway folder, and the router singleton
+    is rebuilt there on first use. Subprocesses inherit the variable."""
+    import router
+
+    monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path_factory.mktemp("data")))
+    monkeypatch.setattr(router, "_router", None)

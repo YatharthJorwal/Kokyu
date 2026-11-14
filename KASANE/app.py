@@ -254,17 +254,20 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
 
 app = FastAPI(lifespan=_lifespan)
 
-# The page (Vite on :1420, or the Tauri webview) fetches each waifu's .vrm from this
-# kernel, which is a different origin. Loopback only, GET only, no credentials.
+# Kokyu's own pages: Vite on :1420 in development, the Tauri webview when packaged.
+ALLOWED_ORIGINS = (
+    "http://localhost:1420",
+    "http://127.0.0.1:1420",
+    "tauri://localhost",
+    "http://tauri.localhost",
+    "https://tauri.localhost",
+)
+
+# The page fetches each waifu's .vrm from this kernel, which is a different origin.
+# Loopback only, GET only, no credentials.
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:1420",
-        "http://127.0.0.1:1420",
-        "tauri://localhost",
-        "http://tauri.localhost",
-        "https://tauri.localhost",
-    ],
+    allow_origins=list(ALLOWED_ORIGINS),
     allow_methods=["GET"],
     allow_headers=[],
 )
@@ -639,6 +642,15 @@ async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp:
         print(f"[yuri] transcript log: write failed, skipping: {exc}", file=sys.stderr)
 
 
+def _is_local_ref(model_ref: str | None) -> bool:
+    """Whether the turn's model runs on this PC. Unreadable counts as not local:
+    the safe side for anything that may only stay on the machine."""
+    try:
+        return model_refs.parse(model_listing.effective_ref(model_ref, CONFIG)).is_local
+    except model_refs.ModelRefError:
+        return False
+
+
 async def _drop_replaced_transcript_turn_safely(user_text: str) -> None:
     try:
         await asyncio.to_thread(store.drop_replaced_transcript_turn, user_text)
@@ -747,6 +759,7 @@ async def _run_turn(
     thread_id: str | None = None,
     model_ref: str | None = None,
     effort: str | None = None,
+    unprompted: list[dict[str, str]] | None = None,
 ) -> None:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, speak each sentence chunk as it's ready, commit (or roll back)
@@ -876,7 +889,12 @@ async def _run_turn(
     spoken_parts: list[str] = []
     detected_emotion: str | None = None
     tool_messages: list[dict[str, Any]] = []
-    offered_tools = tools.offered_schemas(already_looked=bool(look_hint))
+    local_model = _is_local_ref(model_ref)
+    if unprompted and not local_model:
+        # Her Task Guide and OCR remarks were written from screen captures: ambient
+        # content an API model never sees (FR-SC-3, FR-R-7). `unprompted` holds them by identity.
+        messages_for_llm = [m for m in messages_for_llm if not any(m is u for u in unprompted)]
+    offered_tools = tools.offered_schemas(already_looked=bool(look_hint), local_model=local_model)
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             saw_tool_call = False
@@ -1353,6 +1371,13 @@ async def shutdown_endpoint() -> dict:
 
 @app.websocket("/ws")
 async def ws_endpoint(websocket: WebSocket) -> None:
+    # A browser always sends Origin, so any other web page the user has open is
+    # refused here (CORS does not cover websockets). Local programs that send none
+    # (the tests, the sandbox) still connect.
+    origin = websocket.headers.get("origin")
+    if origin is not None and origin not in ALLOWED_ORIGINS:
+        await websocket.close(code=1008)
+        return
     await websocket.accept()
     _active_connections.add(websocket)
 
@@ -1591,7 +1616,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         if current_turn_task is not None and not current_turn_task.done():
             current_turn_task.cancel()
         current_turn_task = _start_turn(
-            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
+            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
         )
 
     # Phase 4 Round 2 -- Task Guide Mode's scheduled-capture loop, one
@@ -2085,7 +2110,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 temp_turn_flags[:] = [temp_mode] * (len(history) - 1)
                 unprompted_msgs.clear()
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids), thread_id=_thread_id(), **_thread_model())
+                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
                 )
                 continue
 
@@ -2100,7 +2125,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # in flight; this is just defense in depth regardless.
                     continue
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
                 )
 
             elif msg_type == "user_audio":
@@ -2151,7 +2176,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # reply to, and nothing worth adding to history.
                     continue
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
                 )
             elif msg_type == "user_file":
                 # Quick-action menu's Upload Image/File item
@@ -2209,7 +2234,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 user_text = f"{shared_line}\n\n{caption}" if caption else shared_line
 
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
                 )
             else:
                 continue

@@ -122,9 +122,11 @@ async def _read_clipboard_tool(**_ignored: Any) -> str:
 
 
 _LOOK_TOOLS = frozenset({"capture_screen", "capture_camera"})
+# What these read was never handed over by the user, so an API model never gets them (FR-R-7).
+_LOCAL_ONLY_TOOLS = _LOOK_TOOLS | {"read_clipboard"}
 
 
-def offered_schemas(already_looked: bool = False) -> list[dict[str, Any]]:
+def offered_schemas(already_looked: bool = False, local_model: bool = True) -> list[dict[str, Any]]:
     """The tool schemas the chat model is actually offered. set_active_task is
     withheld unless task_guide.model_can_start_tasks is on: the classifier
     (task_guide.detect_task_change) decides when a task starts or stops, and a
@@ -136,12 +138,18 @@ def offered_schemas(already_looked: bool = False) -> list[dict[str, Any]]:
     screen/camera tools are withheld then, because a model that is told to
     "call the tool every time" by the persona prompt calls it anyway -- two
     camera frames for one request, and a second description to contradict the
-    first. (A look the gate didn't catch still goes through the tools.)"""
+    first. (A look the gate didn't catch still goes through the tools.)
+
+    local_model False: the turn runs on an API model. What the screen, camera and
+    clipboard tools read is ambient content that may only reach a local model
+    (FR-R-7, D-047), so they are not offered at all and the model cannot ask."""
     schemas = list(TOOL_SCHEMAS)
     if not CONFIG.task_guide.model_can_start_tasks:
         schemas = [s for s in schemas if s["function"]["name"] != "set_active_task"]
     if already_looked:
         schemas = [s for s in schemas if s["function"]["name"] not in _LOOK_TOOLS]
+    if not local_model:
+        schemas = [s for s in schemas if s["function"]["name"] not in _LOCAL_ONLY_TOOLS]
     return schemas
 
 

@@ -343,6 +343,12 @@ def test_look_tools_are_withheld_once_the_gate_has_looked():
     assert "read_clipboard" in names  # unrelated tools stay
 
 
+def test_look_tools_are_never_offered_to_an_api_model():
+    # FR-R-7: what they read is ambient content, local models only
+    names = _names(tools.offered_schemas(local_model=False))
+    assert not {"capture_camera", "capture_screen", "read_clipboard"} & set(names)
+
+
 def test_look_tools_are_offered_when_the_gate_did_not_look():
     names = _names(tools.offered_schemas(already_looked=False))
     assert {"capture_screen", "capture_camera", "read_clipboard"} <= set(names)

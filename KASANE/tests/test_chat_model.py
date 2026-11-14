@@ -3,6 +3,7 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
@@ -308,6 +309,65 @@ def test_a_blocked_api_model_shows_retry_and_switch_and_nothing_answers_instead(
     tokens = [m for m in seen + rest if m["type"] == "token"]
     assert tokens == []                                        # no other model replied
     assert len(calls) == 1
+
+
+def test_an_api_model_is_never_offered_the_screen_or_camera_tools(kernel, monkeypatch):
+    # FR-R-7 (audit finding): an API model could call capture_screen and be sent
+    # the description of the user's screen
+    client, _ = kernel
+    offered = []
+
+    async def recording(role, messages, tools, **kwargs):
+        offered.append({t["function"]["name"] for t in tools})
+        yield {"type": "content", "text": "ok [happy]"}
+
+    monkeypatch.setattr(app.router, "stream_with_tools", recording)
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        for ref in (LOCAL, API):
+            ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": ref}})
+            _until(ws, "thread_updated")
+            ws.send_json({"type": "user_text", "text": "hi"})
+            _until(ws, "turn_end")
+    local_only = {"capture_screen", "capture_camera", "read_clipboard"}
+    assert local_only <= offered[0] and not local_only & offered[1]
+
+
+@pytest.mark.asyncio
+async def test_screen_remarks_stay_out_of_an_api_models_context(tmp_path, monkeypatch):
+    # FR-SC-3 (review finding): a Task Guide or OCR remark was written from a screen
+    # capture; it stays in a local model's context and never reaches an API model
+    premade = tmp_path / "premade"
+    make_pack(premade, "alpha", name="Alpha")
+    waifu = WaifuRegistry(premade, tmp_path / "user").get("alpha")
+    seen = []
+
+    async def recording(role, messages, tools, **kwargs):
+        seen.append(" ".join(m["content"] for m in messages))
+        yield {"type": "content", "text": "ok [neutral]"}
+
+    async def nothing(*_a, **_k):
+        return None
+
+    async def silent(text, voice=None):
+        return b""
+
+    class Socket:
+        state = SimpleNamespace(waifu=waifu)
+
+        async def send_json(self, payload):
+            pass
+
+    monkeypatch.setattr(app.router, "stream_with_tools", recording)
+    monkeypatch.setattr(app.tts, "synthesize", silent)
+    monkeypatch.setattr(app.look_intent, "maybe_look", nothing)
+    monkeypatch.setattr(app, "_log_transcript_turn_safely", nothing)
+    for ref in (LOCAL, API):
+        history, unprompted = [{"role": "system", "content": "sys"}], []
+        app._record_unprompted(history, "Whoa, $4,210 in checking?", True, [], unprompted)
+        await app._run_turn(Socket(), history, "hm?", True, [], model_ref=ref, unprompted=unprompted)
+    assert "$4,210" in seen[0] and "$4,210" not in seen[1]
 
 
 def test_model_failure_frames_cover_blocked_and_provider_errors_only():

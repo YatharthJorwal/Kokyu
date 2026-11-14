@@ -280,6 +280,18 @@ def test_rename_search_and_delete(kernel):
         assert err["data"]["code"] == "unknown_thread"
 
 
+def test_another_web_page_cannot_open_the_kernel_socket(kernel):
+    # review finding: CORS does not cover websockets, so any page the user had open
+    # could read every thread; Kokyu's own page and local programs still connect
+    from starlette.websockets import WebSocketDisconnect
+
+    with pytest.raises(WebSocketDisconnect):
+        with kernel.websocket_connect("/ws", headers={"origin": "https://evil.example"}) as ws:
+            ws.receive_json()
+    with kernel.websocket_connect("/ws", headers={"origin": "http://localhost:1420"}) as ws:
+        assert ws.receive_json()["type"] == "surface_status"
+
+
 def test_regenerate_replaces_the_last_reply_without_repeating_the_line(kernel, monkeypatch):
     seen = []
     replies = iter(["first try [happy]", "second try [happy]"])
