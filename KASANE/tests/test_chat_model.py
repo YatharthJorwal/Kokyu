@@ -314,3 +314,138 @@ def test_model_failure_frames_cover_blocked_and_provider_errors_only():
     assert protocol.model_failure(RouteBlockedError("OFFLINE", "x", API))["code"] == "model_blocked"
     assert protocol.model_failure(ProviderError("500"))["code"] == "model_failed"
     assert protocol.model_failure(llm.LLMUnreachableError("ollama down")) is None
+
+
+# -- K1-10: the model picker over the WebSocket (FR-M-3..6, D-054) -------------
+
+
+@pytest.fixture
+def loads(kernel, monkeypatch):
+    """The real loader, with a fake load and no pause before thread-open loads."""
+    seen = []
+
+    async def fake_load(ref):
+        seen.append(ref)
+
+    monkeypatch.setattr(app, "_load_chat_model", fake_load)
+    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
+        app.CONFIG, chat=dataclasses.replace(app.CONFIG.chat, default_model_ref="local:llamacpp/big", load_delay_s=0)
+    ))
+    monkeypatch.setattr(app.model_loader.LOADER, "enabled", True)
+    return kernel[0], seen
+
+
+def _status_until(ws, state, ref):
+    while True:
+        msg, _ = _until(ws, "model_status")
+        if (msg["data"]["state"], msg["data"]["model_ref"]) == (state, ref):
+            return msg["data"]
+
+
+def test_a_window_sees_the_model_load_and_a_pick_loads_the_new_model(loads):
+    client, seen = loads
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        first, _ = _until(ws, "model_status")                     # the current state, right away
+        assert first["data"]["state"] in ("idle", "loading", "ready")
+        _status_until(ws, "ready", "local:llamacpp/big")          # the thread's (default) model woke up
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
+        _until(ws, "thread_updated")
+        loading = _status_until(ws, "loading", LOCAL)
+        assert loading["label"] == "qwen3.5:4b"
+        _status_until(ws, "ready", LOCAL)
+        ws.send_json({"v": 1, "type": "model_load", "data": {}})  # Try again: loads even though it is up
+        _status_until(ws, "ready", LOCAL)
+    assert seen == ["local:llamacpp/big", LOCAL, LOCAL]
+
+
+def test_a_new_thread_keeps_the_pick_and_does_not_load_again(loads):
+    client, seen = loads
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _status_until(ws, "ready", "local:llamacpp/big")
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
+        _status_until(ws, "ready", LOCAL)
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
+        opened, _ = _until(ws, "thread_opened")
+        assert opened["data"]["thread"]["model_ref"] == LOCAL       # FR-M-5: inherits the last selection
+        ws.send_json({"v": 1, "type": "thread_list", "data": {}})
+        _until(ws, "thread_list")
+    assert seen == ["local:llamacpp/big", LOCAL]
+
+
+def test_the_model_list_reaches_the_window(kernel, monkeypatch):
+    client, _ = kernel
+
+    async def no_ollama(base_url, **_kw):
+        return [], "Ollama is not running"
+
+    class Rt:
+        api_key_present = False
+        catalog = None
+        ledger = None
+        state = None                      # what the connect-time settings message reads
+        use_api_model_override = None
+
+    monkeypatch.setattr(app.model_listing, "ollama_rows", no_ollama)
+    monkeypatch.setattr(app.router, "get_router", lambda: Rt())
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "model_list", "data": {"refresh": True}})
+        listed, _ = _until(ws, "model_list")
+    data = listed["data"]
+    assert data["local_error"] == "Ollama is not running" and data["api"] == [] and data["api_key"] is False
+    assert data["default_ref"] == app.model_listing.default_ref(app.CONFIG)
+
+
+def test_switching_models_waits_for_the_reply(kernel, monkeypatch):
+    client, _ = kernel
+
+    async def slow_stream(role, messages, tools, **kwargs):
+        await asyncio.sleep(0.4)
+        yield {"type": "content", "text": "done [happy]"}
+
+    monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        ws.send_json({"type": "user_text", "text": "hi"})
+        _until(ws, "turn_start")
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
+        err, _ = _until(ws, "error")
+        assert err["data"]["code"] == "turn_running"
+        _until(ws, "turn_end")
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
+        updated, _ = _until(ws, "thread_updated")
+        assert updated["data"]["thread"]["model_ref"] == LOCAL
+
+
+def test_only_the_main_window_loads_models(loads, monkeypatch):
+    # Review finding: a second window opening an Ollama thread used to stop
+    # llama-server under the main window's streaming reply. Observers only watch.
+    client, seen = loads
+    manager = app._conversations()
+    other = manager.store.create_thread(model_ref=LOCAL)
+    manager.store.create_thread(model_ref=None)                             # newest: the one that opens
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _status_until(ws, "ready", "local:llamacpp/big")
+        # shortcut: demote this window instead of opening a second one (each TestClient
+        # socket gets its own event loop, which the kernel's shared objects reject)
+        monkeypatch.setattr(app, "_driver", object())
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": other.id}})
+        opened, _ = _until(ws, "thread_opened")
+        assert opened["data"]["thread"]["model_ref"] == LOCAL
+        ws.send_json({"v": 1, "type": "model_load", "data": {}})
+        ws.send_json({"v": 1, "type": "thread_list", "data": {}})
+        _until(ws, "thread_list")
+    assert seen == ["local:llamacpp/big"]
+
+
+def test_hello_tells_the_window_the_defaults(kernel):
+    client, _ = kernel
+    with client.websocket_connect("/ws") as ws:
+        ws.send_json({"v": 1, "type": "hello", "id": "h1", "data": {"client": "main", "protocol": 1}})
+        hello, _ = _until(ws, "hello")
+    assert hello["data"]["default_model_ref"] == app.model_listing.default_ref(app.CONFIG)
+    assert hello["data"]["default_effort"] == app.CONFIG.chat.default_effort

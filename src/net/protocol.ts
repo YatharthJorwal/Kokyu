@@ -20,6 +20,8 @@ export const CLIENT_TYPES = [
   "thread_rename",
   "set_model",
   "set_effort",
+  "model_list",
+  "model_load",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -32,6 +34,8 @@ export const SERVER_TYPES = [
   "token",
   "turn_done",
   "error",
+  "model_list",
+  "model_status",
 ] as const;
 
 export const ERROR_CODES = [
@@ -76,8 +80,62 @@ export interface ThreadMessage {
   meta: Record<string, unknown>;
 }
 
+/** One row of the model picker (K1-10; FR-M-3, 4). */
+export interface ModelRow {
+  ref: string;
+  label: string;
+  kind: "local" | "api";
+  backend: string;
+  detail: string | null;
+  size_bytes: number | null;
+  /** False: listed but not usable now (no key, missing file); `note` says why. */
+  available: boolean;
+  note: string | null;
+  /** Fits in VRAM? Null until the VRAM manager (K1-09). */
+  fits: boolean | null;
+  price_in?: number | null;
+  price_out?: number | null;
+  tags?: string[];
+}
+
+export interface Spend {
+  /** Off: the caps are not enforced, so the footer does not show them. */
+  enabled: boolean;
+  hour_usd?: number;
+  hourly_cap_usd?: number | null;
+  day_usd: number;
+  month_usd: number;
+  daily_cap_usd: number | null;
+  monthly_cap_usd: number | null;
+}
+
+export interface ModelListData {
+  /** The model a thread without a choice uses. */
+  default_ref: string;
+  local: ModelRow[];
+  api: ModelRow[];
+  local_error: string | null;
+  api_error: string | null;
+  api_stale: boolean;
+  api_key: boolean;
+  spend: Spend | null;
+}
+
+export type ModelLoadState = "idle" | "loading" | "ready" | "failed";
+
+/** The kernel's chat-model load (K1-10, FR-M-6). */
+export interface ModelStatus {
+  model_ref: string | null;
+  label: string | null;
+  state: ModelLoadState;
+  message: string | null;
+  /** Seconds spent loading when the frame was sent. */
+  elapsed_s: number | null;
+}
+
 export interface ServerData {
-  hello: { protocol: number; kernel: string };
+  /** The kernel's defaults for a thread with no choice of its own (K1-10). */
+  hello: { protocol: number; kernel: string; default_model_ref?: string; default_effort?: string | null };
   thread_opened: { thread: ThreadInfo; messages: ThreadMessage[] };
   thread_list: { query: string; threads: ThreadInfo[] };
   thread_message: { message: ThreadMessage };
@@ -93,6 +151,8 @@ export interface ServerData {
     model_ref?: string | null;
     actions?: ("retry" | "switch_model")[];
   };
+  model_list: ModelListData;
+  model_status: ModelStatus;
 }
 
 export interface ClientData {
@@ -105,6 +165,8 @@ export interface ClientData {
   thread_rename: { id: string; title: string };
   set_model: { model_ref: string | null };
   set_effort: { effort: Effort | null };
+  model_list: { refresh?: boolean };
+  model_load: Record<string, never>;
 }
 
 export type Effort = "off" | "low" | "medium" | "high";

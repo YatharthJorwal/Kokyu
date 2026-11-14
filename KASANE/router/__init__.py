@@ -432,12 +432,26 @@ class Router:
         async for _chunk in self.complete(request):
             pass
 
-    async def shutdown(self) -> None:
-        """Stops child model servers (llama-server) the router started."""
+    @property
+    def api_key_present(self) -> bool:
+        """Whether the API provider has a key (the picker greys API rows without one)."""
+        return self._api_key_present
+
+    async def stop_llamacpp(self) -> bool:
+        """Stops llama-server if this router started one; True if one was running.
+        Used when the user picks an Ollama chat model: one large local model at a
+        time (FR-M-6, D-054)."""
         provider = self._llamacpp_provider
         server = getattr(provider, "server", None)
-        if server is not None:
-            await server.stop()
+        if server is None:
+            return False
+        was_running = bool(server.running())
+        await server.stop()
+        return was_running
+
+    async def shutdown(self) -> None:
+        """Stops child model servers (llama-server) the router started."""
+        await self.stop_llamacpp()
 
     def _redact_for_cloud(self, request: ModelRequest) -> tuple[ModelRequest, dict[str, int]]:
         if any(message.get("images") for message in request.messages):

@@ -210,6 +210,8 @@ class LlamaCppServer:
         self._lock = asyncio.Lock()
         self.process: Any = None
         self.preset_id: str | None = None
+        # Set while a started server is still loading its model; None once ready.
+        self._deadline: float | None = None
 
     @property
     def base_url(self) -> str:
@@ -228,8 +230,15 @@ class LlamaCppServer:
 
     async def ensure(self, preset: LlamaCppPreset) -> None:
         async with self._lock:
-            if self.running() and self.preset_id == preset.id and await self._healthy():
-                return
+            if self.running() and self.preset_id == preset.id:
+                if await self._healthy():
+                    return
+                if self._deadline is not None:
+                    # Started earlier and still loading: a cancelled warm-up (the
+                    # user switched away and back, K1-10) left it running. Keep
+                    # waiting for it instead of paying for the load twice.
+                    await self._wait_ready_locked(preset)
+                    return
             await self._stop_locked()
             server = resolve_server(self.cfg)
             if server is None:
@@ -263,17 +272,21 @@ class LlamaCppServer:
                 raise ProviderError(f"could not start llama-server: {exc}") from exc
             self._log = log
             self.preset_id = preset.id
-            loop = asyncio.get_running_loop()
-            deadline = loop.time() + self.cfg.startup_timeout_s
-            while not await self._healthy():
-                if self.process.returncode is not None:
-                    code = self.process.returncode
-                    await self._stop_locked()
-                    raise ProviderError(f"llama-server exited with code {code} while loading {preset.id}; see logs/{LOG_NAME}")
-                if loop.time() > deadline:
-                    await self._stop_locked()
-                    raise ProviderError(f"llama-server did not become ready within {self.cfg.startup_timeout_s:.0f} s")
-                await asyncio.sleep(self._poll_s)
+            self._deadline = asyncio.get_running_loop().time() + self.cfg.startup_timeout_s
+            await self._wait_ready_locked(preset)
+
+    async def _wait_ready_locked(self, preset: LlamaCppPreset) -> None:
+        loop = asyncio.get_running_loop()
+        while not await self._healthy():
+            if self.process is None or self.process.returncode is not None:
+                code = self.process.returncode if self.process is not None else None
+                await self._stop_locked()
+                raise ProviderError(f"llama-server exited with code {code} while loading {preset.id}; see logs/{LOG_NAME}")
+            if self._deadline is not None and loop.time() > self._deadline:
+                await self._stop_locked()
+                raise ProviderError(f"llama-server did not become ready within {self.cfg.startup_timeout_s:.0f} s")
+            await asyncio.sleep(self._poll_s)
+        self._deadline = None
 
     async def stop(self) -> None:
         async with self._lock:
@@ -281,6 +294,7 @@ class LlamaCppServer:
 
     async def _stop_locked(self) -> None:
         proc, self.process, self.preset_id = self.process, None, None
+        self._deadline = None
         if proc is not None and proc.returncode is None:
             proc.terminate()
             try:

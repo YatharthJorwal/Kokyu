@@ -2,6 +2,7 @@
 
 import dataclasses
 import json
+import types
 
 import pytest
 
@@ -343,3 +344,26 @@ async def test_ensure_cloud_picks_up_a_key_pasted_after_launch(tmp_path, monkeyp
     assert await router.ensure_cloud() is True
     assert router.cloud_provider is not None
     assert router.state.cloud_available is True
+
+
+@pytest.mark.asyncio
+async def test_stop_llamacpp_says_whether_a_server_was_running(tmp_path):
+    # K1-10 (FR-M-6): an Ollama pick stops llama-server first; shutdown does the same.
+    class Server:
+        def __init__(self, running):
+            self._running, self.stopped = running, 0
+
+        def running(self):
+            return self._running
+
+        async def stop(self):
+            self.stopped += 1
+            self._running = False
+
+    for running, expected in ((True, True), (False, False)):
+        server = Server(running)
+        router = Router(make_config(tmp_path), catalog=FakeCatalog(), local_provider=FakeProvider("local_ollama"),
+                        llamacpp_provider=types.SimpleNamespace(server=server))
+        assert await router.stop_llamacpp() is expected and server.stopped == 1
+    # no llama.cpp provider built yet (never used): nothing to stop
+    assert await Router(make_config(tmp_path), catalog=FakeCatalog()).stop_llamacpp() is False

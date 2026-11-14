@@ -274,3 +274,42 @@ def test_a_null_helper_model_means_the_reflex_model(tmp_path):
     models = load_config(cfg_file, quiet=True).models
     assert model_for(LOCAL_PROVIDER, "classifier", models) == "big:9b"       # one model in VRAM on a 9B-only PC
     assert model_for(LOCAL_PROVIDER, "memory_writer", models) == "small:4b"
+
+
+@pytest.mark.asyncio
+async def test_a_cancelled_load_of_the_same_preset_is_waited_for_not_restarted(tmp_path, monkeypatch):
+    # K1-10: the user picks the 35B, switches away before it is up, then back.
+    # The half-loaded server keeps loading; starting a second one would cost the
+    # whole load again.
+    monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path / "data"))
+    server_exe = tmp_path / "llama-server.exe"
+    server_exe.write_bytes(b"")
+    spawned = []
+    health = {"ok": False}
+
+    async def spawn(*cmd, **kw):
+        spawned.append(cmd)
+        return FakeProcess(on_stop=lambda: health.update(ok=False))
+
+    def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200 if health["ok"] else 503)
+        return httpx.Response(200, json={"models": []})
+
+    server = lc.LlamaCppServer(
+        LlamaCppConfig(server_path=str(server_exe)), spawn=spawn, transport=transport(handler),
+        ollama_url="http://ollama", poll_s=0.01, keep_loaded=frozenset(),
+    )
+    a = preset(tmp_path)
+    first = asyncio.create_task(server.ensure(a))
+    await asyncio.sleep(0.05)
+    first.cancel()                                           # the warm-up was cancelled mid-load
+    with pytest.raises(asyncio.CancelledError):
+        await first
+    assert server.running() and server.preset_id == "big"    # still loading in the background
+    second = asyncio.create_task(server.ensure(a))
+    await asyncio.sleep(0.05)
+    health["ok"] = True                                      # the model finished loading
+    await asyncio.wait_for(second, timeout=2)
+    assert len(spawned) == 1
+    await server.stop()

@@ -1,11 +1,12 @@
 // The input row (K1-02): multi-line, Enter sends, Shift+Enter is a newline
-// (FR-C-3), Stop while a reply runs (FR-C-2). The `＋` tray and the heart
-// animation are K1-05.
+// (FR-C-3), Stop while a reply runs (FR-C-2). The model chip sits in this row
+// (K1-10, FR-M-1). The `＋` tray and the heart animation are K1-05.
 
 import { useState, type KeyboardEvent } from "react";
 
 import { canSend } from "../chat-state";
 import { actions, useChat } from "../store";
+import { ModelChip } from "./ModelChip";
 
 export function Composer() {
   const [text, setText] = useState("");
@@ -43,15 +44,18 @@ export function Composer() {
         aria-label="Message"
         disabled={role === "observer"}
       />
-      {turn === "idle" ? (
-        <button type="button" className="send" onClick={submit} disabled={!ready || !text.trim()}>
-          Send
-        </button>
-      ) : (
-        <button type="button" className="stop" onClick={() => actions.stop()}>
-          Stop
-        </button>
-      )}
+      <div className="composer-bar">
+        <ModelChip />
+        {turn === "idle" ? (
+          <button type="button" className="send" onClick={submit} disabled={!ready || !text.trim()}>
+            Send
+          </button>
+        ) : (
+          <button type="button" className="stop" onClick={() => actions.stop()}>
+            Stop
+          </button>
+        )}
+      </div>
     </div>
   );
 }

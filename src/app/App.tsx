@@ -10,15 +10,12 @@ import { useChat } from "./store";
 function Header() {
   const title = useChat((s) => s.thread?.title || "New chat");
   const temp = useChat((s) => s.thread?.temp ?? false);
-  const model = useChat((s) => s.thread?.model_ref ?? null);
+  // The model chip lives in the input row (K1-10, FR-M-1), not up here.
   return (
     <header className="chat-header">
       <h1>{title}</h1>
       <span className="chips">
         {temp ? <span className="chip" title="Nothing from this chat goes into memory">Temp Chat</span> : null}
-        <span className="chip" title="The model chip arrives in a later step">
-          {model ? model.replace(/^[a-z]+:[a-z]+\//, "") : "Default model"}
-        </span>
       </span>
     </header>
   );

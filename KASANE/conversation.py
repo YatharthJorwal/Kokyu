@@ -66,14 +66,21 @@ class ConversationManager:
 
     # -- choosing a thread -----------------------------------------------------
 
-    async def open_initial(self, *, waifu_id: str | None) -> Thread:
-        """The thread a fresh connection lands in: the one last opened, else the most
-        recent, else a new one. A page reload therefore returns to the same thread."""
+    async def last_thread(self) -> Thread | None:
+        """The thread a fresh connection would land in, without creating one: the
+        one last opened, else the most recent. Boot uses it to load that thread's
+        model before any window connects (K1-10, D-054)."""
         last = await self._run(self.store.get_kv, LAST_THREAD_KEY)
         thread = await self._run(self.store.find_thread, last) if last else None
         if thread is None or thread.archived:
             recent = await self._run(self.store.list_threads, limit=1)
             thread = recent[0] if recent else None
+        return thread
+
+    async def open_initial(self, *, waifu_id: str | None) -> Thread:
+        """The thread a fresh connection lands in: the one last opened, else the most
+        recent, else a new one. A page reload therefore returns to the same thread."""
+        thread = await self.last_thread()
         if thread is None:
             thread = await self.new_thread(waifu_id=waifu_id)
         await self._run(self.store.set_kv, LAST_THREAD_KEY, thread.id)

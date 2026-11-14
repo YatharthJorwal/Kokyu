@@ -455,15 +455,13 @@ async def model_capabilities(model: str) -> list[str] | None:
     return [str(c) for c in caps] if isinstance(caps, list) else None
 
 
-async def warm_up_model(model: str | None = None) -> None:
-    """Loads the chat model into VRAM at startup (an empty-prompt
-    /api/generate is Ollama's documented way to do that) with the SAME
-    num_ctx every real request uses, so the first message doesn't pay for an
-    8 GB cold load -- which is long enough to hit the request timeout and was
-    the likely cause of the first message after startup answering "I can't
-    reach my own brain" while the model finished loading in the background.
-    Best-effort and silent on success apart from one log line; never raises."""
-    if CONFIG.llm.api_style != "ollama_native" or not CONFIG.llm.warm_up_on_start:
+async def load_model(model: str | None = None) -> None:
+    """Loads an Ollama model into VRAM now (an empty-prompt /api/generate is
+    Ollama's documented way to do that) with the SAME num_ctx every real
+    request uses, so the next message does not pay for a cold load. Raises
+    LLMUnreachableError (or a subclass) when it fails: the model picker shows
+    that inline (K1-10, FR-M-6). Does nothing for a non-Ollama `llm` backend."""
+    if CONFIG.llm.api_style != "ollama_native":
         return
     url = f"{CONFIG.llm.base_url.rstrip('/')}/api/generate"
     model = model or CONFIG.llm.model
@@ -477,18 +475,26 @@ async def warm_up_model(model: str | None = None) -> None:
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(300.0, connect=5.0)) as client:
             response = await client.post(url, json=payload)
-        if response.status_code >= 400:
-            print(
-                f"[yuri] warm-up: {response.status_code} from {url}: {response.text[:300]!r}",
-                file=sys.stderr,
-            )
-            return
-        print(
-            f"[yuri] warm-up: '{model}' loaded in {time.monotonic() - started:.1f}s "
-            f"(num_ctx {CONFIG.llm.num_ctx})",
-            file=sys.stderr,
-        )
-    except Exception as exc:  # noqa: BLE001 -- best-effort; the first real turn will surface a real problem
+    except httpx.RequestError as exc:
+        raise _request_error(url, exc) from exc
+    if response.status_code >= 400:
+        raise LLMServerError(f"Ollama answered {response.status_code} loading '{model}': {response.text[:300]}")
+    print(
+        f"[yuri] warm-up: '{model}' loaded in {time.monotonic() - started:.1f}s "
+        f"(num_ctx {CONFIG.llm.num_ctx})",
+        file=sys.stderr,
+    )
+
+
+async def warm_up_model(model: str | None = None) -> None:
+    """Startup warm-up: `load_model`, but best-effort (the first real turn will
+    surface a real problem) and off when `llm.warm_up_on_start` is false.
+    Never raises."""
+    if CONFIG.llm.api_style != "ollama_native" or not CONFIG.llm.warm_up_on_start:
+        return
+    try:
+        await load_model(model)
+    except Exception as exc:  # noqa: BLE001 -- best-effort
         print(f"[yuri] warm-up skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 

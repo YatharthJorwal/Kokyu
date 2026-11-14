@@ -477,6 +477,10 @@ class ChatConfig:
 
     default_model_ref: str | None = None
     default_effort: str | None = None
+    # Opening a thread whose model is not loaded starts loading it after this
+    # pause, so clicking through old threads does not start a load per click
+    # (K1-10, D-054). Picking a model in the chip loads at once.
+    load_delay_s: float = 1.5
 
 
 @dataclass(frozen=True)

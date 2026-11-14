@@ -189,6 +189,7 @@ Pydantic models in `KASANE/protocol/`, mirrored in `src/net/`; frames `{ "v": 1,
 |---|---|---|
 | C→K | `hello` | Client identity (main, pet), protocol version |
 | C→K | `set_model`, `set_effort` | Per-thread selection |
+| C→K | `model_list`, `model_load` | Picker contents; *Try again* after a failed load |
 | C→K | `attach` | Register an uploaded file or camera frame |
 | C→K | `scene_enter`, `scene_set`, `scene_leave`, `scene_input` | 3D mode (K5) |
 | C→K | `pet_spawn`, `pet_dismiss`, `pet_click` | Pets (K4) |
@@ -196,14 +197,14 @@ Pydantic models in `KASANE/protocol/`, mirrored in `src/net/`; frames `{ "v": 1,
 | K→C | `state` | Thread, waifu, model, effort, voice-status snapshot |
 | K→C | `turn_start`, `token` | Streaming (FR-C-2) |
 | K→C | `captions`, `expression`, `look_at` | Avatar hints |
-| K→C | `model_loading`, `vram`, `spend` | Model chip and meters |
+| K→C | `model_list`, `model_status`, `vram` | Model chip, picker (with the spend footer), loading state |
 | K→C | `error` | Typed errors (quota, auth, vram, tts_down, …) |
 | K→C | `scene_state` | Positions, anchors, who is speaking |
 | K→C | `doctor` | Health report |
 
 Binary frames carry audio when `speak` is replaced by chunked audio (K2).
 
-**Built in K1-00b (D-049):** the envelope, `hello` (version handshake), the thread messages of §5.2b as frames, `turn_start` / `token` / `turn_done`, and `error {code, message, reply_to}` with the codes in `KASANE/protocol/__init__.py`. The rest of the table above lands with the features that need it. **K1-00c (D-050):** `set_model {model_ref|null}` and `set_effort {effort|null}` (validated; answered with `thread_updated {thread}`); `error` frames with `code: model_blocked | model_failed`, `reason`, `model_ref` and `actions` for FR-R-5.
+**Built in K1-00b (D-049):** the envelope, `hello` (version handshake), the thread messages of §5.2b as frames, `turn_start` / `token` / `turn_done`, and `error {code, message, reply_to}` with the codes in `KASANE/protocol/__init__.py`. The rest of the table above lands with the features that need it. **K1-00c (D-050):** `set_model {model_ref|null}` and `set_effort {effort|null}` (validated; answered with `thread_updated {thread}`); `error` frames with `code: model_blocked | model_failed`, `reason`, `model_ref` and `actions` for FR-R-5. **K1-10 (D-054):** `model_list {refresh}` → `model_list {default_ref, local, api, …, spend}`; `model_status {model_ref, label, state, message, elapsed_s}` to every window on connect and on each change; `model_load` (driver only); `hello` answers with `default_model_ref` and `default_effort`.
 
 ## 6. Data and storage
 
@@ -257,13 +258,13 @@ Yuri's roles are kept (`docs/notes/yuri-inventory.md` §6): `reflex`, `vision`, 
 - Reads total/free VRAM through NVML (`nvidia-ml-py`).
 - Estimates a model's footprint as file size plus KV cache plus a safety margin; **measured** values observed after load replace the estimate and are cached.
 - Tracks residents: chat model, embeddings, TTS backend, renderer allowance.
-- Rule: only **one large LLM** resident across Ollama and llama.cpp. Selecting a model on the other backend unloads the first (`keep_alive: 0` for Ollama; stop `llama-server`) before loading. "Large" means its measured VRAM: a MoE with experts on the CPU (about 3 GB) may stay resident beside the small helpers (classifier, embeddings). Until the VRAM manager exists, starting `llama-server` unloads every Ollama model once, and helpers reload on demand (K1-01, D-051).
+- Rule: only **one large LLM** resident across Ollama and llama.cpp. Selecting a model on the other backend unloads the first (`keep_alive: 0` for Ollama; stop `llama-server`) before loading. "Large" means its measured VRAM: a MoE with experts on the CPU (about 3 GB) may stay resident beside the small helpers (classifier, embeddings). Until the VRAM manager exists: starting `llama-server` unloads Ollama's models except the small helpers (D-052), and picking an Ollama chat model stops `llama-server` first (D-054).
 - Produces *fits / won't fit* hints for the switcher and refuses a load that would exceed free VRAM minus headroom, naming the blocker.
 - Large MoE on llama.cpp (Qwen3.6-35B-A3B Q4) keeps every expert in system RAM (`--n-cpu-moe 40`): about 3 GB VRAM, about 19.5 GB working set (memory-mapped, so the OS can page it), about 4.6 GB private. Measured numbers and the settings that won: `docs/STATE.md` (K1-01).
 
 ### 7.4 Providers
 
-`ollama` (native API), `llamacpp` (OpenAI-compatible) and a generic **`openai_compat`** provider (configurable base URL and key; AI Router, OpenRouter, DeepSeek and others are presets; Yuri's `airouter` provider is the starting point, D-037). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). `llm.py` takes a model and a `think` override per call (K1-00c), and the Ollama provider always passes the model the router chose, for every role (D-052); helper models set to null mean the reflex model. At boot the kernel warms the model `chat.default_model_ref` names, plus the helpers when the chat model is on llama.cpp (D-052). The `llamacpp` provider (`router/providers/llamacpp.py`) owns one `llama-server` child per preset (`config.yaml` `llamacpp.presets` until `models.yaml` lands in K1-07), started on first use and stopped at shutdown; it reuses the OpenAI streaming code and moves per-turn system notes into the next user message so the server's prompt cache keeps hitting (D-051).
+`ollama` (native API), `llamacpp` (OpenAI-compatible) and a generic **`openai_compat`** provider (configurable base URL and key; AI Router, OpenRouter, DeepSeek and others are presets; Yuri's `airouter` provider is the starting point, D-037). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). `llm.py` takes a model and a `think` override per call (K1-00c), and the Ollama provider always passes the model the router chose, for every role (D-052); helper models set to null mean the reflex model. The **model loader** (`KASANE/model_loader.py`, D-054) loads the chat model in the background, one load at a time, newest request wins: at boot the last thread's model (else `chat.default_model_ref`), on a pick in the model chip, on opening a thread with another model (after `chat.load_delay_s`), and on *Try again*. Every state change goes to every window as a `model_status` frame; the chat shows it as the "waking up" card. A llama.cpp load also reads the persona once and warms the helpers (D-052). `router/listing.py` builds the picker's `model_list` (presets, Ollama `/api/tags` minus embedding models, the API catalog, spend). The `llamacpp` provider (`router/providers/llamacpp.py`) owns one `llama-server` child per preset (`config.yaml` `llamacpp.presets`, D-054), started on first use and stopped at shutdown; it reuses the OpenAI streaming code and moves per-turn system notes into the next user message so the server's prompt cache keeps hitting (D-051).
 
 ## 8. Voice pipeline
 

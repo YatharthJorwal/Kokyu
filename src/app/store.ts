@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
-import { canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
+import { canPickModel, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
 import { VoicePlayer, type SpeakClip } from "./voice";
 
 export const useChat = create<ChatState>(() => initialState);
@@ -73,5 +73,38 @@ export const actions = {
     if (state.turn !== "idle" || state.thread?.id === id) return;
     voice.stop();
     socket.send("thread_open", { id });
+  },
+
+  // ── the model chip (K1-10) ──────────────────────────────────────────
+
+  /** Opens the picker and asks the kernel what can be picked (fresh every time:
+   * a model pulled in Ollama a minute ago shows up). */
+  openPicker(): void {
+    if (!canPickModel(useChat.getState())) return;
+    dispatch({ kind: "picker", open: true });
+    socket.send("model_list", {});
+  },
+
+  closePicker(): void {
+    dispatch({ kind: "picker", open: false });
+  },
+
+  /** Re-fetches the API catalog (FR-M-4). */
+  refreshModels(): void {
+    socket.send("model_list", { refresh: true });
+  },
+
+  /** Picking a row is the whole action (FR-M-2): the thread switches and the kernel loads it. */
+  setModel(ref: string): boolean {
+    const state = useChat.getState();
+    if (!canPickModel(state)) return false;
+    dispatch({ kind: "picker", open: false });
+    if (ref === (state.thread?.model_ref ?? null)) return true;
+    return socket.send("set_model", { model_ref: ref });
+  },
+
+  /** Try again after a failed load. */
+  retryLoad(): void {
+    socket.send("model_load", {});
   },
 };

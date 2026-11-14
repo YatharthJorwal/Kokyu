@@ -72,6 +72,10 @@ class SetEffort(_Data):
     effort: Literal["off", "low", "medium", "high"] | None = None
 
 
+class ModelListRequest(_Data):
+    refresh: bool = False             # re-fetch the API catalog (FR-M-4)
+
+
 # Client -> kernel, versioned. The data model for each type.
 CLIENT_TYPES: dict[str, type[_Data]] = {
     "hello": Hello,
@@ -83,6 +87,8 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "thread_rename": ThreadRename,
     "set_model": SetModel,
     "set_effort": SetEffort,
+    "model_list": ModelListRequest,   # K1-10: what the chip's popover lists
+    "model_load": Empty,              # K1-10: Try again after a failed load
 }
 
 # Kernel -> client, versioned.
@@ -96,6 +102,8 @@ SERVER_TYPES: tuple[str, ...] = (
     "token",
     "turn_done",
     "error",
+    "model_list",     # K1-10 (FR-M-3, 4, 7)
+    "model_status",   # K1-10 (FR-M-6): loading / ready / failed
 )
 
 ERROR_CODES: tuple[str, ...] = (

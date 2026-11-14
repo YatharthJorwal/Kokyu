@@ -63,9 +63,11 @@ from threads import ThreadStore
 from audio import arbiter
 from audio import latency
 import llm
+import model_loader
 import paths
 import prompting
 import router
+from router import listing as model_listing
 from router import model_ref as model_refs
 import settings as runtime_settings
 from senses import look_intent
@@ -98,38 +100,68 @@ async def _check_chat_model() -> None:
     await _warm_default_chat_model()
 
 
+async def _boot_model_ref() -> str:
+    """The model the first window will use: the last thread's choice, else the
+    configured default (FR-M-5: new threads inherit the last selection)."""
+    thread = None
+    try:
+        thread = await _conversations().last_thread()
+    except Exception as exc:  # noqa: BLE001 -- no store: the default model
+        print(f"[kokyu] warm-up: threads store unavailable ({exc}); using the default model", file=sys.stderr)
+    return model_listing.effective_ref(thread.model_ref if thread else None, CONFIG)
+
+
 async def _warm_default_chat_model() -> None:
-    """K1-01b (D-052): load the model a new thread will use, not always the Ollama
-    default. A llama.cpp preset is started and reads the active persona and the
-    tool list once, so the first message reuses that prefix; an Ollama model is
-    loaded as before; an API model needs nothing. Never raises."""
+    """K1-01b (D-052), K1-10 (D-054): load the model the first message will use,
+    through the model loader so every window sees "waking up" while it loads and
+    a pick in the chip can cancel it. Never raises."""
     if not CONFIG.llm.warm_up_on_start:
         return
-    ref_text = CONFIG.chat.default_model_ref
+    ref_text = await _boot_model_ref()
     try:
-        ref = model_refs.parse(ref_text) if ref_text else None
+        model_refs.parse(ref_text)
     except model_refs.ModelRefError as exc:
-        print(f"[kokyu] warm-up skipped: chat.default_model_ref is invalid ({exc})", file=sys.stderr)
+        print(f"[kokyu] warm-up skipped: {ref_text!r} is not a usable model ({exc})", file=sys.stderr)
         return
-    if ref is None:
-        await llm.warm_up_model()
-        return
+    task = model_loader.LOADER.request(ref_text)
+    if task is not None:
+        # asyncio.wait, not await: a user's pick cancels this load, which is not an error here.
+        await asyncio.wait({task})
+
+
+async def _load_chat_model(ref_text: str) -> None:
+    """Loads a chat model so the next message starts at once (the loader's `warm`
+    function). Raises when the load fails; the loader shows why.
+
+    - llama.cpp: start `llama-server` for the preset (which unloads Ollama's chat
+      model, keeping the helpers) and have it read the active persona and the
+      tool list once, so the first message reuses that prefix (D-052).
+    - Ollama: stop `llama-server` first: one large local model at a time (FR-M-6).
+    - API: nothing to load.
+    Then the small helper models that run before every reply."""
+    ref = model_refs.parse(ref_text)
+    rt = router.get_router()
     if ref.provider == "local_ollama":
-        await llm.warm_up_model(ref.model)
+        if await rt.stop_llamacpp():
+            print("[kokyu] stopped llama-server: an Ollama chat model was picked", file=sys.stderr)
+        await llm.load_model(ref.model)
+        await _warm_helpers()
         return
     if ref.provider != "llamacpp":
         return
     registry = waifus.get_registry()
     waifu = registry.get(_load_active_id()) or registry.get(registry.default_id() or "")
     messages = [{"role": "system", "content": _system_message(waifu)}, {"role": "user", "content": "(warm-up)"}]
-    started = time.monotonic()
-    try:
-        await router.get_router().warm(str(ref), messages, tools.offered_schemas(already_looked=False))
-    except Exception as exc:  # noqa: BLE001 -- a failed warm-up shows up again, with Retry, on the first message
-        print(f"[kokyu] warm-up of {ref} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
-        return
-    print(f"[kokyu] warm-up: {ref} ready in {time.monotonic() - started:.1f}s", file=sys.stderr)
+    await rt.warm(str(ref), messages, tools.offered_schemas(already_looked=False))
     await _warm_helpers()
+
+
+model_loader.LOADER.configure(
+    # Looked up at call time, so tests can replace either function.
+    warm=lambda ref: _load_chat_model(ref),
+    label=lambda ref: model_listing.label_for(ref, CONFIG),
+    instant=lambda ref: ref.startswith("api:"),
+)
 
 
 async def _warm_helpers() -> None:
@@ -212,7 +244,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     startup_pass.cancel()
     await writer.WRITER.stop(final_pass=True)
-    # K1-01: a llama-server the router started must not outlive the kernel.
+    # K1-01: a llama-server the router started must not outlive the kernel. A load
+    # in progress is cancelled first, or it could start one after this.
+    with contextlib.suppress(Exception):
+        await model_loader.LOADER.stop()
     with contextlib.suppress(Exception):
         await router.get_router().shutdown()
 
@@ -941,6 +976,10 @@ async def _run_turn(
         # K1-00: the thread store records the exchange (user line, reply text, and
         # whether Stop cut it off, FR-C-2). Same "never fail the turn" rule as the
         # transcript log right above.
+        if reply_parts:
+            # K1-10: a model that just answered is not "failed to load" any more.
+            with contextlib.suppress(Exception):
+                await model_loader.LOADER.mark_ready(model_listing.effective_ref(model_ref, CONFIG))
         if on_finished is not None:
             stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
             try:
@@ -1243,6 +1282,8 @@ async def shutdown_endpoint() -> dict:
     # llama-server child here or it outlives the kernel (and holds ~20 GB of
     # RAM and its port). Bounded: Tauri's Job Object is the backstop.
     with contextlib.suppress(Exception):
+        await model_loader.LOADER.stop()
+    with contextlib.suppress(Exception):
         await asyncio.wait_for(router.get_router().shutdown(), timeout=8)
 
     sys.stdout.flush()
@@ -1332,6 +1373,16 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         unprompted_msgs.clear()
         await _send_thread_opened(websocket, thread)
         await _send_thread_list(websocket)
+        # K1-10: this thread's model gets loaded (after a short pause, so clicking
+        # through threads does not start a load per click), and the window learns
+        # how the current load is going.
+        # Only the driver loads: an observer opening a thread must not swap the
+        # model out from under the driver's streaming reply (review finding).
+        if websocket is _driver:
+            model_loader.LOADER.request(
+                model_listing.effective_ref(thread.model_ref, CONFIG), delay_s=CONFIG.chat.load_delay_s
+            )
+        await websocket.send_json(protocol.frame("model_status", model_loader.LOADER.status()))
 
     async def _switch_companion(target_id: str) -> None:
         """A waifu switch plus the thread's divider line (FR-S-2)."""
@@ -1378,6 +1429,12 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             await _send_thread_list(websocket)
 
         return _save
+
+    # K1-10: every window hears about model loads (the "waking up" card).
+    async def _push_model_status(status: dict[str, Any]) -> None:
+        await websocket.send_json(protocol.frame("model_status", status))
+
+    unsubscribe_model_status = model_loader.LOADER.subscribe(_push_model_status)
 
     try:
         active_now = _waifu_of(websocket)
@@ -1580,7 +1637,17 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             if parsed is not None:
                 if parsed.type == "hello":
                     await websocket.send_json(
-                        protocol.frame("hello", {"protocol": protocol.PROTOCOL_VERSION, "kernel": "KASANE"}, id=parsed.id)
+                        protocol.frame(
+                            "hello",
+                            {
+                                "protocol": protocol.PROTOCOL_VERSION,
+                                "kernel": "KASANE",
+                                # what a thread with no model or effort of its own runs with (the chip shows it)
+                                "default_model_ref": model_listing.default_ref(CONFIG),
+                                "default_effort": CONFIG.chat.default_effort,
+                            },
+                            id=parsed.id,
+                        )
                     )
                     continue
                 data = {"type": parsed.type, **parsed.data.model_dump()}
@@ -1656,12 +1723,42 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 await _send_thread_list(websocket, str(data.get("query") or ""))
                 continue
 
+            if msg_type == "model_list":
+                # K1-10: the chip's popover (FR-M-3, 4, 7). Read-only, any window.
+                listed = await model_listing.model_list(
+                    router.get_router(), refresh=bool(data.get("refresh")), cfg=CONFIG
+                )
+                await websocket.send_json(protocol.frame("model_list", listed))
+                continue
+
+            if msg_type == "model_load":
+                # K1-10: Try again after a failed load. Observers only watch (their
+                # button is hidden); the driver never reloads mid-reply.
+                if websocket is not _driver:
+                    continue
+                if current_turn_task is not None and not current_turn_task.done():
+                    await websocket.send_json(
+                        protocol.error_frame("turn_running", "Wait for the reply to finish, or press Stop.")
+                    )
+                    continue
+                model_loader.LOADER.request(
+                    model_listing.effective_ref(current_thread.model_ref if current_thread else None, CONFIG),
+                    force=True,
+                )
+                continue
+
             if msg_type in ("set_model", "set_effort"):
                 # K1-00c: per-thread model and effort (FR-M-1, FR-M-8). Already
                 # validated as a v1 frame; applied from the next turn on.
                 if current_thread is None:
                     await websocket.send_json(
                         protocol.error_frame("threads_unavailable", "Conversation history is unavailable right now.")
+                    )
+                    continue
+                if msg_type == "set_model" and current_turn_task is not None and not current_turn_task.done():
+                    # Loading another model would pull the one answering out from under it.
+                    await websocket.send_json(
+                        protocol.error_frame("turn_running", "Wait for the reply to finish, or press Stop, then switch models.")
                     )
                     continue
                 field_name = "model_ref" if msg_type == "set_model" else "effort"
@@ -1671,6 +1768,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_json(
                     protocol.frame("thread_updated", {"thread": current_thread.to_dict()}, thread=current_thread.id)
                 )
+                if msg_type == "set_model" and websocket is _driver:
+                    # K1-10 (FR-M-6): a pick loads at once; the chip shows the progress.
+                    model_loader.LOADER.request(model_listing.effective_ref(current_thread.model_ref, CONFIG))
                 continue
 
             if msg_type == "thread_rename":
@@ -1962,6 +2062,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     except WebSocketDisconnect:
         pass
     finally:
+        unsubscribe_model_status()
         _active_connections.discard(websocket)
         _connection_surface.pop(websocket, None)
         # This connection was the driver -- promote whichever other

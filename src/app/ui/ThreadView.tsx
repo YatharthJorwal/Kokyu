@@ -5,6 +5,7 @@ import { useEffect, useRef } from "react";
 
 import { visibleStream, type ChatMessage } from "../chat-state";
 import { useChat } from "../store";
+import { WakingCard } from "./WakingCard";
 
 function Message({ m }: { m: ChatMessage }) {
   if (m.role === "divider") {
@@ -30,14 +31,29 @@ export function ThreadView() {
   const turn = useChat((s) => s.turn);
   const streaming = useChat(visibleStream);
   const companion = useChat((s) => s.companion?.name ?? null);
+  const modelState = useChat((s) => s.modelStatus?.state ?? null);
   const end = useRef<HTMLDivElement>(null);
+  // Whether the view is pinned to the newest message. A model load finishing
+  // must not yank someone who scrolled up to read history.
+  const atBottom = useRef(true);
 
   useEffect(() => {
     end.current?.scrollIntoView({ block: "end" });
   }, [messages.length, streaming, turn]);
 
+  useEffect(() => {
+    if (atBottom.current) end.current?.scrollIntoView({ block: "end" });
+  }, [modelState]);
+
   return (
-    <div className="thread" aria-live="polite">
+    <div
+      className="thread"
+      aria-live="polite"
+      onScroll={(e) => {
+        const el = e.currentTarget;
+        atBottom.current = el.scrollHeight - el.scrollTop - el.clientHeight < 48;
+      }}
+    >
       {messages.length === 0 && turn === "idle" ? (
         <div className="empty">
           <p className="empty-title">{companion ? `Talk to ${companion}` : "Start a conversation"}</p>
@@ -47,6 +63,7 @@ export function ThreadView() {
       {messages.map((m) => (
         <Message key={m.key} m={m} />
       ))}
+      <WakingCard />
       {turn !== "idle" ? (
         <div className="msg assistant streaming">
           {companion ? <div className="speaker">{companion}</div> : null}

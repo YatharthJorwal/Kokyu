@@ -477,7 +477,32 @@ async def test_warm_up_never_raises(monkeypatch, capsys):
 
     _mock_http(monkeypatch, handler500)
     await llm.warm_up_model()
-    assert "warm-up: 500" in capsys.readouterr().err
+    err = capsys.readouterr().err
+    assert "warm-up skipped" in err and "500" in err and "no memory" in err
+
+
+@pytest.mark.asyncio
+async def test_load_model_raises_so_the_picker_can_show_why(monkeypatch):
+    # K1-10: a switch the user asked for must report a failed load, not swallow it,
+    # and it loads even when the boot warm-up is switched off.
+    _patch_llm_config(monkeypatch, model="big-model", warm_up_on_start=False)
+    seen = []
+
+    def handler500(request: httpx.Request) -> httpx.Response:
+        seen.append(json.loads(request.content)["model"])
+        return httpx.Response(500, text="model requires more system memory")
+
+    _mock_http(monkeypatch, handler500)
+    with pytest.raises(llm.LLMServerError, match="more system memory"):
+        await llm.load_model("qwen3.5:9b")
+    assert seen == ["qwen3.5:9b"]
+
+    def refused(request: httpx.Request) -> httpx.Response:
+        raise httpx.ConnectError("ollama not started yet")
+
+    _mock_http(monkeypatch, refused)
+    with pytest.raises(llm.LLMUnreachableError):
+        await llm.load_model()
 
 
 # --- strict chat templates: only ONE system message, at the start ------------

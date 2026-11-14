@@ -4,7 +4,16 @@
 // Clients hold no business logic (RULES): this decides what to *show*, never
 // what the kernel does.
 
-import { stripTrailingTag, type ErrorCode, type Frame, type ThreadInfo, type ThreadMessage } from "../net/protocol";
+import {
+  stripTrailingTag,
+  type ErrorCode,
+  type Frame,
+  type ModelListData,
+  type ModelStatus,
+  type ThreadInfo,
+  type ThreadMessage,
+} from "../net/protocol";
+import { shortRef } from "./models";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
 export type TurnPhase = "idle" | "thinking" | "replying";
@@ -47,6 +56,13 @@ export interface ChatState {
   companion: Companion | null;
   /** The last line the user sent, for Retry. */
   lastUserText: string | null;
+  /** What a thread with no model or effort of its own uses (from the kernel's hello). */
+  defaults: { model_ref: string | null; effort: string | null } | null;
+  /** What the model picker lists (K1-10); null until first asked. */
+  models: ModelListData | null;
+  /** The kernel's chat-model load: the "waking up" card and the chip (FR-M-6). */
+  modelStatus: ModelStatus | null;
+  pickerOpen: boolean;
 }
 
 export type LegacyMessage = { type: string; [key: string]: unknown };
@@ -58,7 +74,8 @@ export type ChatEvent =
   | { kind: "problem"; reason: string }
   | { kind: "sent"; text: string }
   | { kind: "retrying" }
-  | { kind: "dismiss_notice" };
+  | { kind: "dismiss_notice" }
+  | { kind: "picker"; open: boolean };
 
 export const initialState: ChatState = {
   connection: "connecting",
@@ -71,6 +88,10 @@ export const initialState: ChatState = {
   notice: null,
   companion: null,
   lastUserText: null,
+  defaults: null,
+  models: null,
+  modelStatus: null,
+  pickerOpen: false,
 };
 
 let localCounter = 0;
@@ -99,6 +120,31 @@ export function canSend(state: ChatState): boolean {
   return state.connection === "online" && state.role === "driver" && state.turn === "idle";
 }
 
+/** Switching models waits for the reply (the kernel refuses it mid-turn). */
+export function canPickModel(state: ChatState): boolean {
+  return canSend(state);
+}
+
+/** The model the open thread uses: its own pick, else the kernel's default. Never
+ * guessed from the load status: the loader may be busy with another thread's model. */
+export function currentModelRef(state: ChatState): string | null {
+  return state.thread?.model_ref ?? state.defaults?.model_ref ?? state.models?.default_ref ?? null;
+}
+
+/** The effort a turn in the open thread runs with (FR-M-1: shown on the chip). */
+export function currentEffort(state: ChatState): string | null {
+  return state.thread?.effort ?? state.defaults?.effort ?? null;
+}
+
+/** The chip's name for a model: the picker's label, else the load status's, else the id. */
+export function modelLabel(state: ChatState, ref: string | null): string {
+  if (!ref) return "Default model";
+  const row = state.models ? [...state.models.local, ...state.models.api].find((r) => r.ref === ref) : undefined;
+  if (row) return row.label;
+  if (state.modelStatus?.model_ref === ref && state.modelStatus.label) return state.modelStatus.label;
+  return shortRef(ref);
+}
+
 function upsertThread(threads: ThreadInfo[], thread: ThreadInfo): ThreadInfo[] {
   const found = threads.some((t) => t.id === thread.id);
   const next = found ? threads.map((t) => (t.id === thread.id ? thread : t)) : [thread, ...threads];
@@ -122,8 +168,11 @@ function markLastUser(messages: ChatMessage[], patch: Partial<ChatMessage>): Cha
 
 function reduceFrame(state: ChatState, frame: Frame): ChatState {
   switch (frame.type) {
-    case "hello":
-      return state;
+    case "hello": {
+      const data = frame.data as { default_model_ref?: string; default_effort?: string | null };
+      if (data.default_model_ref === undefined) return state;
+      return { ...state, defaults: { model_ref: data.default_model_ref, effort: data.default_effort ?? null } };
+    }
     case "thread_opened": {
       const data = frame.data as { thread: ThreadInfo; messages: ThreadMessage[] };
       return {
@@ -188,6 +237,10 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         : state.messages;
       return { ...state, messages, turn: "idle", streamRaw: "" };
     }
+    case "model_list":
+      return { ...state, models: frame.data as ModelListData };
+    case "model_status":
+      return { ...state, modelStatus: frame.data as ModelStatus };
     case "error": {
       const data = frame.data as { code: ErrorCode; message: string; actions?: ("retry" | "switch_model")[] };
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [] };
@@ -239,8 +292,11 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return reduceLegacy(state, event.msg);
     case "status": {
       const next = { ...state, connection: event.status };
-      // A dropped connection ends whatever was streaming; the kernel restarts clean.
-      return event.status === "online" ? next : { ...next, turn: "idle", streamRaw: "" };
+      // A dropped connection ends whatever was streaming; the kernel restarts clean
+      // and re-sends its model status on reconnect.
+      return event.status === "online"
+        ? next
+        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };
@@ -251,6 +307,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
         turn: "thinking",
         notice: null,
         lastUserText: event.text,
+        pickerOpen: false,
       };
     case "retrying": {
       // Drop the failed line; the resend adds it again.
@@ -260,5 +317,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
     }
     case "dismiss_notice":
       return { ...state, notice: null };
+    case "picker":
+      return { ...state, pickerOpen: event.open && canPickModel(state) };
   }
 }
