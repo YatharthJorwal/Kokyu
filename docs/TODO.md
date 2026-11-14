@@ -104,7 +104,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2) (5097f37)
 - [x] K1-07a Ollama/llama.cpp/API discovery for the picker (FR-M-3; D-054) (c2b1832)
 - [ ] K1-07b Capability registry (FR-M-10): where it lives (`models.yaml` per SPEC, or `config.yaml` as D-054 proposes) needs the user's answer; lands with the effort slider (K1-11)
-- [ ] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6)
+- [x] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6) (c54a938; D-058)
 - [ ] K1-08b Generic `openai_compat` provider (base URL plus key; AI Router, OpenRouter, DeepSeek presets); end-user keys in the Windows Credential Manager through the shell (D-037, FR-R-6)
 - [ ] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-6, ARCHITECTURE §7.3)
 - [x] K1-10 Model chip + popover (search, Local/API sections, badges, footer meters) (FR-M-1, 2, 5, 7); a "loading model" state while the kernel warms or switches models (D-052, D-054) (c2b1832)
