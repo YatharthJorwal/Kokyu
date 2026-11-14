@@ -29,3 +29,13 @@ def _throwaway_data_dir(tmp_path_factory, monkeypatch):
 
     monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path_factory.mktemp("data")))
     monkeypatch.setattr(router, "_router", None)
+
+
+@pytest.fixture(autouse=True)
+def _no_app_keys():
+    """No test inherits a key another test saved through shell_keys (D-059)."""
+    import shell_keys
+
+    shell_keys.clear()
+    yield
+    shell_keys.clear()

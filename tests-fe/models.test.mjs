@@ -91,6 +91,7 @@ test("small formatting helpers", () => {
   assert.equal(formatSize(null), null);
   assert.equal(shortRef("local:llamacpp/qwen3.6-35b-a3b"), "qwen3.6-35b-a3b");
   assert.equal(shortRef("api:airouter/vendor/chat-1"), "vendor/chat-1");
+  assert.equal(shortRef("api:open_router2/vendor/chat-1"), "vendor/chat-1"); // D-059 endpoint ids
   assert.equal(isLocalRef("api:airouter/x"), false);
   assert.equal(isLocalRef("local:ollama/x"), true);
   assert.equal(effortLabel("off"), "No thinking");

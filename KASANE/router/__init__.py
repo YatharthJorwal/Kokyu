@@ -19,7 +19,9 @@ from functools import partial
 from typing import Any, AsyncIterator
 
 import context_budget
-from config import CONFIG, Config, ProviderConfig, RoleConfig
+import shell_keys
+from config import CONFIG, Config, ProviderConfig, RoleConfig, active_api_id, api_endpoint
+from provider_presets import same_host, url_problem
 from router import decision as decide_mod
 from router.audit import AuditWriter
 from router.budget import SpendLedger, actual_cost, estimate_cost
@@ -62,7 +64,8 @@ BLOCKED_MESSAGES = {
     decide_mod.ROLE_PINNED_LOCAL: "Chat is set to local models only in the config. Switch to a local model.",
     decide_mod.PRIVACY_LOCAL_ONLY: "This message has something that must stay on this PC, so it can't go to an API model. Switch to a local model.",
     decide_mod.AMBIENT_CONTEXT: "Screen and camera captures never leave this PC. Switch to a local model for this message.",
-    decide_mod.CLOUD_DISABLED: "The API model isn't available: there is no key, or the provider is turned off. Add a key in Settings or switch model.",
+    decide_mod.CLOUD_DISABLED: "The API model isn't available: there is no key, or the provider is turned off. Add a key under API key in the model menu, or switch model.",
+    decide_mod.OTHER_PROVIDER: "This thread's model comes from another API provider than the one whose key is saved now. Switch model, or save that provider's key.",
     decide_mod.OFFLINE: "The API provider didn't answer a moment ago. Retry, or switch model.",
     decide_mod.BUDGET_EXHAUSTED: "Your spending cap is reached. Raise it in Settings, or switch model.",
     decide_mod.PRICE_UNKNOWN: "The model list has no price for this model, so your spending cap can't be kept. Refresh the list, or switch model.",
@@ -97,29 +100,24 @@ class Router:
         self._started = False
         self._lock = asyncio.Lock()
 
-        cloud_cfg = config.providers.get("airouter")
+        # One API endpoint at a time (D-059): the provider of the key saved in the app,
+        # else the config slot's own preset (a developer key).
+        self._api_slot: ProviderConfig | None = config.providers.get("airouter")
+        self.api_id = active_api_id(self._api_slot)
+        cloud_cfg = api_endpoint(self._api_slot, self.api_id) if self._api_slot else None
         self.local_provider = local_provider or OllamaNativeProvider()
         # K1-01 (D-051): built on first use, so a machine without llama.cpp pays nothing.
         self._llamacpp_provider = llamacpp_provider
         self.cloud_provider = cloud_provider
         self._api_key_present = cloud_provider is not None
+        self.catalog = catalog or self._catalog_for(cloud_cfg)
         if cloud_provider is None and cloud_cfg is not None:
             from config import resolve_api_key
 
-            key = resolve_api_key(cloud_cfg.api_key_env)
-            self._api_key_present = bool(key)
-            if key:
-                self.cloud_provider = AirouterProvider(cloud_cfg, key)
-
-        self.catalog = catalog or ModelCatalog(
-            cloud_cfg.base_url if cloud_cfg else "https://api.airouter.in/v1",
-            (cloud_cfg.models_cache if cloud_cfg else "data/provider_models.json"),
-            ttl_hours=(cloud_cfg.models_refresh_hours if cloud_cfg else 24),
-            models_url=(cloud_cfg.models_url if cloud_cfg else None),
-        )
+            self._install_key(cloud_cfg, resolve_api_key(cloud_cfg.api_key_env, provider=self.api_id))
         self.audit = audit or AuditWriter(repo_path(config.audit.path))
         self.ledger = ledger or SpendLedger(repo_path(config.budget.ledger_path))
-        self.state = RouterState(cloud_available=False)
+        self.state = RouterState(cloud_available=False, api_id=self.api_id)
         # Worst-case cost of AI Router calls still running: the cap counts them
         # before they finish, so calls started together cannot all pass it (FR-R-2).
         self._reserved_usd = 0.0
@@ -131,6 +129,60 @@ class Router:
 
     def set_use_api_model(self, enabled: bool | None) -> None:
         self.use_api_model_override = enabled
+
+    @staticmethod
+    def _catalog_for(cfg: ProviderConfig | None) -> ModelCatalog:
+        if cfg is None:
+            return ModelCatalog("https://api.airouter.in/v1", "data/provider_models.json")
+        return ModelCatalog(
+            cfg.base_url,
+            cfg.models_cache,
+            ttl_hours=cfg.models_refresh_hours,
+            models_url=cfg.models_url,
+            price_unit=cfg.price_unit,
+        )
+
+    def _install_key(self, cfg: ProviderConfig, key: str | None) -> None:
+        """Build the API provider for `key`, or none. An endpoint whose URL could
+        leak the key (not https, user info in it) gets none."""
+        problem = url_problem(cfg.base_url)
+        if key and problem:
+            print(f"[kokyu] router: API endpoint {cfg.label or cfg.preset} not used: base_url {problem}", flush=True)
+        usable = bool(key) and problem is None
+        self.cloud_provider = AirouterProvider(cfg, key) if usable else None
+        self._api_key_present = usable
+        # /models may need the key too (DeepSeek), but only on the endpoint's own host.
+        self.catalog.api_key = key if usable and same_host(cfg.models_url or cfg.base_url, cfg.base_url) else None
+
+    async def use_app_key(self, provider_id: str, key: str | None) -> bool:
+        """A key saved (or removed) in the app, live (FR-R-6, D-059). Points the API
+        slot at that provider, or back at the config's own endpoint, with no
+        restart. Returns whether API models are usable afterwards."""
+        async with self._lock:
+            shell_keys.set(provider_id, key)
+            new_id = active_api_id(self._api_slot)
+            cfg = api_endpoint(self._api_slot, new_id) if self._api_slot else None
+            if new_id != self.api_id or cfg is None:
+                self.catalog = self._catalog_for(cfg)
+            self.api_id = self.state.api_id = new_id
+            self._cloud_cfg = cfg
+            self.state.offline_until = 0.0   # a new key deserves a fresh try
+            self.cloud_provider = None
+            self._api_key_present = False
+            if cfg is not None:
+                from config import resolve_api_key
+
+                found = await asyncio.to_thread(resolve_api_key, cfg.api_key_env, provider=new_id)
+                self._install_key(cfg, found)
+        return await self.ensure_cloud()
+
+    def api_status(self) -> dict[str, Any]:
+        """The active endpoint for the picker and the key dialog. Never the key."""
+        cfg = self._cloud_cfg
+        source = None
+        if self._api_key_present:
+            source = "app" if shell_keys.get(self.api_id) else "developer"
+        return {"id": self.api_id, "label": (cfg.label if cfg else "") or self.api_id, "key": source}
 
     def _enforce(self, role: str) -> bool:
         """May this role execute a cloud decision right now?"""
@@ -167,10 +219,9 @@ class Router:
         if self.cloud_provider is None:
             from config import resolve_api_key
 
-            key = resolve_api_key(cloud_cfg.api_key_env)
+            key = await asyncio.to_thread(resolve_api_key, cloud_cfg.api_key_env, provider=self.api_id)
             if key:
-                self.cloud_provider = AirouterProvider(cloud_cfg, key)
-                self._api_key_present = True
+                self._install_key(cloud_cfg, key)
         if self.cloud_provider is None:
             self.state.cloud_available = False
             return False
@@ -391,6 +442,9 @@ class Router:
         last_kind: str | None = None                  # the last chunk handed to the caller
         interrupted = False                           # stopped, failed or abandoned mid-reply
 
+        # What a call costs and which endpoint is paid are fixed when it starts: a key
+        # change mid-reply swaps both (D-059), and the old call must not bill at $0.
+        catalog, api_id = self.catalog, self.api_id
         reserved = [decision.est_cost_usd if first.startswith("airouter:") else 0.0]
         self._reserved_usd += reserved[0]   # no await since route(): calls started together see each other
 
@@ -424,10 +478,10 @@ class Router:
                             # app.py stops reading here and routes the next round at once, long
                             # before this generator is finalized: book the call and free its
                             # reservation now, so the cap sees its real cost (FR-R-2).
-                            bills.append(self._bill(cloud_call, decision.est_prompt_tokens))
+                            bills.append(self._bill(cloud_call, decision.est_prompt_tokens, catalog))
                             cloud_call = None
                             booked = len(bills)
-                            totals = await asyncio.to_thread(self._record, bills[:booked])
+                            totals = await asyncio.to_thread(self._record, bills[:booked], api_id)
                             if totals is not None:
                                 self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = totals
                             release()
@@ -443,7 +497,7 @@ class Router:
                         # Past HTTP 200 (StreamFailed) or after any chunk, the provider may
                         # have billed; refused or unreachable before that, nothing was.
                         if produced or isinstance(exc, StreamFailed):
-                            bills.append(self._bill(cloud_call, decision.est_prompt_tokens, interrupted=True))
+                            bills.append(self._bill(cloud_call, decision.est_prompt_tokens, catalog, interrupted=True))
                         cloud_call = None
                     if index + 1 < len(chain):
                         continue
@@ -465,7 +519,7 @@ class Router:
         finally:
             if cloud_call is not None:
                 # Finished, stopped, or failed: what was asked for is paid for (FR-R-2).
-                bills.append(self._bill(cloud_call, decision.est_prompt_tokens, interrupted=interrupted))
+                bills.append(self._bill(cloud_call, decision.est_prompt_tokens, catalog, interrupted=interrupted))
             last = bills[-1][2] if bills else usage
             finish = {
                 "role": request.role,
@@ -478,13 +532,15 @@ class Router:
                 "error": error,
             }
             try:
-                totals = await asyncio.to_thread(self._settle, trace_id, bills[booked:], finish)
+                totals = await asyncio.to_thread(self._settle, trace_id, bills[booked:], finish, api_id)
             finally:
                 release()
             if totals is not None:
                 self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = totals
 
-    def _bill(self, call: list[Any], prompt_estimate: int, *, interrupted: bool = False) -> tuple[str, float, Usage]:
+    def _bill(
+        self, call: list[Any], prompt_estimate: int, catalog: ModelCatalog, *, interrupted: bool = False
+    ) -> tuple[str, float, Usage]:
         """One AI Router call's cost: the usage the provider reported, else an
         estimate. Prompt: the decision's estimate. Reply: what streamed out, or,
         for a reply cut short, the whole cap: unseen thinking is billed, and many
@@ -497,16 +553,16 @@ class Router:
             prompt = prompt_estimate
         if completion is None:
             completion = max(cap or 0, -(-characters // 4)) if interrupted else -(-characters // 4)
-        price_in, price_out = self.catalog.price(model)
+        price_in, price_out = catalog.price(model)
         return model, actual_cost(prompt, completion, price_in, price_out), Usage(prompt, completion, estimated)
 
     def _settle(
-        self, trace_id: str | None, bills: list[tuple[str, float, Usage]], finish: dict[str, Any]
+        self, trace_id: str | None, bills: list[tuple[str, float, Usage]], finish: dict[str, Any], api_id: str
     ) -> tuple[float, float, float] | None:
         """The ledger rows and the audit row of a finished call, in a worker thread.
         Every AI Router call gets a row, $0 included. Neither write may hide the
         reply or the real error: failures are logged (D-058)."""
-        totals = self._record(bills)
+        totals = self._record(bills, api_id)
         if trace_id is not None:
             try:
                 self.audit.finish(trace_id, **finish)
@@ -514,13 +570,13 @@ class Router:
                 print(f"[kokyu] router: audit write failed: {type(exc).__name__}", flush=True)
         return totals
 
-    def _record(self, bills: list[tuple[str, float, Usage]]) -> tuple[float, float, float] | None:
+    def _record(self, bills: list[tuple[str, float, Usage]], api_id: str) -> tuple[float, float, float] | None:
         """Ledger rows for `bills`, then the new totals. Blocking: call it in a thread."""
         totals = None
         try:
             for model, cost, used in bills:
                 self.ledger.record(
-                    "airouter",
+                    api_id,   # which endpoint was paid (D-059)
                     model,
                     cost,
                     prompt_tokens=used.prompt_tokens,
@@ -757,6 +813,7 @@ def summarize(router: Router | None = None) -> str:
     lines = [f"mode: {r.config.routing.mode} (enforce roles: {', '.join(r.config.routing.enforce_roles) or '-'})"]
     lines.append(
         f"cloud: {'available' if r.state.cloud_available else 'unavailable'}"
+        f"  endpoint: {r.api_status()['label']} (key: {r.api_status()['key'] or 'none'})"
         f"  catalog: {len(r.catalog.model_ids())} models"
         + (f"  last error: {r.catalog.last_error}" if r.catalog.last_error else "")
     )

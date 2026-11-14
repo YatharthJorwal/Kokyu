@@ -24,6 +24,7 @@ from typing import Any
 import httpx
 
 from config import CONFIG, Config, LlamaCppConfig
+from provider_presets import API_PRESETS
 from router import model_ref as model_refs
 from router.decision import LOCAL_PROVIDER, model_for
 
@@ -198,8 +199,10 @@ async def model_list(
         ensure_cloud = getattr(rt, "ensure_cloud", None)
         if ensure_cloud is not None:
             await ensure_cloud(fetch=False)   # a list that came back must also be usable (FR-M-4)
+    catalog = getattr(rt, "catalog", None)   # a key change during the refresh swaps it
     key_present = bool(getattr(rt, "api_key_present", False))
-    api = api_rows(catalog, key_present=key_present)
+    status = rt.api_status() if hasattr(rt, "api_status") else None
+    api = api_rows(catalog, key_present=key_present, backend=status["id"] if status else "airouter")
 
     spend = None
     ledger = getattr(rt, "ledger", None)
@@ -229,5 +232,8 @@ async def model_list(
             catalog is not None and catalog.available and (catalog.is_stale() or refresh_error or catalog.last_error)
         ),
         "api_key": key_present,
+        # D-059: the one active endpoint and the ones a key can be saved for. Never a key.
+        "api_provider": status,
+        "api_presets": [{"id": pid, "label": preset["label"]} for pid, preset in API_PRESETS.items()],
         "spend": spend,
     }

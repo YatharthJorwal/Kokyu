@@ -21,8 +21,10 @@ Search order when no path is given:
     config/config.example.yaml      (ships with the repo, so a fresh clone runs)
     built-in defaults               (a config-less process still starts)
 
-Secrets are never in the YAML. `resolve_api_key()` reads, in order: the env var
-named by the provider's `api_key_env`, `secrets.local.yaml` (gitignored), `.env`.
+Secrets are never in the YAML. `resolve_api_key()` reads, in order: the key the
+desktop shell handed over (Windows Credential Manager, FR-R-6), then, in a
+developer checkout only, the env var named by `api_key_env`, that provider's
+section of `secrets.local.yaml` (gitignored), `.env`.
 """
 
 from __future__ import annotations
@@ -37,6 +39,8 @@ from typing import Any, Iterable, Mapping
 import yaml
 
 import paths
+import shell_keys  # noqa: F401 -- takes the shell's keys out of os.environ before any child starts
+from provider_presets import API_PRESETS, ENDPOINT_FIELDS, PROVIDER_ID
 
 _ORCHESTRATOR_DIR = pathlib.Path(__file__).parent
 EXAMPLE_PATH = paths.config_example_path()
@@ -89,6 +93,11 @@ class ProviderConfig:
 
     name: str = ""
     enabled: bool = True
+    # The API slot (`airouter`, D-059): which endpoint this describes, its label and
+    # how its catalog prices models. Unused by the local providers.
+    preset: str = ""
+    label: str = ""
+    price_unit: str = "per_million"
     base_url: str = "http://127.0.0.1:11434"
     # "ollama_native" | "openai". The native path is required for num_ctx,
     # think, inline images and `format` schemas -- do not switch the local
@@ -541,33 +550,56 @@ def _read_dotenv(path: pathlib.Path) -> dict[str, str]:
 def resolve_api_key(
     api_key_env: str,
     *,
-    secrets_path: pathlib.Path = SECRETS_PATH,
+    provider: str | None = None,
+    secrets_path: pathlib.Path | None = None,
     dotenv_path: pathlib.Path | None = None,
 ) -> str | None:
     """The key for a provider, or None. Never guesses, never defaults to a
     placeholder that would silently 401.
 
-    Order: environment variable, then `secrets.local.yaml`, then `.env`."""
-    if not api_key_env:
+    Order: the key saved in the app (handed over by the shell, FR-R-6). Then, in a
+    developer checkout only: environment variable, `secrets.local.yaml`, `.env`."""
+    app_key = shell_keys.get(provider)
+    if app_key:
+        return app_key
+    if paths.is_packaged() or not api_key_env:
+        return None   # FR-R-6: .env and secrets.local.yaml are developer-only
+    key = _developer_key(api_key_env, provider, secrets_path, dotenv_path)
+    if key is not None and not shell_keys.valid_key(key):
+        # A space or control character would put the key into an HTTP error message.
+        print(f"[kokyu] config: the developer key for {api_key_env} has spaces or odd characters; ignored", file=sys.stderr)
         return None
+    return key
 
+
+def _developer_key(
+    api_key_env: str,
+    provider: str | None,
+    secrets_path: pathlib.Path | None,
+    dotenv_path: pathlib.Path | None,
+) -> str | None:
     value = os.environ.get(api_key_env)
     if value and value.strip():
         return value.strip()
 
     try:
-        secrets = yaml.safe_load(secrets_path.read_text(encoding="utf-8")) or {}
+        file = secrets_path or paths.secrets_path()
+        secrets = yaml.safe_load(file.read_text(encoding="utf-8")) or {}
     except (OSError, yaml.YAMLError):
         secrets = {}
+    if not isinstance(secrets, Mapping):
+        secrets = {}
 
-    # Two accepted layouts: {"airouter": {"api_key": ...}} and a flat map.
-    for section in secrets.values():
+    # Two accepted layouts: {"airouter": {"api_key": ...}} and a flat map. With a
+    # provider, only its own section: never hand one provider's key to another host.
+    sections = [secrets.get(provider)] if provider else list(secrets.values())
+    for section in sections:
         if isinstance(section, Mapping):
             for key_name in (api_key_env, "api_key", "key"):
                 candidate = section.get(key_name)
                 if candidate:
                     return str(candidate).strip()
-    flat = secrets.get(api_key_env) or secrets.get("api_key")
+    flat = secrets.get(api_key_env) or (None if provider else secrets.get("api_key"))
     if flat:
         return str(flat).strip()
 
@@ -584,7 +616,9 @@ def _find_config_path() -> pathlib.Path | None:
     return None
 
 
-def _normalize_providers(raw: Mapping[str, Any], llm_raw: Mapping[str, Any]) -> dict[str, ProviderConfig]:
+def _normalize_providers(
+    raw: Mapping[str, Any], llm_raw: Mapping[str, Any], warnings: list[str] | None = None
+) -> dict[str, ProviderConfig]:
     providers_raw = _section(raw, "providers")
     local_raw = dict(providers_raw.get("local_ollama") or {})
     airouter_raw = dict(providers_raw.get("airouter") or {})
@@ -601,8 +635,56 @@ def _normalize_providers(raw: Mapping[str, Any], llm_raw: Mapping[str, Any]) -> 
         local_raw["keep_alive"] = "30m"
 
     local = _build(ProviderConfig, {**local_raw, "name": "local_ollama"})
-    airouter = _build(ProviderConfig, {**airouter_raw, "name": "airouter"})
+    # The one API slot keeps its old name so existing configs and role chains still
+    # load (D-059); `preset` says which endpoint it is.
+    notes = warnings if warnings is not None else []
+    preset = str(airouter_raw.get("preset") or "airouter")
+    known = API_PRESETS.get(preset)
+    if known is not None:
+        # A preset fixes where its key goes: a URL left from another preset (say, only
+        # `preset:` changed in a copied config) must never receive this key.
+        for name in ENDPOINT_FIELDS:
+            if name in airouter_raw and airouter_raw[name] != known[name]:
+                notes.append(
+                    f"providers.airouter.{name} is ignored with preset '{preset}'; "
+                    "give your own id to use another endpoint."
+                )
+        fields = {**airouter_raw, **{name: known[name] for name in ENDPOINT_FIELDS}}
+    else:
+        fields = {"label": "Custom", "price_unit": "none", "models_cache": f"data/{preset}_models.json", **airouter_raw}
+        if not PROVIDER_ID.match(preset):
+            notes.append(
+                f"providers.airouter.preset '{preset}' is not a valid id (a lower-case letter, then "
+                "a-z, 0-9 or _; at most 32). API models are off."
+            )
+            fields = {**fields, "enabled": False, "models_cache": "data/custom_models.json"}
+    airouter = _build(ProviderConfig, {**fields, "name": "airouter", "preset": preset})
+    if not airouter.models_url and airouter.base_url:
+        airouter = dataclasses.replace(airouter, models_url=airouter.base_url.rstrip("/") + "/models")
     return {"local_ollama": local, "airouter": airouter}
+
+
+def active_api_id(slot: ProviderConfig | None) -> str:
+    """Which endpoint the API slot uses (D-059): the provider of the key saved in the
+    app, when it names an endpoint this config knows; else the slot's own preset.
+    A key left for an endpoint that is gone is ignored, never sent elsewhere."""
+    app = shell_keys.app_provider()
+    if slot is None:
+        return app or "airouter"
+    if app and api_endpoint(slot, app) is not None:
+        return app
+    return slot.preset or "airouter"
+
+
+def api_endpoint(slot: ProviderConfig, provider_id: str) -> ProviderConfig | None:
+    """The API slot pointed at `provider_id`: the configured endpoint itself, or a
+    known preset with the slot's other settings. None for an unknown id."""
+    if provider_id == slot.preset:
+        return slot
+    preset = API_PRESETS.get(provider_id)
+    if preset is None:
+        return None
+    return dataclasses.replace(slot, preset=provider_id, **{k: preset[k] for k in ENDPOINT_FIELDS})
 
 
 def _normalize_models(raw: Mapping[str, Any], llm_raw: Mapping[str, Any]) -> ModelsConfig:
@@ -781,7 +863,7 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
             raw = dict(loaded)
 
     llm_raw = _section(raw, "llm")
-    providers = _normalize_providers(raw, llm_raw)
+    providers = _normalize_providers(raw, llm_raw, warnings)
     models = _normalize_models(raw, llm_raw)
 
     routing_raw = _section(raw, "routing")
@@ -844,7 +926,7 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
     # A cloud provider that is switched on but has no key is a warning, not a
     # crash: Mind simply stays local. Never send an unauthenticated request.
     airouter = providers["airouter"]
-    if airouter.enabled and not resolve_api_key(airouter.api_key_env):
+    if airouter.enabled and not resolve_api_key(airouter.api_key_env, provider=active_api_id(airouter)):
         warnings.append(
             "providers.airouter.enabled is true but "
             f"{airouter.api_key_env or '<no api_key_env>'} did not resolve. "

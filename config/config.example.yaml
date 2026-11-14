@@ -32,16 +32,22 @@ providers:
     request_timeout_s: 120
 
   airouter:
-    # Cloud turns on by itself once AIROUTER_API_KEY resolves (put it in .env).
-    # With no key, the router marks the provider unavailable and Mind stays local.
+    # The one API endpoint (D-059); the name `airouter` is kept so role chains work.
+    # End users save a key in the app (model menu > API key): it goes to the Windows
+    # Credential Manager and picks the endpoint. Without one, `preset` and its
+    # developer key (api_key_env, secrets.local.yaml, .env) apply. No key: API
+    # models are unavailable and Mind stays local.
+    # preset: airouter | openrouter | deepseek. A preset fixes its own base_url,
+    # models_url, api_key_env, price_unit and models_cache (values written here are
+    # ignored). For another endpoint, use your own id (a-z, 0-9, _) and set
+    #   base_url: 'https://...'      (https, or plain http to this PC only)
+    #   api_key_env: 'MY_API_KEY'
+    #   price_unit: 'per_million'    # per_million | per_token | none (no prices: blocked while a cap is on)
+    #   models_url, models_cache     (default: <base_url>/models, data/<id>_models.json)
+    preset: 'airouter'
     enabled: true
-    base_url: 'https://api.airouter.in/v1'
-    api_key_env: 'AIROUTER_API_KEY'
     api_style: 'openai'     # /chat/completions, SSE, Bearer auth
-    # Public: returns context length, pricing, tags and zdr per model.
-    models_url: 'https://api.airouter.in/v1/models'
     models_refresh_hours: 24
-    models_cache: 'data/airouter_models.json'
     prefer_zdr: true        # prefer zero-data-retention models for internal text
     request_timeout_s: 120
 

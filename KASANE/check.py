@@ -31,9 +31,10 @@ async def _run(refresh: bool) -> int:
     print()
 
     rt = router.Router(cfg)
-    cloud_cfg = cfg.providers.get("airouter")
-    key = config.resolve_api_key(cloud_cfg.api_key_env) if cloud_cfg else None
-    print(f"api key ({cloud_cfg.api_key_env if cloud_cfg else '-'}): {'resolved' if key else 'missing'}")
+    cloud_cfg = config.api_endpoint(cfg.providers["airouter"], rt.api_id) if "airouter" in cfg.providers else None
+    key = config.resolve_api_key(cloud_cfg.api_key_env, provider=rt.api_id) if cloud_cfg else None
+    print(f"api endpoint: {rt.api_id}; developer key ({cloud_cfg.api_key_env if cloud_cfg else '-'}): {'resolved' if key else 'missing'}")
+    print("  (a key saved in the desktop app is only visible inside the app)")
 
     if refresh:
         await rt.startup()

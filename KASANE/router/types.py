@@ -116,6 +116,8 @@ class RouterState:
     the router, serialized to SQLite only for the spend counters."""
 
     cloud_available: bool = False
+    # The active API endpoint (D-059): an `api:<id>/...` ref for another one is refused.
+    api_id: str = "airouter"
     offline_until: float = 0.0
     spend_hour_usd: float = 0.0
     spend_day_usd: float = 0.0

@@ -40,7 +40,7 @@ def test_a_reference_splits_on_the_first_slash_only():
     assert str(model_ref.parse(API)) == API and model_ref.parse(API).provider == "airouter"
 
 
-@pytest.mark.parametrize("bad", ["", "qwen3.5:9b", "cloud:airouter/x", "local:ollama", "local:ollama/ ", "local:vllm/x", "api:openrouter/x"])
+@pytest.mark.parametrize("bad", ["", "qwen3.5:9b", "cloud:airouter/x", "local:ollama", "local:ollama/ ", "local:vllm/x", "api:Open-Router/x", "api:/x"])
 def test_bad_or_unsupported_references_are_rejected(bad):
     with pytest.raises(model_ref.ModelRefError):
         model_ref.parse(bad)
@@ -97,7 +97,8 @@ def test_user_attached_files_may_go_to_the_chosen_api_model():
 @pytest.mark.parametrize(
     "request_kw, st_kw, reason",
     [
-        ({"model_ref": "api:nowhere/x"}, {}, d.MODEL_UNSUPPORTED),
+        ({"model_ref": "api:Bad-Id/x"}, {}, d.MODEL_UNSUPPORTED),
+        ({"model_ref": "api:openrouter/x"}, {}, d.OTHER_PROVIDER),   # D-059: not the active endpoint
         ({"privacy_class": SECRET}, {}, d.PRIVACY_LOCAL_ONLY),
         ({"ambient": True}, {}, d.AMBIENT_CONTEXT),
         ({"ambient": True, "trust": UNTRUSTED}, {}, d.AMBIENT_CONTEXT),

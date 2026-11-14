@@ -4602,6 +4602,7 @@ dependencies = [
  "tauri-build",
  "tauri-plugin-global-shortcut",
  "win32job",
+ "windows-sys 0.59.0",
 ]
 
 [[package]]

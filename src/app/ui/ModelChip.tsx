@@ -5,9 +5,10 @@
 // loads the model the chip shows a spinner; a failed load shows a warning.
 // The effort slider joins the popover in K1-11, the fits hint with K1-09.
 
-import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
 
-import type { ModelRow, Spend } from "../../net/protocol";
+import type { ModelListData, ModelRow, Spend } from "../../net/protocol";
 import { canPickModel, currentEffort, currentModelRef, modelLabel } from "../chat-state";
 import { badgesFor, effortLabel, filterRows, formatSize, formatUsd, isLocalRef } from "../models";
 import { actions, useChat } from "../store";
@@ -172,8 +173,91 @@ function SpendFooter({ spend }: { spend: Spend }) {
   );
 }
 
+/**
+ * FR-R-6, D-059: the key goes from this box to the Windows Credential Manager
+ * through the shell, which hands it to the kernel; it never crosses the kernel
+ * socket and never enters the store. One endpoint's key at a time.
+ */
+function ApiKeyForm({ models }: { models: ModelListData }) {
+  const status = models.api_provider ?? null;
+  // A custom endpoint from the config is not a preset, but it is what the key is for.
+  const presets = [
+    ...(models.api_presets ?? []),
+    ...(status && !(models.api_presets ?? []).some((p) => p.id === status.id) ? [{ id: status.id, label: status.label }] : []),
+  ];
+  const [provider, setProvider] = useState(status?.id ?? presets[0]?.id ?? "airouter");
+  const [note, setNote] = useState<string | null>(null);
+  const [busy, setBusy] = useState(false);
+  const input = useRef<HTMLInputElement>(null);
+
+  if (!isTauri()) {
+    return <p className="key-form list-hint">Outside the desktop app the key comes from .env or config/secrets.yaml (developer setup).</p>;
+  }
+
+  const run = async (command: "set_api_key" | "delete_api_key", args: Record<string, string>) => {
+    setBusy(true);
+    try {
+      const live = await invoke<boolean>(command, args);
+      const done = command === "set_api_key" ? "Saved" : "Removed";
+      setNote(live ? `${done}. Checking the model list…` : `${done}. It takes effect at the next start.`);
+      if (input.current) input.current.value = "";
+    } catch (err) {
+      setNote(String(err)); // the shell's errors never contain the key
+    } finally {
+      setBusy(false);
+    }
+  };
+  const save = (e: FormEvent) => {
+    e.preventDefault();
+    void run("set_api_key", { provider, key: input.current?.value ?? "" });
+  };
+  const remove = () => {
+    if (status && window.confirm(`Remove the saved ${status.label} key from this PC?`)) {
+      void run("delete_api_key", { provider: status.id });
+    }
+  };
+
+  const source =
+    status?.key === "app" ? "key saved on this PC" : status?.key === "developer" ? "key from the developer setup" : "no key";
+  return (
+    <form className="key-form" onSubmit={save}>
+      <p className="list-hint">
+        {status ? `${status.label}: ${source}.` : "No API endpoint."} Saving a key replaces any other.
+      </p>
+      <div className="key-row">
+        <select value={provider} onChange={(e) => setProvider(e.target.value)} aria-label="API provider" disabled={busy}>
+          {presets.map((p) => (
+            <option key={p.id} value={p.id}>
+              {p.label}
+            </option>
+          ))}
+        </select>
+        <input
+          ref={input}
+          type="password"
+          placeholder="Paste the API key"
+          aria-label="API key"
+          autoComplete="off"
+          spellCheck={false}
+          disabled={busy}
+        />
+        <button type="submit" disabled={busy}>
+          Save
+        </button>
+        {status?.key === "app" ? (
+          <button type="button" onClick={remove} disabled={busy}>
+            Remove
+          </button>
+        ) : null}
+      </div>
+      {note ? <p className="list-hint" role="status">{note}</p> : null}
+    </form>
+  );
+}
+
 function ModelPopover({ current }: { current: string | null }) {
   const models = useChat((s) => s.models);
+  const [keyOpen, setKeyOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
   const search = useRef<HTMLInputElement>(null);
@@ -267,11 +351,20 @@ function ModelPopover({ current }: { current: string | null }) {
         {models !== null ? (
           <section>
             <h3 className="list-head">
-              API
+              API{models.api_provider ? ` · ${models.api_provider.label}` : ""}
               {models.api_stale ? <span className="badge stale">cached</span> : null}
               <button
                 type="button"
-                className="refresh"
+                className="refresh key"
+                title="Add or change the API key"
+                aria-expanded={keyOpen}
+                onClick={() => setKeyOpen((o) => !o)}
+              >
+                Key
+              </button>
+              <button
+                type="button"
+                className="refresh again"
                 title="Fetch the model list again"
                 aria-label="Refresh API models"
                 onClick={() => actions.refreshModels()}
@@ -291,7 +384,7 @@ function ModelPopover({ current }: { current: string | null }) {
                     ? models.api_error
                       ? `Couldn't fetch the list: ${models.api_error}`
                       : "No API models listed."
-                    : "No API key yet. Cloud models show up here once one is set up."}
+                    : "No API key yet. Add one with Key above."}
               </p>
             ) : null}
             <ul>
@@ -310,6 +403,7 @@ function ModelPopover({ current }: { current: string | null }) {
           </section>
         ) : null}
       </div>
+      {keyOpen && models !== null ? <ApiKeyForm models={models} /> : null}
       {spend ? <SpendFooter spend={spend} /> : null}
     </div>
   );

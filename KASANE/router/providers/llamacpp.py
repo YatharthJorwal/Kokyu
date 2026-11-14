@@ -232,6 +232,7 @@ class LlamaCppServer:
                 self.process = await self._spawn(
                     *server_command(server, preset, self.cfg),
                     env=server_env(server),
+                    stdin=asyncio.subprocess.DEVNULL,   # the kernel's stdin carries API keys (D-059)
                     stdout=log,
                     stderr=asyncio.subprocess.STDOUT,
                 )

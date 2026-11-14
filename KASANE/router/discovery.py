@@ -66,9 +66,14 @@ class ModelCatalog:
         ttl_hours: float = 24.0,
         transport: httpx.AsyncBaseTransport | None = None,
         models_url: str | None = None,
+        price_unit: str = "per_million",
         clock=time.time,
     ) -> None:
         self.base_url = base_url.rstrip("/")
+        self.price_unit = price_unit
+        # Set by the router only when the models URL is on the endpoint's own host
+        # (DeepSeek's list needs it; AI Router's and OpenRouter's are public).
+        self.api_key: str | None = None
         self.models_url = (models_url or f"{self.base_url}/models").rstrip("/")
         self.cache_path = repo_path(cache_path)
         self.ttl_seconds = ttl_hours * 3600.0
@@ -119,6 +124,10 @@ class ModelCatalog:
         models = raw.get("models") if isinstance(raw, dict) else None
         if not isinstance(models, dict) or not models:
             return False
+        cached_for = str(raw.get("base_url") or "").rstrip("/")
+        if cached_for and cached_for != self.base_url:
+            return False   # another endpoint's list: its models and prices are not ours
+        # The cache is written per 1M already (see _save_cache): never rescale it.
         self._models = {str(k): _to_info(str(k), v) for k, v in models.items() if isinstance(v, dict)}
         self._fetched_at = _as_float(raw.get("fetched_at", 0.0))
         return bool(self._models)
@@ -153,14 +162,18 @@ class ModelCatalog:
 
         url = self.models_url
         try:
+            headers = {"Authorization": f"Bearer {self.api_key}"} if self.api_key else {}
             async with httpx.AsyncClient(transport=self._transport, timeout=15.0) as client:
-                response = await client.get(url)
+                response = await client.get(url, headers=headers)
             if response.status_code >= 400:
                 self.last_error = f"{response.status_code} from {url}"
                 return self.available
             payload = response.json()
         except (httpx.RequestError, ValueError) as exc:
-            self.last_error = f"{type(exc).__name__}: {exc}"
+            detail = str(exc)
+            if self.api_key and (self.api_key in detail or "Bearer" in detail):
+                detail = "details hidden (they quoted the key)"
+            self.last_error = f"{type(exc).__name__}: {detail}"
             return self.available
 
         data = payload.get("data") if isinstance(payload, dict) else None
@@ -173,7 +186,7 @@ class ModelCatalog:
             if not isinstance(entry, dict) or not entry.get("id"):
                 continue
             model_id = str(entry["id"])
-            parsed[model_id] = _to_info(model_id, entry)
+            parsed[model_id] = _to_info(model_id, entry, self.price_unit)
         if not parsed:
             self.last_error = "catalog was empty"
             return self.available
@@ -188,17 +201,53 @@ class ModelCatalog:
         return True
 
 
-def _to_info(model_id: str, entry: dict[str, Any]) -> ModelInfo:
+# What a price is worth per 1M tokens, by the catalog's unit (D-059).
+_PER_MILLION = {"per_million": 1.0, "per_token": 1_000_000.0}
+
+
+def _to_info(model_id: str, entry: dict[str, Any], unit: str = "per_million") -> ModelInfo:
     pricing = entry.get("pricing") if isinstance(entry.get("pricing"), dict) else {}
-    tags = entry.get("tags") if isinstance(entry.get("tags"), list) else []
+    prompt, completion = pricing.get("prompt"), pricing.get("completion")
+    scale = _PER_MILLION.get(unit)
+    # A negative price (OpenRouter's "-1" for a router model) or no unit means no price.
+    priced = (
+        scale is not None
+        and _is_number(prompt) and _is_number(completion)
+        and float(prompt) >= 0 and float(completion) >= 0
+    )
+    if isinstance(entry.get("tags"), list):
+        tags = [str(tag) for tag in entry["tags"]]
+    else:
+        tags = _derived_tags(entry)
+    architecture = entry.get("architecture") if isinstance(entry.get("architecture"), dict) else {}
+    outputs = architecture.get("output_modalities")
+    kind = str(entry.get("type") or "language")
+    if isinstance(outputs, list) and "text" not in outputs:
+        kind = "image"   # makes pictures, not replies: kept out of the chat list
+    top = entry.get("top_provider") if isinstance(entry.get("top_provider"), dict) else {}
     return ModelInfo(
         id=model_id,
         context_length=int(_as_float(entry.get("context_length"))),
-        max_tokens=int(_as_float(entry.get("max_tokens"))),
-        price_in=_as_float(pricing.get("prompt")),
-        price_out=_as_float(pricing.get("completion")),
-        priced=_is_number(pricing.get("prompt")) and _is_number(pricing.get("completion")),
-        tags=tuple(str(tag) for tag in tags),
+        max_tokens=int(_as_float(entry.get("max_tokens") or top.get("max_completion_tokens"))),
+        price_in=_as_float(prompt) * scale if priced else 0.0,
+        price_out=_as_float(completion) * scale if priced else 0.0,
+        priced=priced,
+        tags=tuple(tags),
         zdr=bool(entry.get("zdr", False)),
-        kind=str(entry.get("type") or "language"),
+        kind=kind,
     )
+
+
+def _derived_tags(entry: dict[str, Any]) -> list[str]:
+    """Badges for a catalog without `tags` (OpenRouter): from what the model accepts."""
+    params = entry.get("supported_parameters") if isinstance(entry.get("supported_parameters"), list) else []
+    architecture = entry.get("architecture") if isinstance(entry.get("architecture"), dict) else {}
+    inputs = architecture.get("input_modalities") if isinstance(architecture.get("input_modalities"), list) else []
+    tags = []
+    if "tools" in params:
+        tags.append("tool-use")
+    if "reasoning" in params or "include_reasoning" in params:
+        tags.append("reasoning")
+    if "image" in inputs:
+        tags.append("vision")
+    return tags

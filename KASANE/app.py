@@ -70,6 +70,7 @@ import router
 from router import listing as model_listing
 from router import model_ref as model_refs
 import settings as runtime_settings
+import shell_keys
 from senses import look_intent
 from senses import ocr_watch
 from audio import speech
@@ -235,6 +236,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     Runs as a background task so a slow or absent Ollama never delays
     startup; never raises."""
     asyncio.create_task(_startup_model_checks())
+    if shell_keys.PIPE_ENABLED:
+        # FR-R-6, D-059: a key saved or removed in the app arrives on stdin, live.
+        shell_keys.start_reader(asyncio.get_running_loop(), _apply_shell_key)
     # Memory writer: never competes with a reply (it waits for the arbiter to be
     # idle), and a catch-up pass shortly after boot picks up anything a crash or a
     # forced exit left unprocessed -- the transcript buffer is durable.
@@ -415,6 +419,27 @@ def _screen_status() -> dict[str, Any]:
         "task_guide": {"on": task_guide.enabled(), "task": task.description if task.active else None},
         "ocr_watch": {"on": ocr_watch.get_state().active},
     }
+
+
+async def _apply_shell_key(provider_id: str, key: str | None) -> None:
+    """The shell saved or removed an API key: point the router at it and show every
+    window the new list (D-059). Logs the provider id only, never the key."""
+    rt = router.get_router()
+    usable = await rt.use_app_key(provider_id, key)
+    print(
+        f"[kokyu] keys: {provider_id} key {'saved' if key else 'removed'} in the app; "
+        f"API models {'usable' if usable else 'not usable yet'} ({rt.api_status()['label']})",
+        flush=True,
+    )
+    listed = await model_listing.model_list(rt, cfg=CONFIG)
+    frames = (
+        protocol.frame("model_list", listed),
+        {"type": "settings", **runtime_settings.describe(rt, CONFIG)},
+    )
+    for ws in list(_active_connections):
+        for frame in frames:
+            with contextlib.suppress(Exception):
+                await ws.send_json(frame)
 
 
 async def _broadcast_screen_status() -> None:
@@ -2031,7 +2056,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 if enabled and not state["cloud_available"]:
                     print(
                         "[yuri] api model: ON requested but cloud is unavailable "
-                        "(no AIROUTER_API_KEY, or the catalog could not load) -- "
+                        "(no API key, or the catalog could not load) -- "
                         "Mind stays local.",
                         file=sys.stderr,
                     )

@@ -131,6 +131,7 @@ async def test_the_server_starts_once_unloads_ollama_and_restarts_for_another_pr
 
     async def spawn(*cmd, **kw):
         spawned.append(cmd)
+        assert kw["stdin"] is asyncio.subprocess.DEVNULL     # the kernel's stdin carries API keys (D-059)
         health["ok"] = True
         return FakeProcess(on_stop=lambda: health.update(ok=False))
 

@@ -10,12 +10,14 @@
 // is_python_process), and the `gpt_sovits_still_alive` try_wait check in
 // spawn_backend_processes.
 
+mod credentials;
+
 use std::collections::HashMap;
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::os::windows::process::CommandExt;
 use std::path::{Path, PathBuf};
-use std::process::{Child, Command, Stdio};
+use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
@@ -79,6 +81,86 @@ const CREATE_NO_WINDOW: u32 = 0x08000000;
 /// `graceful_shutdown_then_kill()`); GPT-SoVITS has no such thing and is
 /// just killed outright, same as before.
 struct ManagedChildren(Arc<Mutex<Vec<(String, Child)>>>);
+
+/// The write end of the kernel's stdin (D-059): a key saved or removed in the app
+/// reaches the running kernel as one JSON line, so no restart. Nothing else uses
+/// this pipe, and no key ever crosses the websocket.
+#[derive(Clone, Default)]
+struct KernelPipe(Arc<Mutex<Option<ChildStdin>>>);
+
+impl KernelPipe {
+    /// Whether the running kernel got the change now (false: it uses it from the next start).
+    fn send(&self, provider: &str, key: Option<&str>) -> bool {
+        let Ok(mut guard) = self.0.lock() else { return false };
+        let Some(stdin) = guard.as_mut() else { return false };
+        let line = serde_json::json!({ "provider": provider, "key": key }).to_string();
+        if writeln!(stdin, "{line}").and_then(|_| stdin.flush()).is_ok() {
+            return true;
+        }
+        *guard = None; // the kernel is gone; the key is saved for the next start
+        false
+    }
+}
+
+/// Only the main window may change a key: the pet and other windows never show
+/// the key dialog.
+fn require_main(window: &tauri::WebviewWindow) -> Result<(), String> {
+    if window.label() == "main" {
+        Ok(())
+    } else {
+        Err("API keys can only be changed from the main window".into())
+    }
+}
+
+/// Frontend -> Rust: save the API key for `provider` in the Windows Credential
+/// Manager and hand it to the running kernel (FR-R-6, D-059). One key at a time:
+/// any other provider's saved key is removed. Returns whether the kernel got it now.
+/// Never returns the key, or any part of it.
+#[tauri::command]
+async fn set_api_key(
+    window: tauri::WebviewWindow,
+    pipe: tauri::State<'_, KernelPipe>,
+    provider: String,
+    key: String,
+) -> Result<bool, String> {
+    require_main(&window)?;
+    let pipe = pipe.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        let key = credentials::clean_key(&key)?;
+        // The new key is written first: a failure here must not lose the old one.
+        credentials::set(&provider, &key)?;
+        let mut leftover = Ok(());
+        for other in credentials::list()? {
+            if other != provider {
+                if let Err(err) = credentials::delete(&other) {
+                    leftover = Err(format!("saved, but the old {other} key could not be removed ({err})"));
+                }
+            }
+        }
+        let live = pipe.send(&provider, Some(&key));
+        leftover.map(|()| live)
+    })
+    .await
+    .map_err(|_| "saving the key was interrupted".to_string())?
+}
+
+/// Frontend -> Rust: remove the saved API key for `provider`, here and in the
+/// running kernel. Removing a key that is not there is fine.
+#[tauri::command]
+async fn delete_api_key(
+    window: tauri::WebviewWindow,
+    pipe: tauri::State<'_, KernelPipe>,
+    provider: String,
+) -> Result<bool, String> {
+    require_main(&window)?;
+    let pipe = pipe.inner().clone();
+    tauri::async_runtime::spawn_blocking(move || {
+        credentials::delete(&provider)?;
+        Ok(pipe.send(&provider, None))
+    })
+    .await
+    .map_err(|_| "removing the key was interrupted".to_string())?
+}
 
 /// Exposed to the frontend for later phases (e.g. a keyboard shortcut or a
 /// HUD button) even though only the tray menu drives it in Phase 1.
@@ -176,7 +258,9 @@ pub fn run() {
         .invoke_handler(tauri::generate_handler![
             toggle_click_through,
             set_camera_indicator,
-            sync_cloud_toggle
+            sync_cloud_toggle,
+            set_api_key,
+            delete_api_key
         ])
         .setup(|app| {
             let window = app
@@ -190,8 +274,10 @@ pub fn run() {
             register_push_to_talk_hotkey(app)?;
 
             let managed_children: Arc<Mutex<Vec<(String, Child)>>> = Arc::new(Mutex::new(Vec::new()));
-            spawn_backend_processes(managed_children.clone());
+            let kernel_pipe = KernelPipe::default();
+            spawn_backend_processes(managed_children.clone(), kernel_pipe.clone());
             app.manage(ManagedChildren(managed_children));
+            app.manage(kernel_pipe);
 
             Ok(())
         })
@@ -282,7 +368,7 @@ fn read_launcher_config() -> HashMap<String, String> {
 /// resolve to the repo root's KASANE/ and logs/ as intended from
 /// there. Not verified for a packaged release build, where the cwd may
 /// differ -- worth rechecking when packaging is actually on the table.
-fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
+fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>, kernel_pipe: KernelPipe) {
     let logs_dir = PathBuf::from("../logs");
     let _ = std::fs::create_dir_all(&logs_dir);
 
@@ -380,12 +466,30 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>) {
             // copy, wait for ours (it is still loading models, in parallel).
             cmd.env("KOKYU_SHELL_STARTS_TTS", "1");
         }
+        // FR-R-6, D-059: the saved API key goes to the kernel at spawn, in the
+        // environment (the kernel removes it at import, before it starts any child),
+        // never on the command line. Later changes go down the stdin pipe.
+        match credentials::all() {
+            Ok(keys) if !keys.is_empty() => {
+                let map: serde_json::Map<String, serde_json::Value> =
+                    keys.into_iter().map(|(provider, key)| (provider, serde_json::Value::String(key))).collect();
+                cmd.env("KOKYU_API_KEYS", serde_json::Value::Object(map).to_string());
+            }
+            Ok(_) => {}
+            Err(err) => eprintln!("[kokyu] keys: could not read the saved API key ({err})"),
+        }
+        cmd.env("KOKYU_KEY_PIPE", "1").stdin(Stdio::piped());
         spawn_logged(
             "orchestrator",
             &mut cmd,
             &logs_dir.join("orchestrator.log"),
             &orchestrator_children,
         );
+        if let (Ok(mut children), Ok(mut pipe)) = (orchestrator_children.lock(), kernel_pipe.0.lock()) {
+            if let Some((_, child)) = children.iter_mut().find(|(label, _)| label == "orchestrator") {
+                *pipe = child.stdin.take();
+            }
+        }
 
         // From here on this is diagnostics only. GPT-SoVITS is not needed for
         // the orchestrator to start, but if something else is squatting its

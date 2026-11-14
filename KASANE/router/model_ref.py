@@ -8,13 +8,17 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# backend -> router provider. llama.cpp presets arrived with K1-01 (D-051); generic
-# OpenAI-compatible providers arrive with K1-08b and are rejected until then.
+from provider_presets import PROVIDER_ID
+
+# backend -> router provider. llama.cpp presets arrived with K1-01 (D-051).
 PROVIDERS: dict[tuple[str, str], str] = {
     ("local", "ollama"): "local_ollama",
     ("local", "llamacpp"): "llamacpp",
-    ("api", "airouter"): "airouter",
 }
+# Every API backend is an OpenAI-compatible endpoint id (`airouter`, `openrouter`,
+# ...). They all run through the one API slot, still named `airouter` (D-059); the
+# router refuses a ref whose endpoint is not the active one.
+API_SLOT = "airouter"
 
 EFFORTS = ("off", "low", "medium", "high")
 
@@ -31,6 +35,8 @@ class ModelRef:
 
     @property
     def provider(self) -> str:
+        if self.kind == "api" and PROVIDER_ID.match(self.backend):
+            return API_SLOT
         try:
             return PROVIDERS[(self.kind, self.backend)]
         except KeyError:

@@ -25,6 +25,7 @@ Last updated: 2026-11-12 (session 2, seed from Yuri `e32af4f`).
 | `tauri`, `tauri-plugin-global-shortcut` | Windows, tray, hotkeys | MIT or Apache-2.0 |
 | `serde`, `serde_json` | Serialization | MIT or Apache-2.0 |
 | `win32job` (Windows only) | Job Object: children die with the app | MIT or Apache-2.0 (verify) |
+| `windows-sys` 0.59 (Windows only) | Credential Manager calls for the API key (FR-R-6, D-059); already in the lock file through tauri | MIT or Apache-2.0 |
 
 ## Kernel (Python)
 

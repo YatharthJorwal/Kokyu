@@ -242,6 +242,7 @@ def _launch_gpt_sovits() -> subprocess.Popen | None:
         return subprocess.Popen(  # noqa: S603 -- local, configured executable
             [python, script, *args],
             cwd=cwd or None,
+            stdin=subprocess.DEVNULL,   # the kernel's stdin carries API keys from the shell (D-059)
             stdout=subprocess.DEVNULL,
             stderr=subprocess.DEVNULL,
             creationflags=_CREATE_NO_WINDOW if os.name == "nt" else 0,

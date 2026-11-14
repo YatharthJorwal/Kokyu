@@ -132,6 +132,10 @@ export interface ModelListData {
   api_stale: boolean;
   api_key: boolean;
   spend: Spend | null;
+  /** The one active API endpoint and where its key came from (D-059). Never the key. */
+  api_provider?: { id: string; label: string; key: "app" | "developer" | null } | null;
+  /** Endpoints a key can be saved for (D-059). */
+  api_presets?: { id: string; label: string }[];
 }
 
 export type ModelLoadState = "idle" | "loading" | "ready" | "failed";

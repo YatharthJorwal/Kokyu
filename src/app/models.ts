@@ -6,7 +6,7 @@ import type { ModelRow } from "../net/protocol";
 
 /** `local:ollama/qwen3.5:9b` -> `qwen3.5:9b`. */
 export function shortRef(ref: string): string {
-  const m = /^[a-z]+:[a-z_]+\/(.+)$/.exec(ref);
+  const m = /^[a-z]+:[a-z][a-z0-9_]*\/(.+)$/.exec(ref);
   return m ? m[1] : ref;
 }
 

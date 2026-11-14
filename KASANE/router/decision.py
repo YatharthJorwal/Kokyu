@@ -37,6 +37,7 @@ LOCAL_DEFAULT = "LOCAL_DEFAULT"
 USER_SELECTED = "USER_SELECTED"
 AMBIENT_CONTEXT = "AMBIENT_CONTEXT"
 MODEL_UNSUPPORTED = "MODEL_UNSUPPORTED"
+OTHER_PROVIDER = "OTHER_PROVIDER"
 
 CHAT_ROLE = "chat"
 
@@ -177,6 +178,9 @@ def decide_chat(
         return decision(PRIVACY_LOCAL_ONLY, target, blocked=True)
     if request.ambient:
         return decision(AMBIENT_CONTEXT, target, blocked=True)
+    if ref.backend != state.api_id:
+        # The thread's model belongs to another endpoint than the active one (D-059).
+        return decision(OTHER_PROVIDER, target, blocked=True)
     cfg = providers.get(ref.provider)
     if cfg is None or not cfg.enabled or not state.cloud_available:
         return decision(CLOUD_DISABLED, target, blocked=True)

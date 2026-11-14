@@ -23,6 +23,9 @@ serde_json = "1"
 # tray Quit).
 [target.'cfg(windows)'.dependencies]
 win32job = "2"
+# K1-08b (FR-R-6, D-059): API keys in the Windows Credential Manager. Already in
+# Cargo.lock through Tauri, so no new download.
+windows-sys = { version = "0.59", features = ["Win32_Foundation", "Win32_Security_Credentials"] }
 
 [profile.dev]
 # Full debug info is what makes src-tauri/target balloon to several GB (and slows the

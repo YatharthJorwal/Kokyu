@@ -1077,6 +1077,33 @@ div.companion,
   color: var(--text);
 }
 
+/* the Key button sits before ↻, so only the first one takes the free space */
+.list-head .refresh.again {
+  margin-left: 0;
+}
+
+.list-head .refresh.key {
+  font-size: 11px;
+  letter-spacing: 0.04em;
+}
+
+/* FR-R-6: the API key box under the list (D-059) */
+.key-form {
+  padding: 6px 8px 8px;
+  border-top: 1px solid var(--line);
+}
+
+.key-row {
+  display: flex;
+  gap: 6px;
+  margin: 0 8px;
+}
+
+.key-row input {
+  flex: 1;
+  min-width: 0;
+}
+
 .badge.variant {
   margin-left: 6px;
   padding: 0 6px;
