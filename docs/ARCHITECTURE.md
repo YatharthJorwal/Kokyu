@@ -203,6 +203,8 @@ Pydantic models in `KASANE/protocol/`, mirrored in `src/net/`; frames `{ "v": 1,
 
 Binary frames carry audio when `speak` is replaced by chunked audio (K2).
 
+**Built in K1-00b (D-049):** the envelope, `hello` (version handshake), the thread messages of §5.2b as frames, `turn_start` / `token` / `turn_done`, and `error {code, message, reply_to}` with the codes in `KASANE/protocol/__init__.py`. The rest of the table above lands with the features that need it.
+
 ## 6. Data and storage
 
 ### 6.1 App-data layout (via `paths.py`)

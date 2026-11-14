@@ -149,15 +149,15 @@ def _chat(ws, text):
 def test_connect_opens_a_thread_and_a_reply_is_saved_to_it(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        thread_id = opened["thread"]["id"]
-        assert opened["messages"] == []
+        thread_id = opened["data"]["thread"]["id"]
+        assert opened["data"]["messages"] == []
         ws.send_json({"type": "set_temp_mode", "enabled": True})   # keeps memory out of the test
         _chat(ws, "hello there")
     with kernel.websocket_connect("/ws") as ws:                   # a reload comes back to it
         opened, _ = _until(ws, "thread_opened")
-    assert opened["thread"]["id"] == thread_id
-    assert opened["thread"]["title"] == "hello there" and opened["thread"]["temp"] is True
-    roles = [(m["role"], m["content"], m["speaker_name"]) for m in opened["messages"]]
+    assert opened["data"]["thread"]["id"] == thread_id
+    assert opened["data"]["thread"]["title"] == "hello there" and opened["data"]["thread"]["temp"] is True
+    roles = [(m["role"], m["content"], m["speaker_name"]) for m in opened["data"]["messages"]]
     assert roles == [("user", "hello there", None), ("assistant", "You said: hello there.", "Alpha")]
 
 
@@ -168,12 +168,12 @@ def test_new_thread_starts_empty_and_the_old_one_keeps_its_history(kernel):
         _chat(ws, "first thread message")
         ws.send_json({"type": "thread_new"})
         second, _ = _until(ws, "thread_opened")
-        assert second["thread"]["id"] != first["thread"]["id"] and second["messages"] == []
+        assert second["data"]["thread"]["id"] != first["data"]["thread"]["id"] and second["data"]["messages"] == []
         listing, _ = _until(ws, "thread_list")
-        assert [t["id"] for t in listing["threads"]][1] == first["thread"]["id"]
-        ws.send_json({"type": "thread_open", "id": first["thread"]["id"]})
+        assert [t["id"] for t in listing["data"]["threads"]][1] == first["data"]["thread"]["id"]
+        ws.send_json({"type": "thread_open", "id": first["data"]["thread"]["id"]})
         back, _ = _until(ws, "thread_opened")
-        assert [m["content"] for m in back["messages"]][0] == "first thread message"
+        assert [m["content"] for m in back["data"]["messages"]][0] == "first thread message"
 
 
 def test_the_model_sees_only_the_open_threads_history(kernel, monkeypatch):
@@ -198,10 +198,10 @@ def test_the_model_sees_only_the_open_threads_history(kernel, monkeypatch):
 def test_switching_companion_adds_a_divider_and_reopening_restores_her(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        tid = opened["thread"]["id"]
+        tid = opened["data"]["thread"]["id"]
         ws.send_json({"type": "switch_waifu", "id": "beta"})
         divider, _ = _until(ws, "thread_message")
-        assert divider["message"]["role"] == "divider" and divider["message"]["content"] == "Beta joined the conversation"
+        assert divider["data"]["message"]["role"] == "divider" and divider["data"]["message"]["content"] == "Beta joined the conversation"
         ws.send_json({"type": "thread_new"})
         _until(ws, "thread_opened")
         ws.send_json({"type": "switch_waifu", "id": "alpha"})
@@ -214,19 +214,19 @@ def test_switching_companion_adds_a_divider_and_reopening_restores_her(kernel):
 def test_rename_search_and_delete(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        tid = opened["thread"]["id"]
+        tid = opened["data"]["thread"]["id"]
         ws.send_json({"type": "thread_rename", "id": tid, "title": "Garden plans"})
         listing, _ = _until(ws, "thread_list")
-        while listing["threads"][0]["title"] != "Garden plans":
+        while listing["data"]["threads"][0]["title"] != "Garden plans":
             listing, _ = _until(ws, "thread_list")
         ws.send_json({"type": "thread_search", "query": "garden"})
         found, _ = _until(ws, "thread_list")
-        while found["query"] != "garden":
+        while found["data"]["query"] != "garden":
             found, _ = _until(ws, "thread_list")
-        assert [t["id"] for t in found["threads"]] == [tid]
+        assert [t["id"] for t in found["data"]["threads"]] == [tid]
         ws.send_json({"type": "thread_delete", "id": tid})
         replacement, _ = _until(ws, "thread_opened")
-        assert replacement["thread"]["id"] != tid
+        assert replacement["data"]["thread"]["id"] != tid
         ws.send_json({"type": "thread_open", "id": tid})
         err, _ = _until(ws, "error")
-        assert err["code"] == "unknown_thread"
+        assert err["data"]["code"] == "unknown_thread"

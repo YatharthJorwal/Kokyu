@@ -58,6 +58,7 @@ from fastapi.responses import FileResponse
 from senses import camera
 import context_budget
 import conversation
+import protocol
 from threads import ThreadStore
 from audio import arbiter
 from audio import latency
@@ -303,14 +304,18 @@ async def _send_thread_list(websocket: Any, query: str = "") -> None:
     manager = _conversations()
     found = await (manager.search(query) if query.strip() else manager.list())
     await websocket.send_json(
-        {"type": "thread_list", "query": query, "threads": [t.to_dict() for t in found]}
+        protocol.frame("thread_list", {"query": query, "threads": [t.to_dict() for t in found]})
     )
 
 
 async def _send_thread_opened(websocket: Any, thread: Any) -> None:
     messages = await _conversations().messages(thread.id)
     await websocket.send_json(
-        {"type": "thread_opened", "thread": thread.to_dict(), "messages": [m.to_dict() for m in messages]}
+        protocol.frame(
+            "thread_opened",
+            {"thread": thread.to_dict(), "messages": [m.to_dict() for m in messages]},
+            thread=thread.id,
+        )
     )
 
 
@@ -606,6 +611,7 @@ async def _run_turn(
     temp_mode: bool = False,
     temp_turn_flags: list[bool] | None = None,
     on_finished: "Callable[[str, str, bool], Awaitable[None]] | None" = None,
+    thread_id: str | None = None,
 ) -> None:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, speak each sentence chunk as it's ready, commit (or roll back)
@@ -630,6 +636,10 @@ async def _run_turn(
     history.append({"role": "user", "content": user_text})
     if temp_turn_flags is not None:
         temp_turn_flags.append(temp_mode)
+    # K1-00b: the chat view streams the reply token by token (FR-C-2); the
+    # spoken clauses below are unchanged.
+    with contextlib.suppress(Exception):
+        await websocket.send_json(protocol.frame("turn_start", {"user_text": user_text}, thread=thread_id))
     timings = LATENCY.begin()
     ARBITER.on_turn_started()
     writer.WRITER.preempt()  # a timer-driven memory pass must not hold the model during a reply
@@ -758,6 +768,8 @@ async def _run_turn(
                         tool_messages.append({"role": "tool", "content": result_text})
                     break  # re-enter the outer for-loop with results appended
                 buffer += event["text"]
+                if event["text"]:
+                    await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
                 timings.mark("first_token")
                 chunks, buffer = extract_ready_chunks(buffer)
                 for chunk in chunks:
@@ -866,6 +878,17 @@ async def _run_turn(
                 await on_finished(user_text, " ".join(reply_parts), stopped)
             except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                 print(f"[kokyu] could not save the exchange to the thread: {exc}", file=sys.stderr)
+        with contextlib.suppress(Exception):
+            await websocket.send_json(
+                protocol.frame(
+                    "turn_done",
+                    {
+                        "text": " ".join(reply_parts),
+                        "stopped": isinstance(sys.exc_info()[1], asyncio.CancelledError),
+                    },
+                    thread=thread_id,
+                )
+            )
 
     # Tells the frontend nothing more is coming for this turn (so it can
     # hide the stop button, re-enable input, etc.) -- only reached on a
@@ -1244,10 +1267,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         try:
             divider = await manager.record_companion_change(current_thread.id, _speaker_record(websocket))
             await websocket.send_json(
-                {"type": "thread_message", "thread": current_thread.id, "message": divider.to_dict()}
+                protocol.frame("thread_message", {"message": divider.to_dict()}, thread=current_thread.id)
             )
         except Exception as exc:  # noqa: BLE001 -- the switch itself already happened
             print(f"[kokyu] could not record the companion change: {exc}", file=sys.stderr)
+
+    def _thread_id() -> str | None:
+        return current_thread.id if current_thread is not None else None
 
     def _saver() -> "Callable[[str, str, bool], Awaitable[None]] | None":
         """Binds the turn to the thread it started in."""
@@ -1328,7 +1354,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         if current_turn_task is not None and not current_turn_task.done():
             current_turn_task.cancel()
         current_turn_task = asyncio.create_task(
-            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver())
+            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
         )
 
     # Phase 4 Round 2 -- Task Guide Mode's scheduled-capture loop, one
@@ -1459,7 +1485,22 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await shutdown_task
             data = receive_task.result()
-            msg_type = data.get("type")
+            # K1-00b: versioned frames are validated first; legacy flat messages
+            # (no "v") fall through to the branches below unchanged (D-049).
+            try:
+                parsed = protocol.parse_client(data)
+            except protocol.ProtocolError as exc:
+                reply_to = data.get("id") if isinstance(data, dict) else None
+                await websocket.send_json(protocol.error_frame(exc.code, exc.message, reply_to=reply_to))
+                continue
+            if parsed is not None:
+                if parsed.type == "hello":
+                    await websocket.send_json(
+                        protocol.frame("hello", {"protocol": protocol.PROTOCOL_VERSION, "kernel": "KASANE"}, id=parsed.id)
+                    )
+                    continue
+                data = {"type": parsed.type, **parsed.data.model_dump()}
+            msg_type = data.get("type") if isinstance(data, dict) else None
 
             # A switch requested while a turn was running takes effect now, between turns
             # (FR-S-2: the turn in flight finishes with the old waifu).
@@ -1535,7 +1576,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 renamed = await manager.rename(str(data.get("id") or ""), str(data.get("title") or ""))
                 if renamed is None:
                     await websocket.send_json(
-                        {"type": "error", "code": "unknown_thread", "message": "That conversation no longer exists."}
+                        protocol.error_frame("unknown_thread", "That conversation no longer exists.")
                     )
                 else:
                     if current_thread is not None and renamed.id == current_thread.id:
@@ -1546,7 +1587,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             if msg_type in ("thread_new", "thread_open", "thread_delete"):
                 if current_turn_task is not None and not current_turn_task.done():
                     await websocket.send_json(
-                        {"type": "error", "code": "turn_running", "message": "Wait for the reply to finish, or press Stop."}
+                        protocol.error_frame("turn_running", "Wait for the reply to finish, or press Stop.")
                     )
                     continue
                 try:
@@ -1563,7 +1604,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                         opened = await manager.open(str(data.get("id") or ""))
                         if opened is None:
                             await websocket.send_json(
-                                {"type": "error", "code": "unknown_thread", "message": "That conversation no longer exists."}
+                                protocol.error_frame("unknown_thread", "That conversation no longer exists.")
                             )
                         else:
                             await _load_thread(opened)
@@ -1578,7 +1619,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 except Exception as exc:  # noqa: BLE001 -- report, keep the connection
                     print(f"[kokyu] thread request {msg_type} failed: {exc}", file=sys.stderr)
                     await websocket.send_json(
-                        {"type": "error", "code": "threads_unavailable", "message": "Conversation history is unavailable right now."}
+                        protocol.error_frame("threads_unavailable", "Conversation history is unavailable right now.")
                     )
                 continue
 
@@ -1704,7 +1745,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # in flight; this is just defense in depth regardless.
                     continue
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
                 )
 
             elif msg_type == "user_audio":
@@ -1755,7 +1796,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # reply to, and nothing worth adding to history.
                     continue
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
                 )
             elif msg_type == "user_file":
                 # Quick-action menu's Upload Image/File item
@@ -1813,7 +1854,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 user_text = f"{shared_line}\n\n{caption}" if caption else shared_line
 
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver())
+                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id())
                 )
             else:
                 continue
