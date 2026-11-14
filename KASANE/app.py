@@ -737,6 +737,13 @@ async def _run_turn(
     # Task Guide Mode's idle clock (see task_guide.is_idle/_task_guide_loop
     # below). A no-op if nothing's actually being tracked.
     task_guide.mark_interaction()
+    # K1-10 (FR-M-6): the turn runs on the loaded model. A pending or running load
+    # of it finishes first (at most chat.load_delay_s extra), so an Ollama turn never
+    # starts while llama-server still holds the memory; with nothing loaded yet
+    # (warm_up_on_start off) the first message is what loads it.
+    pending_load = model_loader.LOADER.request(model_listing.effective_ref(model_ref, CONFIG))
+    if pending_load is not None:
+        await asyncio.wait({pending_load})
 
     # Phase 3: forget first, then recall -- so a fact just removed this
     # turn can't immediately resurface in the same turn's recall block.
@@ -1356,9 +1363,10 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     manager = _conversations()
     current_thread: Any = None
 
-    async def _load_thread(thread: Any) -> None:
+    async def _load_thread(thread: Any, *, load: bool = True) -> None:
         """Makes `thread` the connection's thread: its companion comes back, its
-        messages become the history, its Temp Chat flag applies (FR-MEM-5)."""
+        messages become the history, its Temp Chat flag applies (FR-MEM-5).
+        `load` False leaves its model unloaded until the first message."""
         nonlocal current_thread, temp_mode
         active = _waifu_of(websocket)
         wanted = thread.active_waifu_id
@@ -1378,7 +1386,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         # how the current load is going.
         # Only the driver loads: an observer opening a thread must not swap the
         # model out from under the driver's streaming reply (review finding).
-        if websocket is _driver:
+        if load and websocket is _driver:
             model_loader.LOADER.request(
                 model_listing.effective_ref(thread.model_ref, CONFIG), delay_s=CONFIG.chat.load_delay_s
             )
@@ -1438,7 +1446,11 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
     try:
         active_now = _waifu_of(websocket)
-        await _load_thread(await manager.open_initial(waifu_id=active_now.id if active_now else None))
+        # warm_up_on_start off: opening the window must not load the model either
+        await _load_thread(
+            await manager.open_initial(waifu_id=active_now.id if active_now else None),
+            load=CONFIG.llm.warm_up_on_start,
+        )
     except Exception as exc:  # noqa: BLE001 -- chat must still work without the store
         print(f"[kokyu] threads store unavailable, this session is not saved: {exc}", file=sys.stderr)
         current_thread = None

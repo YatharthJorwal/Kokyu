@@ -449,3 +449,25 @@ def test_hello_tells_the_window_the_defaults(kernel):
         hello, _ = _until(ws, "hello")
     assert hello["data"]["default_model_ref"] == app.model_listing.default_ref(app.CONFIG)
     assert hello["data"]["default_effort"] == app.CONFIG.chat.default_effort
+
+
+def test_a_turn_waits_for_its_model_and_warm_up_off_loads_on_the_first_message(loads, monkeypatch):
+    # Review findings: a message sent before the delayed load started reached
+    # Ollama while llama-server still held the memory; and warm_up_on_start: false
+    # still loaded the model as soon as the window opened.
+    client, seen = loads
+    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
+        app.CONFIG,
+        llm=dataclasses.replace(app.CONFIG.llm, warm_up_on_start=False),
+        chat=dataclasses.replace(app.CONFIG.chat, load_delay_s=30),          # a load that would start much later
+    ))
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        ws.send_json({"v": 1, "type": "thread_list", "data": {}})
+        _until(ws, "thread_list")
+        assert seen == []                                                   # opening did not load
+        ws.send_json({"type": "user_text", "text": "hi"})
+        _status_until(ws, "ready", "local:llamacpp/big")                   # the message loaded it, at once
+        _until(ws, "turn_done")
+    assert seen == ["local:llamacpp/big"]
