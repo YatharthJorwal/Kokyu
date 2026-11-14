@@ -91,7 +91,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 
 - [x] K1-00 Extract a **conversation manager** from `ws_endpoint` / `_run_turn`; SQLite **threads store** with `active_waifu_id`, per-thread `model_ref` and effort; divider messages (FR-C-1, 10, FR-S-2) (5deb6b6)
 - [x] K1-00b Typed protocol (`KASANE/protocol/`, mirrored in `src/net/`), token streaming events, versioned frames (`ARCHITECTURE.md` §5.3) (32d9bef)
-- [ ] K1-00c `llm.py` takes a model and an effort/think parameter; `OllamaNativeProvider` honours `model`; `chat` role and the egress policy in `router/decision.py` with tests (D-025, FR-R-4, 5, 7) — **needs the user's OK on D-025 first**
+- [x] K1-00c `llm.py` takes a model and an effort/think parameter; `OllamaNativeProvider` honours `model`; `chat` role and the egress policy in `router/decision.py` with tests (D-025, FR-R-4, 5, 7) — **needs the user's OK on D-025 first** (5c7a9ce)
 - [ ] K1-00d Normal app window (replace the 340×480 widget window), CSP locked down, Temp Chat flag per thread (FR-MEM-5)
 - [ ] K1-01 Spike: Qwen3.5-35B-A3B Q4 on llama.cpp with experts on CPU: VRAM, RAM, tokens/s; record numbers
 - [ ] K1-02 Introduce React shell around the existing engine; Zustand store fed by WebSocket events (D-013)
