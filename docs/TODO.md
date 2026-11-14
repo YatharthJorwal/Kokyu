@@ -13,7 +13,7 @@ Execution order (D-034): T (parallel), K0, K1, K1b, K2, K3, W, K6, K7, then K4 a
 | Docs | Spec set, README, product direction | n/a | Done; session-1 bundle pending merge |
 | ~~LIC-1~~ | License decided: proprietary (D-040) | done | **Done** |
 | **T** | GPT-SoVITS component recipe by a CLI agent (parallel track) | 1.0 | Not started |
-| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | 1.0 | **In progress** (session 2) |
+| **K0** | Skeleton: seed from Yuri, waifu pack, shared memory, invariance (rescoped, D-026) | 1.0 | **Code complete; waiting for the manual gate on the PC** (session 2) |
 | K1 | Chat shell, waifu switcher, model switcher, API providers | 1.0 | Not started |
 | **K1b** | Installer walking skeleton on a clean machine (D-035) | 1.0 | Not started |
 | K2 | Stage view, voice providers, senses | 1.0 | Not started |
@@ -68,22 +68,23 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K0-00 Environment: sandbox baseline verified (Yuri: 641 pytest, 65 frontend, tsc, vite build). **User machine still unverified:** run the command block in `HANDOFF.md` §5 and paste the output into `STATE.md` §2
 - [x] K0-01 Docs committed and pushed (`704c05d`)
 - [x] K0-02 Yuri and Luna inventory: `docs/notes/yuri-inventory.md`; `ARCHITECTURE.md` §2, 3, 4.1, 5, 7.1, 9.1, 11 corrected; D-024 to D-031 recorded
-- [ ] K0-03 Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded
-- [ ] K0-04 Rename and rebrand in small reviewed steps (no bulk replace): `orchestrator/` → `KASANE/` (`git mv`), `conftest.py`, scripts, Rust paths; product name Kokyu, identifier `io.github.yatharthjorwal.kokyu`, window title, tray text, `YURI_*` → `KOKYU_*`, log prefixes, npm package name; kernel port 8765 → 8780 in Python, Rust, `ws-client.ts`; no hard-coded ports left in Rust
-- [ ] K0-05 `KASANE/paths.py` (dev `./data`, packaged `%APPDATA%\Kokyu`); replace `repo_path("data/…")` and other hard-coded locations; tests
-- [ ] K0-06 Config v3: strip machine paths from the example, move the TTS reference clip and transcript out of config (they become waifu data), add `waifus.dir` and `kernel.port`, TTS block becomes `tts.backend` (URL plus optional launch); update `config.example.yaml`; add `models.example.yaml`
-- [ ] K0-07 `KASANE/waifus/`: pydantic model for `waifu.yaml` (FR-W-1, 4, 6), loader, validator, registry; unit tests
-- [ ] K0-08 Persona as data (D-031): split Yuri's `SYSTEM_PROMPT` into personality (waifu prompt) and shared app addendum (emotion tags, speech rules); `scripts/seed_waifus.py` imports the Luna and Yuri prompts from paths the user supplies and writes `data/waifus/<id>/`; create `docs/THIRD-PARTY.md`
-- [ ] K0-09 Active waifu in the existing single-history flow: per-connection active waifu; `switch_waifu` and `waifu_state` messages (`ARCHITECTURE.md` §5.2); system prompt swapped on switch; history kept
-- [ ] K0-10 `KASANE/prompting.py`: system assembly (persona + addendum), ephemeral blocks unchanged; unit tests
-- [ ] K0-11 TTS per waifu: `tts.synthesize(text, voice)` with the waifu's reference clip, transcript and language; backend URL from config; pre-warm; **pyttsx3 fallback off by default** (FR-V-7); typed error when the backend is down; tests with a fake server
-- [ ] K0-12 Shared memory with speakers (FR-MEM-1, 2): `transcript_log` gains a speaker column through `memory/migrate.py`; `add_transcript_turn(..., speaker=)`; writer prompt and episode summaries name the waifu; migration and writer tests
-- [ ] K0-13 **Invariance tests** (FR-W-3, FR-S-5): two fixture waifus; the `ModelRequest` messages differ only in the persona prompt; same role and model decision, same recall results, same tool schemas offered; only prompt and TTS parameters differ
-- [ ] K0-14 Map the existing local-only router tests to FR-R-3 (no behaviour change); add one test that no waifu field reaches `router.route`
-- [ ] K0-15 Temporary waifu dropdown in the existing widget's quick-action menu, with a one-line debug readout (waifu, voice clip, model); no layout redesign (that is K1)
-- [ ] K0-16 `scripts/check.mjs` and `npm run check` (tsc, test:fe, build, cargo check, pytest; cargo skippable with a flag); green in the sandbox
-- [ ] K0-17 Update `STATE`, `HANDOFF`, `TODO`, `DECISIONS`; gate review
-- **Gate K0 (sandbox, automated):** invariance tests green; switching Luna ↔ Yuri changes only the persona prompt and TTS parameters (asserted); `pytest` + `test:fe` + `tsc` + `vite build` green.
+- [x] K0-03 Seed commit: copy Yuri at `e32af4f` **verbatim** (excluded as in D-028); tests green in the sandbox as seeded (0cd2d20)
+- [x] K0-04 Rename and rebrand in small reviewed steps (no bulk replace): `orchestrator/` → `KASANE/` (`git mv`), `conftest.py`, scripts, Rust paths; product name Kokyu, identifier `io.github.yatharthjorwal.kokyu`, window title, tray text, `YURI_*` → `KOKYU_*`, log prefixes, npm package name; kernel port 8765 → 8780 in Python, Rust, `ws-client.ts`; no hard-coded ports left in Rust (8a61fcd)
+- [x] K0-05 `KASANE/paths.py` (dev `./data`, packaged `%APPDATA%\Kokyu`); replace `repo_path("data/…")` and other hard-coded locations; tests (cae608a)
+- [x] K0-06 Config v3: strip machine paths from the example, move the TTS reference clip and transcript out of config (they become waifu data), add `waifus.dir` and `kernel.port`, TTS block becomes `tts.backend` (URL plus optional launch); update `config.example.yaml`; add `models.example.yaml` Done as: machine paths removed from code defaults and the example, legacy clip keys emptied; the waifu directory comes from `paths.py` and the kernel port stays the constant `PORT` in `app.py` (a `kernel.port` config key moved to the backlog). (4963246)
+- [x] K0-07 `KASANE/waifus/`: pydantic model for `waifu.yaml` (FR-W-1, 4, 6), loader, validator, registry; unit tests (fda24ad)
+- [x] K0-08 Persona as data (D-031): split Yuri's `SYSTEM_PROMPT` into personality (waifu prompt) and shared app addendum (emotion tags, speech rules); `scripts/seed_waifus.py` imports the Luna and Yuri prompts from paths the user supplies and writes `data/waifus/<id>/`; create `docs/THIRD-PARTY.md` Done as: premade packs are built by `scripts/build_premade.py` from the user's files; the persona prompts are copied **verbatim** and the emotion-tag rule lives in the shared addendum instead of splitting Yuri's prompt (D-045). `docs/THIRD-PARTY.md` created. (470c947)
+- [x] K0-09 Active waifu in the existing single-history flow: per-connection active waifu; `switch_waifu` and `waifu_state` messages (`ARCHITECTURE.md` §5.2); system prompt swapped on switch; history kept (28f7f9e)
+- [x] K0-10 `KASANE/prompting.py`: system assembly (persona + addendum), ephemeral blocks unchanged; unit tests (28f7f9e)
+- [x] K0-11 TTS per waifu: `tts.synthesize(text, voice)` with the waifu's reference clip, transcript and language; backend URL from config; pre-warm; **pyttsx3 fallback off by default** (FR-V-7); typed error when the backend is down; tests with a fake server (4963246)
+- [x] K0-12 Shared memory with speakers (FR-MEM-1, 2): `transcript_log` gains a speaker column through `memory/migrate.py`; `add_transcript_turn(..., speaker=)`; writer prompt and episode summaries name the waifu; migration and writer tests (65de8d5)
+- [x] K0-13 **Invariance tests** (FR-W-3, FR-S-5): two fixture waifus; the `ModelRequest` messages differ only in the persona prompt; same role and model decision, same recall results, same tool schemas offered; only prompt and TTS parameters differ (28f7f9e)
+- [x] K0-14 Map the existing local-only router tests to FR-R-3 (no behaviour change); add one test that no waifu field reaches `router.route` Done as structural guards: no waifu input in `router.decide`, `Router.complete`, `stream_with_tools` or `ModelRequest`; Yuri's existing role-pinning tests cover FR-R-3. (28f7f9e)
+- [x] K0-15 Temporary waifu dropdown in the existing widget's quick-action menu, with a one-line debug readout (waifu, voice clip, model); no layout redesign (that is K1) Done as: Companion `<select>` in the quick-action menu, avatar swapped by one reload per switch (temporary until the K2 stage rework, D-046). (0a23332)
+- [x] K0-16 `scripts/check.mjs` and `npm run check` (tsc, test:fe, build, cargo check, pytest; cargo skippable with a flag); green in the sandbox (ba7c2a3)
+- [x] K0-17 Update `STATE`, `HANDOFF`, `TODO`, `DECISIONS` (this commit); the gate review is the user's manual checks below
+- **Gate K0 (sandbox, automated): PASSED 2026-11-12** (pytest 718, test:fe 76, tsc, vite build; a real kernel plus websocket smoke test also passed).
+- *Original wording:* invariance tests green; switching Luna ↔ Yuri changes only the persona prompt and TTS parameters (asserted); `pytest` + `test:fe` + `tsc` + `vite build` green.
 - **Gate K0 (manual, user):** `npm run tauri dev` opens the Kokyu window; the dropdown switches waifus; replies differ in persona; the voice is audibly different per waifu using the **existing GPT-SoVITS install** (same `/tts` contract, so Track T is not required for this gate); `cargo check` passes on the PC.
 
 ## Phase K1: Chat shell
@@ -208,3 +209,7 @@ Goal: find packaging problems in week one of the product, not the last week.
 - Multi-monitor pets
 - Auto-update
 - Per-waifu private memory (option; contradicts D-005 today)
+
+- `kernel.port` as a config key (the port is the constant `PORT` in `KASANE/app.py`)
+- Rename the Cargo package, binary and log file names (`yuri`, `orchestrator.log`) before packaging (K7)
+- Persist the last-used companion in `settings.json` instead of `data/active_waifu.txt`

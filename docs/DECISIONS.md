@@ -276,3 +276,21 @@ Accepted · User · 2026-11-12
 Accepted · User ("finalize the spec and proceed") · 2026-11-12
 **Decision:** `SPEC.md` is the **v1.0 baseline** for K0 to K3. Entries marked Provisional in this log are promoted to Accepted, except those that exist to be validated by a spike, which stay open until it runs: D-014 (pets overlay, K4), D-035 (K1b), D-036 (built-in voice, K2) and the egress rule in D-025 (confirmed at K1 start). Changes after this point go through new decisions.
 **Consequences:** D-029 Task Guide and OCR watch are parked (not deleted). Yuri's config examples were included verbatim in the seed commit so the inherited tests stay green, then rewritten in K0-06 (a refinement of D-028).
+
+## Session 2 implementation entries (2026-11-12)
+
+## D-045 K0 implementation choices
+Accepted · Default · 2026-11-12
+- **Premade prompts are copied verbatim; the shared addendum adds the emotion-tag rule.** This refines D-031: splitting Yuri's long prompt automatically is brittle, and the addendum ("end with exactly one tag; if your instructions already say this, follow them") works for premade and user-created waifus alike.
+- **A waifu with no pack installed does not break the app:** the kernel runs the legacy built-in persona unchanged, so a fresh checkout still talks.
+- **A switch requested during a turn is applied between turns** (FR-S-2) by checking at the top of the message loop; the client sees `pending` in `waifu_state` meanwhile.
+- **Voice backend down means a caption-only reply** (empty audio, the caption shows for about reading time); the pyttsx3 placeholder voice is opt-in (`tts.fallback_engine: pyttsx3`), default off (FR-V-7).
+- **The kernel remembers the last companion** in `data/active_waifu.txt`; `memory.db` now lives in `<repo>/data/` with the other databases (it used to sit inside the kernel folder).
+- **Cargo package/binary and log file names are unchanged** (`yuri`, `orchestrator.log`): renaming needs `cargo` to regenerate `Cargo.lock`, so it waits for K7.
+- Memory schema is now **v3** (nullable `speaker` on `transcript_log`, idempotent migration).
+
+## D-046 The avatar is swapped by a page reload (temporary)
+Provisional · Default · 2026-11-12
+**Context:** The seeded stage code binds lip-sync, eyes, idle motion and expression life to one VRM inside one long init function; hot-swapping the model needs the K2 stage rework and cannot be verified without a browser.
+**Decision:** When the kernel names an active waifu different from the one on screen, the page stores the id in `localStorage` and reloads once; the avatar loads from `GET /waifus/{id}/vrm`. The kernel is authoritative and the rule is loop-safe (`needsAvatarReload`).
+**Consequences:** A brief flash on switch. K2-01 replaces this with a real avatar swap inside the Stage view.

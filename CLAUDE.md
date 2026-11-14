@@ -73,7 +73,7 @@ docs/                 SCOPE, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, 
 data/                 runtime data (gitignored)
 ```
 
-The tree is the **target**. Until K0-03 only `docs/` exists. Yuri's layout and findings: `docs/notes/yuri-inventory.md`. Check `STATE.md` for what actually exists.
+The tree is real as of K0 (seeded from Yuri, renamed, reshaped). Yuri's layout and findings: `docs/notes/yuri-inventory.md`. Check `STATE.md` for what actually exists.
 
 ## 5. Commands
 
@@ -90,7 +90,7 @@ npm run dev:ui          # page only (what tauri dev uses). Never run it together
 npm run doctor          # why a window does not load
 npm run build           # tsc + vite build
 npm run test:fe         # frontend pure-logic tests
-npm run check           # NEW in K0-15: tsc --noEmit + test:fe + build + cargo check + pytest
+npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest (add `-- --skip-cargo` without a Rust toolchain; KOKYU_PYTHON overrides the interpreter)
 .\.venv\Scripts\python.exe -m pytest KASANE -q
 .\.venv\Scripts\python.exe KASANE\check.py --refresh   # config, key, catalog, spend
 ```

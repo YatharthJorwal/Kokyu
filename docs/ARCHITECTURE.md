@@ -73,9 +73,9 @@ The kernel keeps Yuri's **flat module layout**: the `KASANE/` folder is put on `
 ```
 KASANE/
   app.py  bus.py  config.py  llm.py  settings.py  check.py  context_budget.py   (from Yuri)
-  paths.py               NEW (K0-05): ALL filesystem locations
-  waifus/                NEW (K0-07): pack model, loader, validator, registry, instruction template
-  prompting.py           NEW (K0-10): system prompt assembly
+  paths.py               DONE (K0): ALL filesystem locations
+  waifus/                DONE (K0): pack model, loader, validator, registry (instruction template comes in K3)
+  prompting.py           DONE (K0): persona prompt + shared app addendum
   threads/               NEW (K1): SQLite thread store
   conversation.py        NEW (K1): turn loop extracted from ws_endpoint
   protocol/              NEW (K1): typed message models
@@ -163,7 +163,10 @@ There are **no token events** and no thread, waifu or model concept.
 | Direction | Type | Purpose |
 |---|---|---|
 | Client → kernel | `switch_waifu` `{id}` | Change the active waifu for subsequent turns |
-| Kernel → client | `waifu_state` `{active, waifus:[{id, name}]}` | Roster and active waifu |
+| Kernel → client | `waifu_state` `{active, waifus:[{id, name, premade, traits}], problems:[text], pending?}` | Roster and active waifu; sent on connect and after every switch. `active` is null when no pack is installed; `pending` names a switch waiting for the running turn |
+| Kernel → client | `error` `{code:"unknown_waifu", message}` | A switch named a companion that does not exist |
+| Kernel → client | `speak` with `audio_b64: ""` | Voice backend down: caption only, no audio (FR-V-7) |
+| HTTP | `GET /waifus/{id}/vrm` | A registered waifu's avatar (CORS: loopback page origins, GET only) |
 
 ### 5.3 Target (K1): typed protocol
 

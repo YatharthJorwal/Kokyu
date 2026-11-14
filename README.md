@@ -2,7 +2,7 @@
 
 > A desktop chat app for a roster of AI waifus. Local-first, built for Windows.
 
-**Status: pre-alpha, documentation phase. Nothing runs yet.** The repository currently holds the project's specification and plan; code starts with Phase 0 (see [`docs/TODO.md`](docs/TODO.md)).
+**Status: pre-alpha.** Phase 0 (skeleton) is code-complete: the kernel, shell and waifu packs exist; the chat UI, installer and the rest follow the plan in [`docs/TODO.md`](docs/TODO.md). Runs from source only.
 
 Kōkyū (後宮, "the inner palace") is the app. **KASANE** (*Kernel for Adaptive Synthetic Agents, Networks and Embodiments*) is the kernel inside it.
 
@@ -42,7 +42,7 @@ A normal-looking chatbot UI with a roster of companions. A waifu is **a voice an
 
 **B. Portable bundle** *(planned, phase K7).* Unzip, run `setup.ps1` once to create the Python environment and verify the machine, then launch `Kokyu.exe`.
 
-**C. From source** *(works from phase K1 onward).*
+**C. From source** *(works today).*
 
 ```powershell
 git clone https://github.com/YatharthJorwal/Kokyu.git
@@ -56,7 +56,11 @@ Copy-Item .env.example .env        # optional: add AIROUTER_API_KEY
 npm run tauri dev
 ```
 
-`npm run doctor` explains why a window does not load. `python KASANE\check.py` checks config, models and keys without starting the app.
+`npm run check` runs the whole test suite (`-- --skip-cargo` without a Rust toolchain). `npm run doctor` explains why a window does not load. `python KASANE\check.py` checks config, models and keys without starting the app.
+
+## Premade companions
+
+Luna and Yuri ship as built-in packs in `assets/premade/`. Build them from your own files with `python scripts/build_premade.py --help` (voice clip + transcript in `KASANE/voice_files/<Name>/`, your VRMs, the persona prompts), then commit `assets/premade/`.
 
 ## Your waifus
 
