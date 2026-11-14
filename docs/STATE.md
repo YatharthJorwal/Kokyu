@@ -2,7 +2,7 @@
 
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-14, session 3
+- **Last updated:** 2026-11-14, session 3 (second half)
 - **Current phase:** **K1 in progress** (K1-00 to K1-00d, K1-01 and K1-01b done; next K1-02, the React shell). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
 - **Repo:** `github.com/YatharthJorwal/Kokyu`, `main` pushed directly from the user's PC by Claude this session (no bundle).
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
