@@ -98,6 +98,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-03 Sidebar: waifu list, history (grouped, search, rename, delete), Settings entry (FR-C-6)
 - [ ] K1-04 Thread view with streaming, Markdown, copy/regenerate, Stop (FR-C-1, 2, 8, 9, 10)
 - [ ] K1-05 Input box and `＋` tray with disabled stubs (FR-C-3, 4); port the heart animation (FR-C-5)
+- [ ] K1-05b Screen companions: Task Guide and OCR watch toggles in the `＋` tray and Settings, status chip with one-click stop, refuse to start without a local vision model (FR-SC-1..5, D-048)
 - [ ] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2)
 - [ ] K1-07 Capability registry (`models.yaml`) and Ollama/llama.cpp discovery (FR-M-3, 10)
 - [ ] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6)

@@ -218,6 +218,19 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-VP-4 | Provider failure shows a banner and continues text-only (FR-V-7). | K2 |
 | FR-VP-5 | The default provider on a fresh install is `builtin`, so the first conversation never waits for a large download. The model is chosen in a K2 spike (license, quality, CPU latency). | K2 |
 
+### 2.17 Screen companions (FR-SC) — added by D-048
+
+Inherited from Yuri: **Task Guide** (the user names a task; the waifu notices when the screen drifts away from it and nudges) and **OCR watch** (rare, unprompted remarks about something notable on screen).
+
+| ID | Requirement | Phase |
+|---|---|---|
+| FR-SC-1 | Both modes are **opt-in and off by default** on every launch unless the user turned them on in Settings; each is toggled from the `＋` tray and Settings. | K1 |
+| FR-SC-2 | While either mode is on, a **visible indicator** (status chip) shows which one is watching the screen, and one click stops it. | K1 |
+| FR-SC-3 | Screen captures for these modes are **ambient content**: they are processed by local models only and never reach an API model (FR-R-7). If no local vision model is available the mode refuses to start with a plain message. | K1 |
+| FR-SC-4 | Task Guide: the user states a task in words; the kernel checks the screen on an interval and, when the user has drifted for the configured time, the **active waifu** says a short nudge in her own persona. Ending or replacing the task is one action. | K1 |
+| FR-SC-5 | OCR watch: remarks are rare by design (configurable minimum interval, default no more than one every few minutes) and skipped while the user is typing or a turn is running. | K1 |
+| FR-SC-6 | Remarks from either mode are spoken through the arbiter like any reply (never over the user or another reply) and appear in the current thread marked as unprompted; they follow Temp Chat (FR-MEM-5). | K2 |
+
 ## 3. Data formats
 
 ### 3.1 `waifu.yaml` (schema 1)
@@ -340,8 +353,8 @@ Agent mode and VR (deferred, see `SCOPE.md` §12); mobile, web hosting, multi-us
 |---|---|
 | T | GPT-SoVITS component recipe and contract (`TTS-BACKEND.md`) |
 | K0 | FR-W-1..4, 6; FR-S-5; FR-R-3 (mapped to existing tests); FR-V-1, 7 (adapter); FR-MEM-1..3 |
-| K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3 |
-| K2 | FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-2..6, 8; FR-VP-1..5; FR-C-4 live |
+| K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 |
+| K2 | FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-2..6, 8; FR-VP-1..5; FR-C-4 live; FR-SC-6 |
 | K1b | FR-DIST-9, 11 (walking-skeleton installer on a clean machine) |
 | K3 | FR-W-2 (UI), FR-W-5; FR-CR-1..8 |
 | W | FR-COMP-1..5; FR-WIZ-1..7 |

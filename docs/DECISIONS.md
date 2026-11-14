@@ -294,3 +294,16 @@ Provisional · Default · 2026-11-12
 **Context:** The seeded stage code binds lip-sync, eyes, idle motion and expression life to one VRM inside one long init function; hot-swapping the model needs the K2 stage rework and cannot be verified without a browser.
 **Decision:** When the kernel names an active waifu different from the one on screen, the page stores the id in `localStorage` and reloads once; the avatar loads from `GET /waifus/{id}/vrm`. The kernel is authoritative and the rule is loop-safe (`needsAvatarReload`).
 **Consequences:** A brief flash on switch. K2-01 replaces this with a real avatar swap inside the Stage view.
+
+## Session 3 entries (2026-11-14)
+
+## D-047 D-025 egress rule confirmed
+Accepted · User · 2026-11-14
+**Decision:** The user approved D-025 as written: selecting an API model for a thread is consent for that thread's text and for files the user explicitly attaches; ambient captures (camera, screen capture, OCR watch, Task Guide screenshots) never reach a non-local model; API failure, offline and budget exhaustion show *Retry* / *Switch model*, never a silent fallback.
+**Consequences:** D-025 is Accepted. K1-00c may proceed.
+
+## D-048 Task Guide and OCR watch become v1 features ("screen companions")
+Accepted · User ("make some slight spec changes and actually add them as a feature") · 2026-11-14
+**Context:** D-029 proposed parking Yuri's Task Guide (tracks a task the user names and nudges when they drift) and OCR watch (rare ambient remarks about the screen). The user wants them in the product, and treats the feature list as growing while the phase plan stays.
+**Decision:** Supersedes the "park" part of D-029. Both become **screen companions**, specified as FR-SC-1..6 in `SPEC.md` §2.17: opt-in, off by default, local models only (FR-R-7), a visible indicator while active, the active waifu delivers the remark in her own persona and voice (no waifu-dependent logic, FR-W-3), and each can be stopped with one action. K1 exposes the toggles in the `＋` tray and a status chip; K2 adds the voice delivery through the arbiter.
+**Consequences:** `SPEC.md` gains §2.17 and the K1/K2 rows of the acceptance matrix; `TODO.md` gains K1-05b. The feature list may keep growing through new decisions; the phase order does not change.
