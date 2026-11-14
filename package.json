@@ -14,7 +14,8 @@
     "tauri": "tauri",
     "clean": "node scripts/clean.mjs",
     "clean:all": "node scripts/clean.mjs --all",
-    "test:fe": "node scripts/test-frontend.mjs"
+    "test:fe": "node scripts/test-frontend.mjs",
+    "check": "node scripts/check.mjs"
   },
   "dependencies": {
     "@pixiv/three-vrm": "^3.5.5",
