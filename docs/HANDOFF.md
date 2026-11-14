@@ -17,7 +17,7 @@
 7. Commercial and release work (Dodo, website, signing) is deferred until the product is developed (D-043).
 8. Spec v1.0 baseline is final (D-044). Changes go through new decisions.
 9. Since session 3, Claude works **directly on the user's Windows PC** (`D:\AI\Kokyu.ai`, via the Claude desktop app, often while the user is away) and commits and pushes `main` itself. Rust, Node and the venv are there; a window, audio and the GPU are there too, but Claude cannot see or hear them, so visual/audio results stay "not verified" until the user looks.
-10. Plan: `TODO.md`; K1 in progress (K1-00, K1-00b done).
+10. Plan: `TODO.md`; K1 in progress (K1-00, K1-00b, K1-00c done).
 
 ## 2. How the user works
 
@@ -28,7 +28,7 @@ Solo developer, casual, wants direct commands (no manual file shuffling), phases
 ### Session 3 (2026-11-14)
 - **Run on the user's PC for the first time.** `npm run check` (with cargo) was red on Windows only because of a path-separator test bug; fixed (`baa0b54`). Everything else, including `cargo check`, passed.
 - **Decided by the user:** D-025 approved (D-047). Task Guide and OCR watch become real features, "screen companions" (D-048, SPEC §2.17 FR-SC-1..6, TODO K1-05b). K1 starts without the K0 manual gate; deliver item by item.
-- **Built:** K1-00 threads store + conversation manager (`5deb6b6`); K1-00b typed protocol v1 + token streaming (`32d9bef`, D-049).
+- **Built:** K1-00 threads store + conversation manager (`5deb6b6`); K1-00b typed protocol v1 + token streaming (`32d9bef`, D-049); K1-00c per-thread model/effort, `chat` role, D-025 egress rules (`5c7a9ce`, D-050), checked live against the real Ollama.
 - **Surprises:** a module-level `asyncio.Event` (`app._shutdown_event`) binds to the first event loop, so each TestClient test must patch in a fresh one; `_run_turn` reads `sys.exc_info()` in its `finally` to know Stop cut the reply.
 
 ### Session 2 (2026-11-12)
@@ -39,12 +39,12 @@ Solo developer, casual, wants direct commands (no manual file shuffling), phases
 
 ## 4. Where we stopped
 
-K1-00 and K1-00b are done, green on the PC and pushed. Next is **K1-00c** (`llm.py` model/effort parameters, the `chat` role and the D-025 egress rules in `router/decision.py`). The UI still shows Yuri's widget; nothing in K1 is visible until K1-00d/K1-02.
+K1-00, K1-00b and K1-00c are done, green on the PC and pushed. Next is **K1-00d** (normal app window instead of the 340x480 widget, CSP locked down). The UI still shows Yuri's widget; nothing in K1 is visible until K1-00d/K1-02.
 
 ## 5. Next session: start here
 
 1. `git log -5`, `git status`, `npm run check` (set `KOKYU_PYTHON` to `.venv\Scripts\python.exe` if needed).
-2. Continue K1 in TODO order: K1-00c, K1-00d (normal app window, CSP, Temp Chat per thread already stored), K1-01 (llama.cpp spike; can run on this PC), K1-02 (React shell on the v1 protocol).
+2. Continue K1 in TODO order: K1-00d (normal app window, CSP, Temp Chat per thread already stored), K1-01 (llama.cpp spike; can run on this PC), K1-02 (React shell on the v1 protocol).
 3. The K0 manual gate is still open (`STATE.md` §6): building the premade packs needs the user's VRM/wav paths and traits.
 
 **Commands the user may want (PowerShell, in the repo folder):**
@@ -72,6 +72,8 @@ npm run tauri dev
 - In the sandbox, never `pkill -f` with a pattern that appears in your own command line (it kills the shell).
 - The path `GPT SoVITS` has a space: single-quote it in YAML; `launcher.local.txt` needs no quotes.
 - Never commit secrets, databases, logs. Assets are committed **only** under `assets/premade/`.
+- The `chat` role replaced `reflex` for the main turn (D-050). Older tests still call `reflex` directly and that is fine; new turn tests should expect `chat` plus `model_ref`, `effort`, `ambient` kwargs.
+- `app.py` has lines with trailing spaces; exact-match edit scripts can miss them (`stream_with_tools("reflex", ` had one).
 - TestClient WebSocket tests: patch `app._shutdown_event` with a fresh `asyncio.Event()`, `app._driver` to None, `app._conversation_manager` to None, and set `KOKYU_DATA_DIR` to tmp, or `threads.db` lands in the real `data/` (see `tests/test_conversation.py`).
 - Git Bash on this PC: `python3` exists; a `cmd1 <<EOF || cmd2 <<EOF` fallback runs the first heredoc and swallows the second. Use the venv Python directly.
 

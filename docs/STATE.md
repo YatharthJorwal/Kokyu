@@ -3,11 +3,11 @@
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
 - **Last updated:** 2026-11-14, session 3
-- **Current phase:** **K1 in progress** (K1-00, K1-00b done). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
+- **Current phase:** **K1 in progress** (K1-00, K1-00b, K1-00c done; next K1-00d). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
 - **Repo:** `github.com/YatharthJorwal/Kokyu`, `main` pushed directly from the user's PC by Claude this session (no bundle).
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (80), vite build, `cargo check`, pytest (761).
+- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (80), vite build, `cargo check`, pytest (792).
 
 ## 1. What exists
 
@@ -21,6 +21,7 @@
 | Premade packs `assets/premade/{luna,yuri}/` | **Do not exist yet**: the VRMs and `.wav` files are on the user's disk, not in git (transcripts are in `KASANE/voice_files/`) |
 | Threads store `threads.db` and conversation manager (K1-00): every connection works in a saved thread; new/open/rename/delete/search; companion dividers; Temp Chat per thread | Done and tested (kernel only; no UI yet) |
 | Typed protocol v1 and token streaming (K1-00b): envelope, validation, `turn_start`/`token`/`turn_done`, TS mirror in `src/net/protocol.ts` | Done and tested (kernel + pure TS; the widget ignores frames) |
+| Per-thread model and effort, `chat` role, D-025 egress rules, Retry/Switch-model error frames (K1-00c, D-050) | Done and tested; live local call verified |
 | Chat UI, sidebar, model switcher, creator, pets, 3D | Not started (K1-02 onward) |
 | TTS backend (Track T) | Not started; development uses the existing install (D-042) |
 
@@ -60,7 +61,9 @@ WebView2 version; where the Luna repo and the VRM files live (`assets/premade/` 
 | Real kernel over a real websocket: connect sends `waifu_state`; `switch_waifu` changes the active waifu; unknown id gives an error; choice remembered; `GET /waifus/{id}/vrm` serves the file with the right content type | **Verified** (sandbox, throwaway fixture packs) |
 | Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; router signatures carry no waifu | **Verified** (tests) |
 | `cargo check` / the Rust edits compile | **Verified** (user's PC, 2026-11-14) |
-| Current tree on Windows: pytest 761, test:fe 80, tsc, vite build, cargo check | **Verified** (user's PC, `npm run check`, 2026-11-14) |
+| Current tree on Windows: pytest 792, test:fe 80, tsc, vite build, cargo check | **Verified** (user's PC, `npm run check`, 2026-11-14) |
+| `chat` role on the real Ollama: `local:ollama/qwen3.5:4b` with effort off, and the default model, both stream a reply through the router; an API model with an ambient capture is refused without any call | **Verified** (user's PC, live script, 2026-11-14; first-token times 50 s / 22 s include a cold model load and are not latency measurements) |
+| A live AI Router call on the `chat` role; `reasoning_effort` accepted by the provider | **Not verified** (no key resolved in this run) |
 | Threads: a reply is saved to the open thread, reload returns to it, new/open/rename/search/delete, dividers, the model sees only the open thread | **Verified** (tests over the real WebSocket endpoint, fake model) |
 | Token streaming order and the tag-free `turn_done` text | **Verified** (same) |
 | Threads and streaming with a live model and a real window | **Not verified** |
