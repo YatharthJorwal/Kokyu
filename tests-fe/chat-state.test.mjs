@@ -190,3 +190,14 @@ test("the socket splits v1 frames from legacy messages and reports what it canno
   assert.deepEqual(seen.map((x) => x[0]), ["frame", "legacy", "problem", "problem"]);
   assert.deepEqual([0, 1, 2, 3, 9].map(backoffMs), [250, 500, 1000, 2000, 2000]);
 });
+
+test("a file send waits for the kernel's wording of the line (K1-05, FR-C-3)", () => {
+  let s = run(online, { kind: "sent", text: null });
+  assert.equal(s.turn, "thinking");
+  assert.equal(s.messages.length, 0); // no guessed line: the kernel words it ("shared an image…")
+  s = reduce(s, frame("turn_start", { user_text: '(shared an image, "cat.png") A cat on a desk.\n\nlook' }));
+  assert.deepEqual(s.messages.map((m) => [m.role, m.pending ?? false]), [["user", false]]);
+  // the vision step failed: Yuri's widget message closes the turn without one
+  s = reduce(run(online, { kind: "sent", text: null }), { kind: "legacy", msg: { type: "turn_end" } });
+  assert.equal(s.turn, "idle");
+});

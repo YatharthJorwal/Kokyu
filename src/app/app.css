@@ -641,8 +641,224 @@ div.companion,
 .composer-bar {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
+}
+
+.composer-bar .send,
+.composer-bar .stop {
+  margin-left: auto;
+}
+
+.composer.dragging {
+  border-color: var(--accent);
+}
+
+.attachment {
+  display: inline-flex;
+  align-self: flex-start;
+  align-items: center;
+  gap: 6px;
+  padding: 3px 4px 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  font-size: 13px;
+}
+
+.attachment button {
+  padding: 0 6px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.composer-problem {
+  margin: 0;
+  color: var(--danger);
+  font-size: 13px;
+}
+
+/* ── the ＋ tray (K1-05, FR-C-4) ─────────────────────────── */
+
+.tray {
+  position: relative;
+}
+
+.tray-toggle {
+  width: 30px;
+  height: 30px;
+  border: 1px solid var(--line);
+  border-radius: 50%;
+  background: transparent;
+  color: var(--text);
+}
+
+.tray-toggle:hover:not(:disabled),
+.tray-toggle[aria-expanded="true"] {
+  background: var(--panel-2);
+}
+
+.tray-menu {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  left: 0;
+  z-index: 20;
+  display: flex;
+  flex-direction: column;
+  min-width: 190px;
+  padding: 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+}
+
+.tray-menu button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 7px 10px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--text);
+  text-align: left;
+}
+
+.tray-menu button:hover:not(:disabled),
+.tray-menu button:focus-visible {
+  background: var(--panel-2);
+}
+
+.tray-menu button:disabled {
+  color: var(--muted);
+}
+
+.soon {
+  font-size: 11px;
+  opacity: 0.8;
+}
+
+/* ── the status heart, ported from Yuri (K1-05, FR-C-5) ──── */
+
+.heart {
+  flex: none;
+  width: 20px;
+  height: 20px;
+  color: #75627a;
+  transition: color 250ms ease;
+}
+
+.heart svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+  transform-origin: 50% 55%;
+}
+
+.heart path {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 2.2;
+  stroke-linejoin: round;
+}
+
+.heart .heart-fill {
+  fill: currentColor;
+  stroke: none;
+  opacity: 0;
+  transition: opacity 400ms ease;
+}
+
+.heart .heart-track {
+  opacity: 0.2;
+}
+
+/* offline: a short arc chases round, so the window reads as starting, not broken */
+.heart .heart-arc {
+  stroke-linecap: round;
+  stroke-dasharray: 26 74;
+  animation: heart-trace 1.8s linear infinite;
+  transition: stroke-dasharray 400ms ease;
+}
+
+.heart.idle {
+  color: #8d72f2;
+}
+
+.heart.idle .heart-arc,
+.heart.replying .heart-arc {
+  stroke-dasharray: 100 0;
+  animation: none;
+}
+
+.heart.idle .heart-fill {
+  opacity: 0.28;
+}
+
+.heart.thinking {
+  color: #c2a6ff;
+}
+
+.heart.thinking .heart-arc {
+  stroke-dasharray: 30 70;
+  animation: heart-trace 0.9s linear infinite;
+}
+
+.heart.thinking .heart-fill {
+  opacity: 0.15;
+}
+
+.heart.replying {
+  color: var(--accent);
+}
+
+.heart.replying .heart-fill {
+  opacity: 0.5;
+}
+
+.heart.replying svg {
+  animation: heart-beat 1.3s ease-in-out infinite;
+}
+
+@keyframes heart-trace {
+  to {
+    stroke-dashoffset: -100;
+  }
+}
+
+@keyframes heart-beat {
+  0%,
+  100% {
+    transform: scale(1);
+  }
+  14% {
+    transform: scale(1.2);
+  }
+  28% {
+    transform: scale(1);
+  }
+  42% {
+    transform: scale(1.13);
+  }
+  70% {
+    transform: scale(1);
+  }
+}
+
+/* Reduced motion: the states stay apart by colour and fill alone. */
+@media (prefers-reduced-motion: reduce) {
+  .heart .heart-arc,
+  .heart.thinking .heart-arc,
+  .heart.replying svg {
+    animation: none;
+  }
+
+  .heart .heart-arc,
+  .heart.thinking .heart-arc {
+    stroke-dasharray: 100 0;
+  }
 }
 
 /* ── model chip and picker (K1-10) ───────────────────────── */

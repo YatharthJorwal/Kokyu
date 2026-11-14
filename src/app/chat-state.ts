@@ -74,7 +74,8 @@ export type ChatEvent =
   | { kind: "legacy"; msg: LegacyMessage }
   | { kind: "status"; status: ConnectionStatus }
   | { kind: "problem"; reason: string }
-  | { kind: "sent"; text: string }
+  /** `text` null: a file went out; its line arrives with turn_start (the kernel words it). */
+  | { kind: "sent"; text: string | null }
   | { kind: "regenerating" }
   | { kind: "dismiss_notice" }
   | { kind: "picker"; open: boolean };
@@ -310,7 +311,10 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
     case "sent":
       return {
         ...state,
-        messages: [...state.messages, { key: localKey(), role: "user", text: event.text, speaker: null, pending: true }],
+        messages:
+          event.text === null
+            ? state.messages
+            : [...state.messages, { key: localKey(), role: "user", text: event.text, speaker: null, pending: true }],
         turn: "thinking",
         notice: null,
         pickerOpen: false,

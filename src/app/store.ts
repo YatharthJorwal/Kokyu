@@ -9,6 +9,13 @@ import { KernelSocket } from "../net/kernel";
 import { canPickModel, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
 import { VoicePlayer, type SpeakClip } from "./voice";
 
+/** A file ready to send: an image as base64 JPEG, or a text file's content (src/file-upload.ts). */
+export interface Attachment {
+  filename: string;
+  kind: "image" | "text";
+  content: string;
+}
+
 export const useChat = create<ChatState>(() => initialState);
 
 function dispatch(event: ChatEvent): void {
@@ -43,6 +50,16 @@ export const actions = {
     if (!socket.sendLegacy({ type: "user_text", text: line })) return false;
     voice.stop();
     dispatch({ kind: "sent", text: line });
+    return true;
+  },
+
+  /** A file from the `＋` tray, a paste or a drop (FR-C-3), with the typed text as its
+   * caption. The kernel describes an image (or reads a text file) and runs the turn. */
+  sendFile(file: Attachment, caption: string): boolean {
+    if (!canSend(useChat.getState())) return false;
+    if (!socket.sendLegacy({ type: "user_file", ...file, caption: caption.trim() })) return false;
+    voice.stop();
+    dispatch({ kind: "sent", text: null });
     return true;
   },
 
