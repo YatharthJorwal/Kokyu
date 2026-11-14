@@ -39,7 +39,7 @@ def test_a_reference_splits_on_the_first_slash_only():
     assert str(model_ref.parse(API)) == API and model_ref.parse(API).provider == "airouter"
 
 
-@pytest.mark.parametrize("bad", ["", "qwen3.5:9b", "cloud:airouter/x", "local:ollama", "local:ollama/ ", "local:llamacpp/x"])
+@pytest.mark.parametrize("bad", ["", "qwen3.5:9b", "cloud:airouter/x", "local:ollama", "local:ollama/ ", "local:vllm/x", "api:openrouter/x"])
 def test_bad_or_unsupported_references_are_rejected(bad):
     with pytest.raises(model_ref.ModelRefError):
         model_ref.parse(bad)

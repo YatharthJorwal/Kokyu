@@ -439,6 +439,47 @@ class VisionConfig:
 
 
 @dataclass(frozen=True)
+class LlamaCppPreset:
+    """One llama.cpp model the user can pick (`local:llamacpp/<id>`). Machine paths
+    live only in the user's gitignored config/config.yaml."""
+
+    id: str = ""
+    label: str = ""
+    model_path: str = ""
+    n_cpu_moe: int | None = None       # MoE expert layers kept in system RAM
+    gpu_layers: int = 99
+    ctx: int = 8192
+    threads: int | None = None
+    flash_attn: str = "on"
+    extra_args: tuple[str, ...] = ()
+
+
+@dataclass(frozen=True)
+class LlamaCppConfig:
+    """The llama.cpp backend (K1-01, D-051). `server_path` empty = use the
+    llama-server that ships inside Ollama, if present (development)."""
+
+    server_path: str = ""
+    host: str = "127.0.0.1"
+    port: int = 8080
+    startup_timeout_s: float = 600.0
+    request_timeout_s: float = 600.0
+    presets: tuple[LlamaCppPreset, ...] = ()
+
+    def preset(self, preset_id: str) -> LlamaCppPreset | None:
+        return next((p for p in self.presets if p.id == preset_id), None)
+
+
+@dataclass(frozen=True)
+class ChatConfig:
+    """The conversation (`chat` role). `default_model_ref` is used by threads
+    that have no model chosen; null = the local Ollama model in `llm.model`."""
+
+    default_model_ref: str | None = None
+    default_effort: str | None = None
+
+
+@dataclass(frozen=True)
 class Config:
     # v2 surface
     providers: Mapping[str, ProviderConfig] = field(default_factory=dict)
@@ -453,6 +494,8 @@ class Config:
     latency: LatencyConfig = field(default_factory=LatencyConfig)
     persona: PersonaConfig = field(default_factory=PersonaConfig)
     logs: LogsConfig = field(default_factory=LogsConfig)
+    llamacpp: LlamaCppConfig = field(default_factory=LlamaCppConfig)
+    chat: ChatConfig = field(default_factory=ChatConfig)
 
     # v1 views, derived -- the ported modules read these unchanged
     llm: LLMConfig = field(default_factory=LLMConfig)
@@ -685,6 +728,21 @@ def _derive_memory(
     return _build(MemoryConfig, memory_raw)
 
 
+def _derive_llamacpp(raw: Mapping[str, Any]) -> LlamaCppConfig:
+    section = _section(raw, "llamacpp")
+    presets = []
+    for item in section.get("presets") or ():
+        if not isinstance(item, Mapping) or not item.get("id") or not item.get("model_path"):
+            continue
+        data = dict(item)
+        data["id"] = str(data["id"])
+        data["model_path"] = str(paths.resolve(str(data["model_path"])))
+        data["extra_args"] = tuple(str(a) for a in data.get("extra_args") or ())
+        presets.append(_build(LlamaCppPreset, data))
+    data = {k: v for k, v in section.items() if k != "presets"}
+    return _build(LlamaCppConfig, {**data, "presets": tuple(presets)})
+
+
 def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) -> Config:
     """Load and normalize a config file. `path=None` uses the search order."""
     explicit = path is not None
@@ -799,6 +857,8 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
         latency=latency,
         persona=persona,
         logs=logs,
+        llamacpp=_derive_llamacpp(raw),
+        chat=_build(ChatConfig, _section(raw, "chat")),
         llm=llm,
         tts=_derive_tts(raw),
         stt=_derive_stt(raw, voice),

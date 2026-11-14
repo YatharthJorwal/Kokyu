@@ -375,3 +375,34 @@ logs:
   level: 'info'
   rotate_mb: 20
   keep_files: 5
+
+# ─────────────────────────────────────────────────────────────────────────────
+# Conversation model (K1, D-051). Threads with no model chosen use this.
+# null = the Ollama model in `llm.model`. Examples:
+#   local:ollama/qwen3.5:9b
+#   local:llamacpp/qwen3.6-35b-a3b      (a preset id from `llamacpp.presets`)
+#   api:airouter/<catalog id>
+# ─────────────────────────────────────────────────────────────────────────────
+chat:
+  default_model_ref: null
+  default_effort: null      # off | low | medium | high
+
+# ─────────────────────────────────────────────────────────────────────────────
+# llama.cpp (K1-01, D-051): large MoE models with expert weights in system RAM.
+# The kernel starts llama-server when such a model is chosen and stops it when
+# an Ollama model is chosen (one large model in VRAM at a time).
+# server_path: '' = the llama-server bundled with Ollama, if installed.
+# Put real model paths in config/config.yaml (gitignored), single-quoted.
+# ─────────────────────────────────────────────────────────────────────────────
+llamacpp:
+  server_path: ''
+  host: 127.0.0.1
+  port: 8080
+  startup_timeout_s: 600
+  presets: []
+  #  - id: qwen3.6-35b-a3b
+  #    label: Qwen3.6 35B-A3B (Q4, experts on CPU)
+  #    model_path: 'D:\models\Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf'
+  #    n_cpu_moe: 40          # every expert on the CPU: ~3 GB VRAM (K1-01, docs/STATE.md)
+  #    ctx: 8192
+  #    threads: 10         # physical cores; measured fastest on an i5-14400F

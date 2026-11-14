@@ -257,13 +257,13 @@ Yuri's roles are kept (`docs/notes/yuri-inventory.md` §6): `reflex`, `vision`, 
 - Reads total/free VRAM through NVML (`nvidia-ml-py`).
 - Estimates a model's footprint as file size plus KV cache plus a safety margin; **measured** values observed after load replace the estimate and are cached.
 - Tracks residents: chat model, embeddings, TTS backend, renderer allowance.
-- Rule: only **one large LLM** resident across Ollama and llama.cpp. Selecting a model on the other backend unloads the first (`keep_alive: 0` for Ollama; stop `llama-server`) before loading.
+- Rule: only **one large LLM** resident across Ollama and llama.cpp. Selecting a model on the other backend unloads the first (`keep_alive: 0` for Ollama; stop `llama-server`) before loading. "Large" means its measured VRAM: a MoE with experts on the CPU (about 3 GB) may stay resident beside the small helpers (classifier, embeddings). Until the VRAM manager exists, starting `llama-server` unloads every Ollama model once, and helpers reload on demand (K1-01, D-051).
 - Produces *fits / won't fit* hints for the switcher and refuses a load that would exceed free VRAM minus headroom, naming the blocker.
-- Large MoE on llama.cpp (for example Qwen3.5-35B-A3B Q4) uses expert offload to CPU; its VRAM and RAM use are measured in a dedicated spike (K1).
+- Large MoE on llama.cpp (Qwen3.6-35B-A3B Q4) keeps every expert in system RAM (`--n-cpu-moe 40`): about 3 GB VRAM, about 19.5 GB working set (memory-mapped, so the OS can page it), about 4.6 GB private. Measured numbers and the settings that won: `docs/STATE.md` (K1-01).
 
 ### 7.4 Providers
 
-`ollama` (native API), `llamacpp` (OpenAI-compatible) and a generic **`openai_compat`** provider (configurable base URL and key; AI Router, OpenRouter, DeepSeek and others are presets; Yuri's `airouter` provider is the starting point, D-037). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). **Known gap:** Yuri's `OllamaNativeProvider.complete` ignores its `model` argument and uses the global `llm.CONFIG.llm.model`; K1 changes `llm.py` to take a model and an effort setting.
+`ollama` (native API), `llamacpp` (OpenAI-compatible) and a generic **`openai_compat`** provider (configurable base URL and key; AI Router, OpenRouter, DeepSeek and others are presets; Yuri's `airouter` provider is the starting point, D-037). The provider is chosen only by `decide()`. User-selected API failures are surfaced, never rerouted (FR-R-5). `llm.py` takes a model and a `think` override per call (K1-00c). The `llamacpp` provider (`router/providers/llamacpp.py`) owns one `llama-server` child per preset (`config.yaml` `llamacpp.presets` until `models.yaml` lands in K1-07), started on first use and stopped at shutdown; it reuses the OpenAI streaming code and moves per-turn system notes into the next user message so the server's prompt cache keeps hitting (D-051).
 
 ## 8. Voice pipeline
 
@@ -360,7 +360,7 @@ No automated test may require a GPU, network, API key or display.
 | Embeddings | ~0.3 GB | Always resident |
 | GPT-SoVITS | ~2 to 3 GB (unmeasured) | Measure in track T |
 | Renderer | ~0.5 to 1 GB (unmeasured) | Measure in K2 |
-| Qwen3.5-35B-A3B Q4 (llama.cpp, experts on CPU) | small VRAM, ~20 GB system RAM | Spike in K1 |
+| Qwen3.6-35B-A3B Q4 (llama.cpp, all experts on CPU) | ~3 GB | ~19.5 GB system RAM mapped, ~4.6 GB private (K1-01, measured) |
 
 ## 14. Extension points for deferred features
 

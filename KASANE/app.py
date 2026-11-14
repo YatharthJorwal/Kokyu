@@ -163,6 +163,9 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     startup_pass.cancel()
     await writer.WRITER.stop(final_pass=True)
+    # K1-01: a llama-server the router started must not outlive the kernel.
+    with contextlib.suppress(Exception):
+        await router.get_router().shutdown()
 
 
 app = FastAPI(lifespan=_lifespan)
@@ -1293,9 +1296,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         return current_thread.id if current_thread is not None else None
 
     def _thread_model() -> dict[str, str | None]:
-        if current_thread is None:
-            return {"model_ref": None, "effort": None}
-        return {"model_ref": current_thread.model_ref, "effort": current_thread.effort}
+        """The thread's model and effort, else the configured defaults (D-051)."""
+        model_ref = current_thread.model_ref if current_thread is not None else None
+        effort = current_thread.effort if current_thread is not None else None
+        return {
+            "model_ref": model_ref or CONFIG.chat.default_model_ref,
+            "effort": effort or CONFIG.chat.default_effort,
+        }
 
     def _saver() -> "Callable[[str, str, bool], Awaitable[None]] | None":
         """Binds the turn to the thread it started in."""
@@ -1309,8 +1316,8 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 user_text,
                 reply,
                 speaker=_speaker_record(websocket),
-                model_ref=thread.model_ref,
-                effort=thread.effort,
+                model_ref=thread.model_ref or CONFIG.chat.default_model_ref,
+                effort=thread.effort or CONFIG.chat.default_effort,
                 stopped=stopped,
             )
             await _send_thread_list(websocket)

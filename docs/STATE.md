@@ -3,11 +3,11 @@
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
 - **Last updated:** 2026-11-14, session 3
-- **Current phase:** **K1 in progress** (K1-00, K1-00b, K1-00c done; next K1-00d). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
+- **Current phase:** **K1 in progress** (K1-00 to K1-00d and K1-01 done; next K1-01b, then K1-02). The user chose to start K1 without running the K0 manual gate (window, voice); those checks are still open below.
 - **Repo:** `github.com/YatharthJorwal/Kokyu`, `main` pushed directly from the user's PC by Claude this session (no bundle).
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (80), vite build, `cargo check`, pytest (792).
+- **Last green run (the user's Windows PC, 2026-11-14):** `npm run check` with cargo: tsc, frontend tests (83), vite build, `cargo check`, pytest (802).
 
 ## 1. What exists
 
@@ -22,6 +22,8 @@
 | Threads store `threads.db` and conversation manager (K1-00): every connection works in a saved thread; new/open/rename/delete/search; companion dividers; Temp Chat per thread | Done and tested (kernel only; no UI yet) |
 | Typed protocol v1 and token streaming (K1-00b): envelope, validation, `turn_start`/`token`/`turn_done`, TS mirror in `src/net/protocol.ts` | Done and tested (kernel + pure TS; the widget ignores frames) |
 | Per-thread model and effort, `chat` role, D-025 egress rules, Retry/Switch-model error frames (K1-00c, D-050) | Done and tested; live local call verified |
+| Normal app window 1200×800 and an explicit CSP (K1-00d) | Done; `cargo check` and a config test pass; **the window was not looked at** |
+| llama.cpp backend (K1-01, D-051): `local:llamacpp/<preset>`, `llama-server` child managed by the kernel, presets in `config.yaml`, prompt-cache-friendly messages | Done and tested; **live verified** with Qwen3.6-35B-A3B, which is now the default chat model in the user's `config/config.yaml` |
 | Chat UI, sidebar, model switcher, creator, pets, 3D | Not started (K1-02 onward) |
 | TTS backend (Track T) | Not started; development uses the existing install (D-042) |
 
@@ -35,7 +37,7 @@
 | OS | Windows (PowerShell); local folder `Kokyu.ai` |
 | GPT-SoVITS install | `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (**a space in the path**) |
 | Ollama models | `hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L`, `qwen3.5:9b`, `qwen3.5:4b`, `nomic-embed-text` |
-| llama.cpp | Qwen3.5-35B-A3B Q4 available |
+| llama.cpp | **Qwen3.6**-35B-A3B `UD-Q4_K_XL` (unsloth, ~21 GB) under `D:\AI\hf_cache\hub\models--unsloth--Qwen3.6-35B-A3B-GGUF\...`; no standalone llama.cpp install, the kernel uses the `llama-server.exe` inside Ollama (`%LOCALAPPDATA%\Programs\Ollama\lib\ollama`) |
 | API | AI Router key |
 | Assets | VRMs made by the user; voices generated on the ElevenLabs website (AI-generated) |
 | VR headset | None |
@@ -46,7 +48,19 @@ Linux, Python 3.12, Node 22. No Rust build, GPU, display, audio, Ollama or GPT-S
 
 ### Measured on the user's PC (2026-11-14)
 
-Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; `.venv`, `node_modules` and `src-tauri/launcher.local.txt` (GPT-SoVITS path) exist; `cargo check` passes.
+Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; `.venv`, `node_modules` and `src-tauri/launcher.local.txt` (GPT-SoVITS path) exist; `cargo check` passes. Ollama 0.40.16. About 1.2 to 1.4 GB VRAM in use by the desktop; 18 to 19 GB RAM free before loading a model.
+
+**K1-01 spike: Qwen3.6-35B-A3B Q4 on llama.cpp** (`scripts/spike_llamacpp.py`, ctx 8192, flash attention, `--jinja`, thinking off, 256 generated tokens):
+
+| `--n-cpu-moe` | threads | VRAM | RAM (working set / private) | prompt tok/s | gen tok/s |
+|---|---|---|---|---|---|
+| 40 (all experts on CPU) | 6 | 2.8 to 3.0 GB | 19.5 / 4.6 GB | 16 to 76 (2,210-token prompt) | 6.9 and 21.5 (two runs) |
+| 40 | 10 | 3.0 GB | 19.5 / 4.6 GB | 54 | 22.9 |
+| 40 | 10, `--threads-batch 6` | 3.0 GB | 19.5 / 4.6 GB | 58.5 | 23.6 |
+
+Earlier short-prompt runs with 26 and 32 experts on the CPU used more VRAM and were not faster (logs in `logs/spike/`, gitignored). Run-to-run variance is large (the file is memory-mapped and the OS pages it), so treat these as ranges. **Chosen:** `n_cpu_moe 40, threads 10` (D-051).
+
+**Through the real router** (two chat turns, persona plus the real tool list, effort off): server load 43 s; first prompt 1,003 tokens in 29.5 s (34 tok/s, cold pages); first turn 74 s to the first token (111 s in a second run). Second turn (both runs): llama-server re-read only 23 tokens, first token in 0.8 s, 24 to 26 tok/s generation.
 
 ### Still unknown
 
@@ -64,6 +78,8 @@ WebView2 version; where the Luna repo and the VRM files live (`assets/premade/` 
 | Current tree on Windows: pytest 792, test:fe 80, tsc, vite build, cargo check | **Verified** (user's PC, `npm run check`, 2026-11-14) |
 | `chat` role on the real Ollama: `local:ollama/qwen3.5:4b` with effort off, and the default model, both stream a reply through the router; an API model with an ambient capture is refused without any call | **Verified** (user's PC, live script, 2026-11-14; first-token times 50 s / 22 s include a cold model load and are not latency measurements) |
 | A live AI Router call on the `chat` role; `reasoning_effort` accepted by the provider | **Not verified** (no key resolved in this run) |
+| `local:llamacpp/qwen3.6-35b-a3b` through the router: the kernel starts `llama-server`, streams two turns, the second reuses the prompt cache, shutdown stops the server | **Verified** (user's PC, live script, 2026-11-14) |
+| llama.cpp with tool calls actually made by the model; thinking on | **Not verified** (the two live turns made no tool call; thinking was off) |
 | Threads: a reply is saved to the open thread, reload returns to it, new/open/rename/search/delete, dividers, the model sees only the open thread | **Verified** (tests over the real WebSocket endpoint, fake model) |
 | Token streaming order and the tag-free `turn_done` text | **Verified** (same) |
 | Threads and streaming with a live model and a real window | **Not verified** |
@@ -78,7 +94,10 @@ WebView2 version; where the Luna repo and the VRM files live (`assets/premade/` 
 
 - **First launch reloads once:** with no stored companion the page loads, the kernel names the active waifu, the page stores it and reloads to get her avatar. Temporary (D-046).
 - **Screen companions:** Task Guide and OCR watch are now v1 features (D-048, FR-SC); their K1 work is K1-05b. Unchanged in code so far.
-- **The window still shows Yuri's widget.** The Kokyu chat layout arrives with K1-00d (normal window) and K1-02 (React shell).
+- **The window still shows Yuri's widget**, now inside a normal 1200×800 window (K1-00d). The Kokyu chat layout arrives with K1-02 (React shell).
+- **The first message on the 35B takes 75 to 110 s** (server load plus a cold prompt read); later turns start in about a second. K1-01b warms it at kernel start.
+- **The 35B maps ~19.5 GB of RAM** while loaded. With other heavy apps open, generation can drop (one run measured 7 tok/s).
+- **Tests read the user's `config/config.yaml`** when it exists (inherited loader). The suite passes with the 35B as the default, but it is not isolated from local config.
 - **`memory.db` moved** to `<repo>/data/memory.db` (it used to be inside the kernel folder). Nothing from Yuri's old memory is imported.
 - **Cosmetic leftovers:** Cargo package/binary `yuri`, log file `orchestrator.log`, the old `window.__YURI_MODEL_PATH__` override, some "yuri" log prefixes (K7 / cleanup).
 - Inherited: faster-whisper on CUDA failed on this machine (CPU STT); port 1420 is shared by `dev:ui` and `tauri dev`; killing instead of tray Quit loses that session's memory consolidation.

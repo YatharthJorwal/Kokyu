@@ -8,10 +8,11 @@ from __future__ import annotations
 
 from dataclasses import dataclass
 
-# backend -> router provider. llama.cpp and generic OpenAI-compatible providers
-# arrive with K1-01 / K1-08b; until then they are rejected with a clear message.
+# backend -> router provider. llama.cpp presets arrived with K1-01 (D-051); generic
+# OpenAI-compatible providers arrive with K1-08b and are rejected until then.
 PROVIDERS: dict[tuple[str, str], str] = {
     ("local", "ollama"): "local_ollama",
+    ("local", "llamacpp"): "llamacpp",
     ("api", "airouter"): "airouter",
 }
 

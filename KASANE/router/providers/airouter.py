@@ -78,10 +78,11 @@ class AirouterProvider:
         payload = self._payload(request, model)
         url = f"{self.cfg.base_url.rstrip('/')}/chat/completions"
         headers = {
-            "Authorization": f"Bearer {self.api_key or ''}",
             "Content-Type": "application/json",
             "Accept": "text/event-stream",
         }
+        if self.api_key:  # a keyless local server (llama-server) rejects "Bearer " with no token
+            headers["Authorization"] = f"Bearer {self.api_key}"
 
         for attempt in range(2):
             try:

@@ -84,6 +84,7 @@ class Router:
         catalog: ModelCatalog | None = None,
         local_provider=None,
         cloud_provider=None,
+        llamacpp_provider=None,
         audit: AuditWriter | None = None,
         ledger: SpendLedger | None = None,
         clock=time.time,
@@ -95,6 +96,8 @@ class Router:
 
         cloud_cfg = config.providers.get("airouter")
         self.local_provider = local_provider or OllamaNativeProvider()
+        # K1-01 (D-051): built on first use, so a machine without llama.cpp pays nothing.
+        self._llamacpp_provider = llamacpp_provider
         self.cloud_provider = cloud_provider
         self._api_key_present = cloud_provider is not None
         if cloud_provider is None and cloud_cfg is not None:
@@ -288,6 +291,12 @@ class Router:
     def _provider(self, name: str):
         if name == "local_ollama":
             return self.local_provider
+        if name == "llamacpp":
+            if self._llamacpp_provider is None:
+                from router.providers.llamacpp import LlamaCppProvider
+
+                self._llamacpp_provider = LlamaCppProvider(self.config.llamacpp)
+            return self._llamacpp_provider
         if name == "airouter":
             if self.cloud_provider is None:
                 raise RouterError("airouter selected but no provider is configured")
@@ -406,6 +415,13 @@ class Router:
             )
         except Exception as exc:  # noqa: BLE001 -- the audit must never hide the real error
             print(f"[kokyu] router: audit of a blocked turn failed: {exc}", flush=True)
+
+    async def shutdown(self) -> None:
+        """Stops child model servers (llama-server) the router started."""
+        provider = self._llamacpp_provider
+        server = getattr(provider, "server", None)
+        if server is not None:
+            await server.stop()
 
     def _redact_for_cloud(self, request: ModelRequest) -> tuple[ModelRequest, dict[str, int]]:
         if any(message.get("images") for message in request.messages):

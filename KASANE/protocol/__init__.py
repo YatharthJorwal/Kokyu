@@ -156,10 +156,11 @@ def model_failure(exc: BaseException) -> dict[str, Any] | None:
             "reply_to": None,
         }
     if isinstance(exc, ProviderError):
+        detail = str(exc).strip().splitlines()[0][:160] if str(exc).strip() else "no details"
         return {
             "code": "model_failed",
             "reason": "PROVIDER_ERROR",
-            "message": "The API model returned an error. Retry, or switch model.",
+            "message": f"The chosen model failed ({detail}). Retry, or switch model.",
             "model_ref": None,
             "actions": ["retry", "switch_model"],
             "reply_to": None,
