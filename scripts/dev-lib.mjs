@@ -1,11 +1,13 @@
 // Small, testable pieces of `npm run dev` (see dev.mjs). Core Node modules only.
-import { join } from "node:path";
+import { posix, win32 } from "node:path";
 
 /** The venv's Python for this platform, matching what the Tauri shell uses. */
 export function venvPython(root, platform = process.platform) {
+  // Join with the target platform's separator, not the host's, so a plan for
+  // another platform reads the way it would there (and tests agree on any host).
   return platform === "win32"
-    ? join(root, ".venv", "Scripts", "python.exe")
-    : join(root, ".venv", "bin", "python");
+    ? win32.join(root, ".venv", "Scripts", "python.exe")
+    : posix.join(root, ".venv", "bin", "python");
 }
 
 /**
