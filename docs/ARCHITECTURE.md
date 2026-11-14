@@ -168,6 +168,19 @@ There are **no token events** and no thread, waifu or model concept.
 | Kernel → client | `speak` with `audio_b64: ""` | Voice backend down: caption only, no audio (FR-V-7) |
 | HTTP | `GET /waifus/{id}/vrm` | A registered waifu's avatar (CORS: loopback page origins, GET only) |
 
+### 5.2b Added in K1-00 (threads; untyped until K1-00b)
+
+| Direction | Type | Purpose |
+|---|---|---|
+| Kernel → client | `thread_opened` `{thread, messages}` | Sent on connect (the last opened thread, else the newest, else a new one) and after every open/new/delete |
+| Kernel → client | `thread_list` `{query, threads}` | Sidebar history, newest first; sent on open and after every saved exchange, rename or delete |
+| Kernel → client | `thread_message` `{thread, message}` | A divider written when the companion changes (FR-S-2) |
+| Client → kernel | `thread_list`, `thread_search {query}` | History list, or threads whose title or messages contain the text |
+| Client → kernel | `thread_new`, `thread_open {id}`, `thread_delete {id}` | Change the open thread; refused with `error {code:"turn_running"}` while a reply runs |
+| Client → kernel | `thread_rename {id, title}` | Rename; `error {code:"unknown_thread"}` for a missing id |
+
+`KASANE/threads/store.py` owns `threads.db` (SPEC §3.5 plus a `temp` column for FR-MEM-5 and a small `kv` table for the last opened thread); `KASANE/conversation.py` turns stored messages into the turn's history (dividers excluded) and records each exchange with speaker, model ref, effort and a `stopped` flag. `_run_turn` gained one optional `on_finished(user, reply, stopped)` callback and still never sees a waifu. Opening a thread brings back its companion; `set_temp_mode` is saved on the thread.
+
 ### 5.3 Target (K1): typed protocol
 
 Pydantic models in `KASANE/protocol/`, mirrored in `src/net/`; frames `{ "v": 1, "type", "id", "thread", "data" }`; a version mismatch is a hard, visible error. Additions beyond 5.1/5.2:
