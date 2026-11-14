@@ -101,11 +101,13 @@ roles:
     chain: [airouter, local_ollama]
     local_only: false
     max_tokens: 2000
+    reasoning_tokens: 6000  # API only: extra cap when the model may think (billed as output)
     temperature: 0.6
   chat:                   # K1 (D-025): runs on the thread's chosen model; no fallback
     chain: [airouter, local_ollama]
     local_only: false
-    max_tokens: 1200
+    max_tokens: 1200        # an API reply's cap, and what its cost estimate assumes (D-058)
+    reasoning_tokens: 6000  # API only: extra cap when the model may think (billed as output)
     temperature: 0.7
 
 # ─────────────────────────────────────────────────────────────────────────────

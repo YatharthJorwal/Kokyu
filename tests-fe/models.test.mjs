@@ -98,6 +98,7 @@ test("small formatting helpers", () => {
   // FR-M-4 variant badges: a few known tags, deduplicated, never a wall of them
   assert.deepEqual(badgesFor({ tags: ["reasoning", "Thinking", "vision", "json", "tools", "free"] }), ["reasoning", "vision", "tools"]);
   assert.deepEqual(badgesFor({}), []);
+  assert.deepEqual(badgesFor({ tags: ["tool-use", "reasoning", "structured-output"] }), ["tools", "reasoning"]); // AI Router's tags
 });
 
 test("search matches every word against the label, id, detail and tags", () => {

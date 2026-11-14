@@ -33,6 +33,12 @@ class FakeCatalog:
     def price(self, model):
         return (0.5, 1.5)
 
+    def priced(self, model):
+        return True
+
+    def info(self, model):
+        return None
+
 
 class FakeProvider:
     def __init__(self, name, *, error=None):

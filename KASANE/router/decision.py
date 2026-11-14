@@ -28,6 +28,7 @@ UNTRUSTED_CONTEXT = "UNTRUSTED_CONTEXT"
 CLOUD_DISABLED = "CLOUD_DISABLED"
 OFFLINE = "OFFLINE"
 BUDGET_EXHAUSTED = "BUDGET_EXHAUSTED"
+PRICE_UNKNOWN = "PRICE_UNKNOWN"
 EXPLICIT_ESCALATION = "EXPLICIT_ESCALATION"
 BACKGROUND_JOB = "BACKGROUND_JOB"
 COMPLEXITY_THRESHOLD = "COMPLEXITY_THRESHOLD"
@@ -101,6 +102,12 @@ def _budget_exhausted(budget: BudgetConfig, state: RouterState) -> bool:
     return False
 
 
+def _price_unknown(budget: BudgetConfig, state: RouterState) -> bool:
+    """A cap is on, but the catalog has no price for the model (D-058)."""
+    caps = (budget.hourly_usd, budget.daily_usd, budget.monthly_usd)
+    return budget.enabled and not state.price_known and any(cap >= 0 for cap in caps)
+
+
 def _escalation_reason(request: ModelRequest, routing: RoutingConfig, state: RouterState) -> str | None:
     when = routing.escalate_when
     if request.explicit_escalation and when.get("explicit_think_hard", True):
@@ -138,7 +145,8 @@ def decide_chat(
     6. API model, ambient capture -> blocked AMBIENT_CONTEXT (FR-R-7)
     7. provider off / no key      -> blocked CLOUD_DISABLED
     8. recently unreachable       -> blocked OFFLINE
-    9. over a spending cap        -> blocked BUDGET_EXHAUSTED
+    9. no price, a cap is on      -> blocked PRICE_UNKNOWN (D-058)
+    9b. over a spending cap       -> blocked BUDGET_EXHAUSTED
     10. otherwise                 -> that API model. User-attached files
         (trust=untrusted, not ambient) may go (D-025 rule 4).
     """
@@ -174,6 +182,8 @@ def decide_chat(
         return decision(CLOUD_DISABLED, target, blocked=True)
     if state.offline_until and now < state.offline_until:
         return decision(OFFLINE, target, blocked=True)
+    if _price_unknown(budget, state):
+        return decision(PRICE_UNKNOWN, target, blocked=True)
     if _budget_exhausted(budget, state):
         return decision(BUDGET_EXHAUSTED, target, blocked=True)
     return decision(USER_SELECTED, target)
@@ -243,6 +253,8 @@ def decide(
         return local_only(OFFLINE)
 
     # 6. Spending caps.
+    if _price_unknown(budget, state):
+        return local_only(PRICE_UNKNOWN)
     if _budget_exhausted(budget, state):
         return local_only(BUDGET_EXHAUSTED)
 

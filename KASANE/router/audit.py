@@ -17,6 +17,8 @@ import time
 import uuid
 from typing import Any
 
+from router.redact import redact
+
 
 class AuditWriter:
     def __init__(self, path: str | pathlib.Path, *, enabled: bool = True) -> None:
@@ -91,6 +93,6 @@ class AuditWriter:
                 "cost_usd": None if cost_usd is None else round(cost_usd, 8),
                 "estimated": estimated,
                 "fallback_used": fallback_used,
-                "error": error,
+                "error": None if error is None else redact(error)[0],
             }
         )

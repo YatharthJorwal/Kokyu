@@ -29,6 +29,7 @@ import paths
 from config import CONFIG, LlamaCppConfig, LlamaCppPreset, ProviderConfig
 from router import model_ref as model_refs
 from router.errors import ProviderError
+from router.providers import airouter
 from router.providers.airouter import AirouterProvider
 from router.types import ModelChunk, ModelRequest
 
@@ -114,42 +115,9 @@ def cache_friendly(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
 
 
 def openai_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Kernel (Ollama-shaped) messages -> OpenAI chat messages for llama-server.
-
-    One system turn, first (see `cache_friendly`); an assistant tool call gets an
-    id and JSON-string arguments, and the tool result that follows it gets the
-    matching `tool_call_id`."""
-    folded = cache_friendly([dict(m) for m in messages])
-    out: list[dict[str, Any]] = []
-    pending_ids: list[str] = []
-    counter = 0
-    for message in folded:
-        role = message.get("role")
-        if role == "assistant" and message.get("tool_calls"):
-            calls = []
-            for call in message["tool_calls"]:
-                fn = call.get("function", {})
-                args = fn.get("arguments", {})
-                counter += 1
-                call_id = call.get("id") or f"call_{counter}"
-                pending_ids.append(call_id)
-                calls.append({
-                    "id": call_id,
-                    "type": "function",
-                    "function": {
-                        "name": fn.get("name", ""),
-                        "arguments": args if isinstance(args, str) else json.dumps(args),
-                    },
-                })
-            out.append({"role": "assistant", "content": message.get("content") or "", "tool_calls": calls})
-        elif role == "tool":
-            entry = {"role": "tool", "content": message.get("content") or ""}
-            if pending_ids:
-                entry["tool_call_id"] = pending_ids.pop(0)
-            out.append(entry)
-        else:
-            out.append({"role": role, "content": message.get("content") or ""})
-    return out
+    """Kernel (Ollama-shaped) messages -> OpenAI chat messages for llama-server:
+    one system turn, first (see `cache_friendly`), tool calls in OpenAI shape."""
+    return airouter.openai_messages(cache_friendly([dict(m) for m in messages]))
 
 
 def _bare(name: str) -> str:
@@ -310,6 +278,7 @@ class LlamaCppServer:
 
 class LlamaCppProvider(AirouterProvider):
     name = "llamacpp"
+    paid = False   # local: no bill to estimate, and warm() asks for one token and says nothing
 
     def __init__(
         self,

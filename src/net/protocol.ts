@@ -107,6 +107,8 @@ export interface ModelRow {
   price_in?: number | null;
   price_out?: number | null;
   tags?: string[];
+  /** API rows: the vendor the model is listed under (FR-M-4). */
+  group?: string | null;
 }
 
 export interface Spend {

@@ -149,10 +149,12 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> l
         if info is None or info.kind not in ("language", "", "chat", "text"):
             continue
         detail = [f"{info.context_length // 1000}k context"] if info.context_length else []
+        vendor, _, name = model_id.partition("/")
         rows.append(
             {
                 "ref": f"api:{backend}/{model_id}",
-                "label": model_id,
+                "label": name or model_id,
+                "group": vendor if name else None,   # FR-M-4: grouped by provider
                 "kind": "api",
                 "backend": backend,
                 "detail": " · ".join(detail) or None,
@@ -193,6 +195,9 @@ async def model_list(
             await catalog.refresh(force=True)
         except Exception as exc:  # noqa: BLE001 -- the catalog records the usual failures itself
             refresh_error = f"{type(exc).__name__}: {exc}"
+        ensure_cloud = getattr(rt, "ensure_cloud", None)
+        if ensure_cloud is not None:
+            await ensure_cloud(fetch=False)   # a list that came back must also be usable (FR-M-4)
     key_present = bool(getattr(rt, "api_key_present", False))
     api = api_rows(catalog, key_present=key_present)
 

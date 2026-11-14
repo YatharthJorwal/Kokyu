@@ -13,8 +13,10 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import json
 import time
-from typing import AsyncIterator
+from functools import partial
+from typing import Any, AsyncIterator
 
 import context_budget
 from config import CONFIG, Config, ProviderConfig, RoleConfig
@@ -23,7 +25,7 @@ from router.audit import AuditWriter
 from router.budget import SpendLedger, actual_cost, estimate_cost
 from router.decision import decide
 from router.discovery import ModelCatalog, repo_path
-from router.errors import ProviderError, RouteBlockedError, RouterError
+from router.errors import ProviderError, RouteBlockedError, RouterError, StreamFailed
 from router import model_ref as model_refs
 from router.providers import AirouterProvider, OllamaNativeProvider
 from router.redact import redact_messages
@@ -63,6 +65,7 @@ BLOCKED_MESSAGES = {
     decide_mod.CLOUD_DISABLED: "The API model isn't available: there is no key, or the provider is turned off. Add a key in Settings or switch model.",
     decide_mod.OFFLINE: "The API provider didn't answer a moment ago. Retry, or switch model.",
     decide_mod.BUDGET_EXHAUSTED: "Your spending cap is reached. Raise it in Settings, or switch model.",
+    decide_mod.PRICE_UNKNOWN: "The model list has no price for this model, so your spending cap can't be kept. Refresh the list, or switch model.",
 }
 
 
@@ -117,6 +120,9 @@ class Router:
         self.audit = audit or AuditWriter(repo_path(config.audit.path))
         self.ledger = ledger or SpendLedger(repo_path(config.budget.ledger_path))
         self.state = RouterState(cloud_available=False)
+        # Worst-case cost of AI Router calls still running: the cap counts them
+        # before they finish, so calls started together cannot all pass it (FR-R-2).
+        self._reserved_usd = 0.0
         self._cloud_cfg: ProviderConfig | None = cloud_cfg
         # None = follow routing.mode/enforce_roles. True/False = the user's live
         # choice from the tray/quick-action toggle, which outranks the config
@@ -146,7 +152,7 @@ class Router:
 
     # -- lifecycle -----------------------------------------------------------
 
-    async def ensure_cloud(self) -> bool:
+    async def ensure_cloud(self, *, fetch: bool = True) -> bool:
         """Make cloud usable right now if it can be, without a restart.
 
         A key pasted into `.env` after launch is picked up here, the provider is
@@ -169,8 +175,9 @@ class Router:
             self.state.cloud_available = False
             return False
         try:
-            loaded = self.catalog.load_cache()
-            if not loaded or self.catalog.is_stale():
+            # The cache only fills an empty catalog: it must never replace a fresher list.
+            loaded = self.catalog.available or self.catalog.load_cache()
+            if fetch and (not loaded or self.catalog.is_stale()):
                 await self.catalog.refresh(force=not loaded)
         except Exception as exc:  # noqa: BLE001 -- a toggle must not crash the app
             print(f"[yuri] router: catalog refresh failed: {exc}", flush=True)
@@ -196,7 +203,7 @@ class Router:
             and self._api_key_present
         )
         if cloud_ok:
-            loaded = self.catalog.load_cache()
+            loaded = self.catalog.available or self.catalog.load_cache()   # never over a fresher list
             if not loaded or self.catalog.is_stale():
                 await self.catalog.refresh(force=not loaded)
             cloud_ok = self.catalog.available
@@ -207,10 +214,19 @@ class Router:
                     flush=True,
                 )
         self.state.cloud_available = cloud_ok
-        now = self.clock()
-        hour, day, month = self.ledger.totals(now)
-        self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = hour, day, month
+        await self._refresh_spend()
+        self._started = True   # app.py calls this directly: the first turn must not run it again
         return cloud_ok
+
+    async def _refresh_spend(self) -> None:
+        """The cap checks the ledger as it is now, so a window that has passed
+        frees it again (FR-R-2). Off the event loop; a failure keeps the last numbers."""
+        try:
+            totals = await asyncio.to_thread(self.ledger.totals, self.clock())
+        except Exception as exc:  # noqa: BLE001 -- a ledger hiccup must not end a turn
+            print(f"[kokyu] router: spend ledger read failed: {exc}", flush=True)
+            return
+        self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = totals
 
     # -- decisions -----------------------------------------------------------
 
@@ -226,17 +242,18 @@ class Router:
 
     def _anticipated_cloud_cost(
         self, role: str, prompt_tokens: int, max_tokens: int, model_ref: str | None = None
-    ) -> float:
+    ) -> tuple[float, bool]:
+        """(worst-case cost, whether every cloud model it covers has a price)."""
         if role == decide_mod.CHAT_ROLE:
             try:
                 ref = model_refs.parse(model_ref or "")
             except model_refs.ModelRefError:
-                return 0.0
+                return 0.0, True
             if ref.is_local:
-                return 0.0
+                return 0.0, True
             price_in, price_out = self.catalog.price(ref.model)
-            return estimate_cost(prompt_tokens, max_tokens, price_in, price_out)
-        worst = 0.0
+            return estimate_cost(prompt_tokens, max_tokens, price_in, price_out), self.catalog.priced(ref.model)
+        worst, priced = 0.0, True
         role_cfg = self.config.roles.get(role) or _default_role(role)
         for provider in role_cfg.chain:
             if provider == "local_ollama":
@@ -244,7 +261,42 @@ class Router:
             model = decide_mod.model_for(provider, role, self.config.models)
             price_in, price_out = self.catalog.price(model)
             worst = max(worst, estimate_cost(prompt_tokens, max_tokens, price_in, price_out))
-        return worst
+            priced = priced and self.catalog.priced(model)
+        return worst, priced
+
+    def _max_tokens(self, request: ModelRequest) -> int:
+        """The reply cap an AI Router call is sent with, and the one its worst-case
+        estimate assumes: the same number, so the estimate is a bound (FR-R-2).
+        A model that may think gets the role's `reasoning_tokens` on top: thinking
+        is billed as output and counts against the cap (D-058)."""
+        if request.max_tokens:
+            return request.max_tokens
+        role_cfg = self.config.roles.get(request.role)
+        cap = (role_cfg.max_tokens if role_cfg else None) or self.config.llm.max_tokens
+        if role_cfg is not None and role_cfg.reasoning_tokens and self._may_reason(request):
+            cap += role_cfg.reasoning_tokens
+        return cap
+
+    def _may_reason(self, request: ModelRequest) -> bool:
+        """An effort was asked for, or the catalog tags a model this request may
+        reach (the picked one, else the role's chain) as a reasoner."""
+        if model_refs.openai_reasoning_effort(request.effort):
+            return True
+        try:
+            ref = model_refs.parse(request.model_ref or "")
+            models = [] if ref.is_local else [ref.model]
+        except model_refs.ModelRefError:
+            role_cfg = self.config.roles.get(request.role) or _default_role(request.role)
+            models = [
+                decide_mod.model_for(provider, request.role, self.config.models)
+                for provider in role_cfg.chain
+                if provider != "local_ollama"
+            ]
+        for model in models:
+            info = self.catalog.info(model)
+            if info and {"reasoning", "thinking"} & {str(tag).lower() for tag in info.tags}:
+                return True
+        return False
 
     def _effective_privacy(self, request: ModelRequest) -> str:
         for message in request.messages:
@@ -257,11 +309,18 @@ class Router:
         tests can look at it without a provider."""
         role_cfg = self.config.roles.get(request.role) or _default_role(request.role)
         prompt_tokens = self._estimate(request)
-        max_tokens = request.max_tokens or self.config.llm.max_tokens
+        est_cost, priced = self._anticipated_cloud_cost(
+            request.role, prompt_tokens, self._max_tokens(request), request.model_ref
+        )
+        reserved = self._reserved_usd
         state = dataclasses.replace(
             self.state,
+            spend_hour_usd=self.state.spend_hour_usd + reserved,
+            spend_day_usd=self.state.spend_day_usd + reserved,
+            spend_month_usd=self.state.spend_month_usd + reserved,
             est_prompt_tokens=prompt_tokens,
-            est_cost_usd=self._anticipated_cloud_cost(request.role, prompt_tokens, max_tokens, request.model_ref),
+            est_cost_usd=est_cost,
+            price_known=priced,
             tool_count=len(request.tools),
         )
         decision = decide(
@@ -307,90 +366,194 @@ class Router:
 
     async def complete(self, request: ModelRequest) -> AsyncIterator[ModelChunk]:
         await self._ensure_started()
+        await self._refresh_spend()
         decision = self.route(request)
         if decision.blocked:
-            self._audit_blocked(request, decision)
+            await asyncio.to_thread(self._audit_blocked, request, decision)
             raise RouteBlockedError(decision.reason, blocked_message(decision.reason), request.model_ref)
         chain = self._execution_chain(decision)
         first = chain[0]
         executed_decision = dataclasses.replace(decision, executed=first)
-
         redactions: dict[str, int] = {}
         if first.startswith("airouter:"):
             # Counts for the audit row; the actual redacted copy is rebuilt per
             # target below, so a fallback to local still sends the original.
             _, redactions = self._redact_for_cloud(request)
 
-        trace_id = self.audit.start(
-            decision=executed_decision,
-            privacy_class=self._effective_privacy(request),
-            trust=request.trust,
-            redactions=redactions,
-            mode=self.config.routing.mode,
-            job_id=request.job_id,
-        )
+        trace_id: str | None = None
         started = time.monotonic()
         usage: Usage | None = None
         fallback_used = False
         error: str | None = None
-        cost: float | None = None
+        bills: list[tuple[str, float, Usage]] = []   # (model, cost, usage) per AI Router call made
+        booked = 0                                    # bills already written to the ledger
+        cloud_call: list[Any] | None = None           # [model, usage, characters out, cap] of the one running
+        last_kind: str | None = None                  # the last chunk handed to the caller
+        interrupted = False                           # stopped, failed or abandoned mid-reply
+
+        reserved = [decision.est_cost_usd if first.startswith("airouter:") else 0.0]
+        self._reserved_usd += reserved[0]   # no await since route(): calls started together see each other
+
+        def release() -> None:
+            self._reserved_usd -= reserved[0]
+            reserved[0] = 0.0
         try:
+            trace_id = await self._audit_start(request, executed_decision, redactions)
             for index, target in enumerate(chain):
                 provider_name, _, model = target.partition(":")
                 if index > 0:
                     fallback_used = True
+                produced = False
                 try:
                     provider = self._provider(provider_name)
                     outbound = request
                     if provider_name == "airouter":
                         outbound, _ = self._redact_for_cloud(request)
+                        outbound = dataclasses.replace(outbound, max_tokens=self._max_tokens(request))
+                        cloud_call = [model, None, 0, outbound.max_tokens]
                     async for chunk in provider.complete(outbound, model=model):
+                        produced = True
                         if chunk.usage is not None:
                             usage = chunk.usage
+                        if cloud_call is not None:
+                            if chunk.usage is not None:
+                                cloud_call[1] = chunk.usage
+                            cloud_call[2] += len(chunk.text) + sum(len(json.dumps(c, default=str)) for c in chunk.calls)
+                        last_kind = chunk.kind
+                        if chunk.kind == "tool_calls" and cloud_call is not None:
+                            # app.py stops reading here and routes the next round at once, long
+                            # before this generator is finalized: book the call and free its
+                            # reservation now, so the cap sees its real cost (FR-R-2).
+                            bills.append(self._bill(cloud_call, decision.est_prompt_tokens))
+                            cloud_call = None
+                            booked = len(bills)
+                            totals = await asyncio.to_thread(self._record, bills[:booked])
+                            if totals is not None:
+                                self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = totals
+                            release()
                         yield chunk
-                    if provider_name == "airouter":
-                        price_in, price_out = self.catalog.price(model)
-                        cost = actual_cost(
-                            usage.prompt_tokens if usage else None,
-                            usage.completion_tokens if usage else None,
-                            price_in,
-                            price_out,
-                        )
                     break
                 except ProviderError as exc:
                     error = str(exc)
                     if provider_name == "airouter":
-                        self.state.offline_until = self.clock() + 60.0
+                        if not isinstance(exc, StreamFailed):
+                            # Refused or unreachable. A stream that failed after HTTP 200 came
+                            # from a provider that answered: Retry must still work (FR-R-5).
+                            self.state.offline_until = self.clock() + 60.0
+                        # Past HTTP 200 (StreamFailed) or after any chunk, the provider may
+                        # have billed; refused or unreachable before that, nothing was.
+                        if produced or isinstance(exc, StreamFailed):
+                            bills.append(self._bill(cloud_call, decision.est_prompt_tokens, interrupted=True))
+                        cloud_call = None
                     if index + 1 < len(chain):
                         continue
                     raise
+        except BaseException as exc:
+            # GeneratorExit right after a tool call (or the end) is the caller done
+            # reading, not a failure. Anywhere else the reply was abandoned midway:
+            # app.py's Stop usually lands while it awaits between chunks.
+            early_close = isinstance(exc, GeneratorExit) and last_kind not in ("tool_calls", "done")
+            interrupted = early_close or not isinstance(exc, GeneratorExit)
+            if error is None and interrupted:
+                if early_close:
+                    error = "closed early"
+                elif isinstance(exc, asyncio.CancelledError):
+                    error = "cancelled"
+                else:
+                    error = f"{type(exc).__name__}: {exc}"
+            raise
         finally:
-            latency_ms = (time.monotonic() - started) * 1000.0
-            if cost:
-                try:
-                    self.ledger.record(
-                        first.split(":", 1)[0],
-                        first.partition(":")[2],
-                        cost,
-                        prompt_tokens=usage.prompt_tokens if usage else None,
-                        completion_tokens=usage.completion_tokens if usage else None,
-                        estimated=bool(usage and usage.estimated),
-                    )
-                    hour, day, month = self.ledger.totals(self.clock())
-                    self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = hour, day, month
-                except Exception as exc:  # noqa: BLE001 -- bookkeeping must not kill a reply
-                    print(f"[yuri] router: spend ledger write failed: {exc}", flush=True)
-            self.audit.finish(
-                trace_id,
-                role=request.role,
-                latency_ms=latency_ms,
-                prompt_tokens=usage.prompt_tokens if usage else None,
-                completion_tokens=usage.completion_tokens if usage else None,
-                cost_usd=cost,
-                estimated=bool(usage and usage.estimated),
-                fallback_used=fallback_used,
-                error=error,
+            if cloud_call is not None:
+                # Finished, stopped, or failed: what was asked for is paid for (FR-R-2).
+                bills.append(self._bill(cloud_call, decision.est_prompt_tokens, interrupted=interrupted))
+            last = bills[-1][2] if bills else usage
+            finish = {
+                "role": request.role,
+                "latency_ms": (time.monotonic() - started) * 1000.0,
+                "prompt_tokens": last.prompt_tokens if last else None,
+                "completion_tokens": last.completion_tokens if last else None,
+                "cost_usd": sum(cost for _, cost, _ in bills) if bills else None,
+                "estimated": any(u.estimated for _, _, u in bills),
+                "fallback_used": fallback_used,
+                "error": error,
+            }
+            try:
+                totals = await asyncio.to_thread(self._settle, trace_id, bills[booked:], finish)
+            finally:
+                release()
+            if totals is not None:
+                self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = totals
+
+    def _bill(self, call: list[Any], prompt_estimate: int, *, interrupted: bool = False) -> tuple[str, float, Usage]:
+        """One AI Router call's cost: the usage the provider reported, else an
+        estimate. Prompt: the decision's estimate. Reply: what streamed out, or,
+        for a reply cut short, the whole cap: unseen thinking is billed, and many
+        providers keep generating after the client hangs up (D-058)."""
+        model, reported, characters, cap = call
+        prompt = reported.prompt_tokens if reported and reported.prompt_tokens is not None else None
+        completion = reported.completion_tokens if reported and reported.completion_tokens is not None else None
+        estimated = prompt is None or completion is None or bool(reported and reported.estimated)
+        if prompt is None:
+            prompt = prompt_estimate
+        if completion is None:
+            completion = max(cap or 0, -(-characters // 4)) if interrupted else -(-characters // 4)
+        price_in, price_out = self.catalog.price(model)
+        return model, actual_cost(prompt, completion, price_in, price_out), Usage(prompt, completion, estimated)
+
+    def _settle(
+        self, trace_id: str | None, bills: list[tuple[str, float, Usage]], finish: dict[str, Any]
+    ) -> tuple[float, float, float] | None:
+        """The ledger rows and the audit row of a finished call, in a worker thread.
+        Every AI Router call gets a row, $0 included. Neither write may hide the
+        reply or the real error: failures are logged (D-058)."""
+        totals = self._record(bills)
+        if trace_id is not None:
+            try:
+                self.audit.finish(trace_id, **finish)
+            except Exception as exc:  # noqa: BLE001
+                print(f"[kokyu] router: audit write failed: {type(exc).__name__}", flush=True)
+        return totals
+
+    def _record(self, bills: list[tuple[str, float, Usage]]) -> tuple[float, float, float] | None:
+        """Ledger rows for `bills`, then the new totals. Blocking: call it in a thread."""
+        totals = None
+        try:
+            for model, cost, used in bills:
+                self.ledger.record(
+                    "airouter",
+                    model,
+                    cost,
+                    prompt_tokens=used.prompt_tokens,
+                    completion_tokens=used.completion_tokens,
+                    estimated=used.estimated,
+                    ts=self.clock(),
+                )
+            if bills:
+                totals = self.ledger.totals(self.clock())
+        except Exception as exc:  # noqa: BLE001 -- bookkeeping must not kill a reply
+            print(f"[kokyu] router: spend ledger write failed: {type(exc).__name__}", flush=True)
+        return totals
+
+    async def _audit_start(
+        self, request: ModelRequest, decision: RouteDecision, redactions: dict[str, int]
+    ) -> str | None:
+        """The audit's first row, off the loop. A failed write is logged and the
+        call goes ahead (D-058): the audit records calls, it does not gate them."""
+        try:
+            return await asyncio.to_thread(
+                partial(
+                    self.audit.start,
+                    decision=decision,
+                    privacy_class=self._effective_privacy(request),
+                    trust=request.trust,
+                    redactions=redactions,
+                    mode=self.config.routing.mode,
+                    job_id=request.job_id,
+                )
             )
+        except Exception as exc:  # noqa: BLE001
+            print(f"[kokyu] router: audit write failed: {type(exc).__name__}", flush=True)
+            return None
 
     def _audit_blocked(self, request: ModelRequest, decision: RouteDecision) -> None:
         try:

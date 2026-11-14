@@ -49,6 +49,7 @@ const BADGE_TAGS: Record<string, string> = {
   thinking: "reasoning",
   vision: "vision",
   tools: "tools",
+  "tool-use": "tools",   // AI Router's spelling
   free: "free",
   zdr: "no retention",
 };

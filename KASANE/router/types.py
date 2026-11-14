@@ -122,6 +122,9 @@ class RouterState:
     spend_month_usd: float = 0.0
     est_cost_usd: float = 0.0
     est_prompt_tokens: int = 0
+    # False when the catalog has no price for a cloud model this call could use:
+    # a cap cannot be kept on a cost it cannot see (FR-R-2, D-058).
+    price_known: bool = True
     steps_estimate: int = 1
     tool_count: int = 0
     prices: dict[str, float] = field(default_factory=dict)   # "provider:model" -> usd/1M in

@@ -5,7 +5,7 @@
 // loads the model the chip shows a spinner; a failed load shows a warning.
 // The effort slider joins the popover in K1-11, the fits hint with K1-09.
 
-import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useMemo, useRef, useState, type KeyboardEvent } from "react";
 
 import type { ModelRow, Spend } from "../../net/protocol";
 import { canPickModel, currentEffort, currentModelRef, modelLabel } from "../chat-state";
@@ -295,8 +295,16 @@ function ModelPopover({ current }: { current: string | null }) {
               </p>
             ) : null}
             <ul>
-              {api.map((r) => (
-                <Row key={r.ref} row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r.ref)} />
+              {api.map((r, i) => (
+                <Fragment key={r.ref}>
+                  {/* FR-M-4: grouped by provider; the rows come sorted by id, so a new vendor starts a group */}
+                  {r.group && r.group !== api[i - 1]?.group ? (
+                    <li className="list-hint" role="presentation">
+                      {r.group}
+                    </li>
+                  ) : null}
+                  <Row row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r.ref)} />
+                </Fragment>
               ))}
             </ul>
           </section>

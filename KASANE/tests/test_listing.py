@@ -108,10 +108,16 @@ async def test_model_list_puts_it_together_with_the_spend_footer(tmp_path):
                 self.refreshed = force
 
             self.catalog.refresh = refresh
+            self.ensured = False
+
+        async def ensure_cloud(self, *, fetch=True):
+            self.ensured = not fetch           # recheck only: the list was just fetched
 
     rt = Rt()
     data = await listing.model_list(rt, refresh=True, cfg=cfg, transport=tags_transport())
     assert rt.refreshed is True
+    assert rt.ensured is True                                   # a refreshed list is usable at once (K1-08 review)
+    assert (data["api"][0]["group"], data["api"][0]["label"]) == ("vendor", "chat-1")   # FR-M-4 groups
     assert data["default_ref"] == "local:llamacpp/big"
     assert [r["ref"] for r in data["local"]][:2] == ["local:llamacpp/big", "local:ollama/qwen3.5:9b"]   # presets first
     assert [r["ref"] for r in data["api"]] == ["api:airouter/vendor/chat-1"]

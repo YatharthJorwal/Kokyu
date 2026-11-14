@@ -33,6 +33,14 @@ def _as_float(value: Any) -> float:
         return 0.0
 
 
+def _is_number(value: Any) -> bool:
+    try:
+        float(value)
+    except (TypeError, ValueError):
+        return False
+    return True
+
+
 @dataclass(frozen=True)
 class ModelInfo:
     id: str
@@ -43,6 +51,7 @@ class ModelInfo:
     tags: tuple[str, ...] = ()
     zdr: bool = False
     kind: str = "language"
+    priced: bool = True        # the catalog gave both prices (a price of 0 is a price)
 
     def supports(self, tag: str) -> bool:
         return tag in self.tags
@@ -85,6 +94,10 @@ class ModelCatalog:
         info = self.info(model_id)
         return (info.price_in, info.price_out) if info else (0.0, 0.0)
 
+    def priced(self, model_id: str) -> bool:
+        info = self.info(model_id)
+        return info is not None and info.priced
+
     def context_length(self, model_id: str) -> int:
         info = self.info(model_id)
         return info.context_length if info else 0
@@ -119,7 +132,7 @@ class ModelCatalog:
                 model_id: {
                     "context_length": info.context_length,
                     "max_tokens": info.max_tokens,
-                    "pricing": {"prompt": info.price_in, "completion": info.price_out},
+                    "pricing": {"prompt": info.price_in, "completion": info.price_out} if info.priced else {},
                     "tags": list(info.tags),
                     "zdr": info.zdr,
                     "type": info.kind,
@@ -170,8 +183,8 @@ class ModelCatalog:
         self.last_error = None
         try:
             self._save_cache()
-        except OSError as exc:  # a read-only repo must not kill the app
-            self.last_error = f"cache not written: {exc}"
+        except OSError as exc:  # a read-only repo must not kill the app; the list itself is fresh
+            print(f"[kokyu] router: model list cache not written: {exc}", flush=True)
         return True
 
 
@@ -184,6 +197,7 @@ def _to_info(model_id: str, entry: dict[str, Any]) -> ModelInfo:
         max_tokens=int(_as_float(entry.get("max_tokens"))),
         price_in=_as_float(pricing.get("prompt")),
         price_out=_as_float(pricing.get("completion")),
+        priced=_is_number(pricing.get("prompt")) and _is_number(pricing.get("completion")),
         tags=tuple(str(tag) for tag in tags),
         zdr=bool(entry.get("zdr", False)),
         kind=str(entry.get("type") or "language"),

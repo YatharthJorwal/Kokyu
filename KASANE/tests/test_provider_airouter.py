@@ -6,9 +6,10 @@ import httpx
 import pytest
 
 from config import ProviderConfig
-from router.errors import ProviderError
+from router.errors import ProviderError, StreamFailed
 from router.providers.airouter import AirouterProvider
-from router.types import ModelRequest
+from router.providers.llamacpp import LlamaCppProvider
+from router.types import ModelRequest, Usage
 
 CFG = ProviderConfig(
     name="airouter",
@@ -74,10 +75,11 @@ async def test_usage_is_reported():
 
 
 @pytest.mark.asyncio
-async def test_missing_usage_is_none():
-    body = sse(chunk({"content": "x"}, "stop"))
+async def test_missing_usage_is_estimated_thinking_included():
+    # FR-R-2 (K1-08 review): the call is billed either way; reasoning is billed as output.
+    body = sse(chunk({"reasoning_content": "r" * 30}), chunk({"content": "x" * 10}, "stop"))
     events = await collect(provider(lambda request: httpx.Response(200, content=body)))
-    assert events[-1].usage is None
+    assert events[-1].usage == Usage(prompt_tokens=None, completion_tokens=10, estimated=True)
 
 
 @pytest.mark.asyncio
@@ -139,3 +141,104 @@ async def test_authorization_header_is_sent():
 
     await collect(provider(handler, key="secret-key"))
     assert captured["auth"] == "Bearer secret-key"
+
+
+# -- K1-08 review gaps (FR-R-2, FR-R-5, FR-R-6) ---------------------------------
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize(
+    "body",
+    [
+        sse(chunk({"content": "Hel"}), {"error": {"message": "upstream overloaded"}}),     # an error mid-reply
+        sse(chunk({"content": "Hel"}, "error")),                                           # finish_reason error
+        b'{"error": {"message": "no credits"}}',                                            # JSON error sent with 200
+        b'data: {"choices": [{"delta": {"content": "Hel"}}]}\n\n',                          # cut off: no [DONE]
+        b"data: [DONE]\n\n",                                                                 # nothing at all
+    ],
+)
+async def test_a_reply_that_fails_inside_the_stream_raises(body):
+    with pytest.raises(ProviderError):
+        await collect(provider(lambda request: httpx.Response(200, content=body)))
+
+
+@pytest.mark.asyncio
+async def test_a_key_the_provider_echoes_back_never_reaches_the_error():
+    p = provider(lambda request: httpx.Response(401, text="invalid key test-key-0123456789abcdef"), key="test-key-0123456789abcdef")
+    with pytest.raises(ProviderError) as err:
+        await collect(p)
+    assert "test-key-0123456789abcdef" not in str(err.value) and "[secret]" in str(err.value)
+
+
+@pytest.mark.asyncio
+async def test_usage_comes_before_the_tool_calls_because_the_caller_stops_there():
+    body = sse(
+        chunk({"tool_calls": [{"index": 0, "id": "c1", "function": {"name": "capture_screen", "arguments": "{}"}}]}, "tool_calls"),
+        {"choices": [], "usage": {"prompt_tokens": 10, "completion_tokens": 3}},
+    )
+    events = await collect(provider(lambda request: httpx.Response(200, content=body)))
+    assert [e.kind for e in events] == ["usage", "tool_calls", "done"] and events[0].usage.prompt_tokens == 10
+
+
+@pytest.mark.asyncio
+async def test_a_tool_round_goes_out_in_openai_shape():
+    seen = []
+
+    def handler(request):
+        seen.append(json.loads(request.content))
+        return httpx.Response(200, content=sse(chunk({"content": "ok"}, "stop")))
+
+    history = (
+        {"role": "user", "content": "what's on screen?"},
+        {"role": "assistant", "content": "", "tool_calls": [{"function": {"name": "capture_screen", "arguments": {"region": "full"}}}]},
+        {"role": "tool", "content": "a code editor"},
+    )
+    await collect_request(provider(handler), ModelRequest(role="chat", messages=history))
+    call, result = seen[0]["messages"][1], seen[0]["messages"][2]
+    assert call["tool_calls"] == [
+        {"id": "call_1", "type": "function", "function": {"name": "capture_screen", "arguments": '{"region": "full"}'}}
+    ]
+    assert result == {"role": "tool", "content": "a code editor", "tool_call_id": "call_1"}
+
+
+async def collect_request(p, request):
+    return [c async for c in p.complete(request, model="m")]
+
+
+@pytest.mark.asyncio
+async def test_a_failure_after_thinking_alone_is_a_billable_stream_failure():
+    body = b'data: {"choices": [{"delta": {"reasoning_content": "let me think"}}]}\n\n'   # then the line drops
+    with pytest.raises(StreamFailed):
+        await collect(provider(lambda request: httpx.Response(200, content=body)))
+
+
+@pytest.mark.asyncio
+async def test_a_cap_spent_on_thinking_is_an_error_for_an_api_model_only():
+    body = sse(chunk({"reasoning_content": "hmm " * 50}, "length"))
+    with pytest.raises(StreamFailed, match="reply cap"):
+        await collect(provider(lambda request: httpx.Response(200, content=body)))
+    local = provider(lambda request: httpx.Response(200, content=body))
+    local.paid = False                                          # llama-server's one-token warm-up
+    assert LlamaCppProvider.paid is False
+    assert [e.kind for e in await collect(local)] == ["done"]
+
+
+@pytest.mark.asyncio
+async def test_a_key_across_the_error_cut_is_still_redacted():
+    key = "test-key-0123456789abcdef"
+    p = provider(lambda request: httpx.Response(401, text="x" * 290 + key), key=key)
+    with pytest.raises(ProviderError) as err:
+        await collect(p)
+    assert "test-key-0" not in str(err.value) and "[secret]" in str(err.value)
+
+
+@pytest.mark.asyncio
+async def test_usage_sent_after_a_failed_finish_still_reaches_the_bill():
+    body = sse(chunk({"reasoning_content": "hmm"}, "length"), {"choices": [], "usage": {"prompt_tokens": 5, "completion_tokens": 7200}})
+    events = []
+    with pytest.raises(StreamFailed):
+        async for event in provider(lambda request: httpx.Response(200, content=body)).complete(
+            ModelRequest(role="chat", messages=({"role": "user", "content": "hi"},)), model="m"
+        ):
+            events.append(event)
+    assert [e.kind for e in events] == ["usage"] and events[0].usage.completion_tokens == 7200

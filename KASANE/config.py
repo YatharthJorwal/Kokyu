@@ -137,6 +137,9 @@ class RoleConfig:
     local_only: bool = True
     max_tokens: int | None = None
     temperature: float | None = None
+    # API calls only: extra reply cap when the model may think (effort set, or the
+    # catalog tags it a reasoner). Thinking is billed as output (D-058).
+    reasoning_tokens: int | None = None
 
 
 @dataclass(frozen=True)
@@ -632,10 +635,10 @@ def _normalize_roles(raw: Mapping[str, Any], never_escalate: tuple[str, ...]) ->
         "classifier": RoleConfig(chain=("local_ollama",), local_only=True, max_tokens=300),
         "embed": RoleConfig(chain=("local_ollama",), local_only=True),
         "memory_writer": RoleConfig(chain=("local_ollama",), local_only=True, max_tokens=800),
-        "mind": RoleConfig(chain=("airouter", "local_ollama"), local_only=False, max_tokens=2000),
+        "mind": RoleConfig(chain=("airouter", "local_ollama"), local_only=False, max_tokens=2000, reasoning_tokens=6000),
         # K1-00c (D-025): the conversation itself, on the thread's chosen model.
         # The chain only names the providers a user may pick; there is no fallback.
-        "chat": RoleConfig(chain=("airouter", "local_ollama"), local_only=False, max_tokens=1200),
+        "chat": RoleConfig(chain=("airouter", "local_ollama"), local_only=False, max_tokens=1200, reasoning_tokens=6000),
     }
     out: dict[str, RoleConfig] = {}
     for name, default in defaults.items():

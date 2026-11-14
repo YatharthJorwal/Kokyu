@@ -146,3 +146,28 @@ def test_price_of_unknown_model_is_zero(tmp_path):
     catalog = ModelCatalog("https://api.example/v1", tmp_path / "none.json")
     assert catalog.price("nope") == (0.0, 0.0)
     assert catalog.context_length("nope") == 0
+
+
+@pytest.mark.asyncio
+async def test_a_missing_price_is_not_a_price_of_zero(tmp_path):
+    # D-058: the cap cannot be kept on a cost it cannot see.
+    payload = {"data": [
+        {"id": "a/free", "pricing": {"prompt": "0", "completion": "0"}},
+        {"id": "a/unpriced"},
+    ]}
+    catalog = _catalog(tmp_path, _client(payload))
+    await catalog.refresh()
+    assert catalog.priced("a/free") and not catalog.priced("a/unpriced") and not catalog.priced("a/unknown")
+    reloaded = ModelCatalog("https://api.example/v1", catalog.cache_path)
+    assert reloaded.load_cache() and not reloaded.priced("a/unpriced")    # the cache keeps the difference
+
+
+@pytest.mark.asyncio
+async def test_a_cache_that_cannot_be_written_is_not_a_failed_refresh(tmp_path, monkeypatch):
+    catalog = _catalog(tmp_path, _client())
+
+    def read_only():
+        raise OSError("read-only folder")
+
+    monkeypatch.setattr(catalog, "_save_cache", read_only)
+    assert await catalog.refresh() is True and catalog.last_error is None

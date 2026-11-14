@@ -20,6 +20,11 @@ class ProviderError(RouterError):
     """A provider was reached but failed (HTTP error, malformed stream, 429)."""
 
 
+class StreamFailed(ProviderError):
+    """The provider accepted the request (HTTP 200) and then failed: it may have
+    billed the prompt and what it generated, so the call is billed (D-058)."""
+
+
 class DiscoveryError(RouterError):
     """The model catalog could not be read and there was no usable cache."""
 
