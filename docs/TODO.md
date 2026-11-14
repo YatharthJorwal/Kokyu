@@ -95,7 +95,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K1-00d Normal app window (replace the 340×480 widget window), CSP locked down, Temp Chat flag per thread (FR-MEM-5) (3865ccd; Temp Chat per thread landed in K1-00; the window itself not yet looked at)
 - [x] K1-01 Spike: Qwen3.5-35B-A3B Q4 on llama.cpp with experts on CPU: VRAM, RAM, tokens/s; record numbers. Done with the user's **Qwen3.6**-35B-A3B, and extended into the `llamacpp` provider plus presets so it is the default chat model (D-051) (e05154e)
 - [x] K1-01b Warm the default chat model at kernel start (load `llama-server`, read the system prompt once) so the first message does not wait 75 to 110 s (D-052; the "loading model" UI status moved to K1-10) (bd1de6d)
-- [ ] K1-02 Introduce React shell around the existing engine; Zustand store fed by WebSocket events (D-013)
+- [x] K1-02 Introduce React shell around the existing engine; Zustand store fed by WebSocket events (D-013). Chat window now; the avatar stays on widget.html until K2 (D-053) (2387abf)
 - [ ] K1-03 Sidebar: waifu list, history (grouped, search, rename, delete), Settings entry (FR-C-6)
 - [ ] K1-04 Thread view with streaming, Markdown, copy/regenerate, Stop (FR-C-1, 2, 8, 9, 10)
 - [ ] K1-05 Input box and `＋` tray with disabled stubs (FR-C-3, 4); port the heart animation (FR-C-5)
