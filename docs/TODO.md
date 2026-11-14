@@ -99,7 +99,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K1-03 Sidebar: waifu list, history (grouped, search, rename, delete), Settings entry (FR-C-6) (9acb83f; Settings opens nothing until K1-13)
 - [x] K1-04 Thread view with streaming, Markdown, copy/regenerate, Stop (FR-C-1, 2, 8, 9, 10) (ba4669b; token counts per message still missing: K1-04b)
 - [ ] K1-04b Record token counts per message where the backend reports them (FR-C-10)
-- [ ] K1-05 Input box and `＋` tray with disabled stubs (FR-C-3, 4); port the heart animation (FR-C-5)
+- [x] K1-05 Input box and `＋` tray with disabled stubs (FR-C-3, 4); port the heart animation (FR-C-5) (2d5c6c2; Upload file already live)
 - [ ] K1-05b Screen companions: Task Guide and OCR watch toggles in the `＋` tray and Settings, status chip with one-click stop, refuse to start without a local vision model (FR-SC-1..5, D-048)
 - [ ] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2)
 - [x] K1-07a Ollama/llama.cpp/API discovery for the picker (FR-M-3; D-054) (c2b1832)
