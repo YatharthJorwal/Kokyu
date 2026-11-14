@@ -54,6 +54,10 @@ export interface ChatState {
   streamRaw: string;
   notice: Notice | null;
   companion: Companion | null;
+  /** Every installed companion, for the sidebar (K1-03, FR-C-6). */
+  roster: Companion[];
+  /** The sidebar's search results (K1-03); null when not searching. */
+  search: { query: string; threads: ThreadInfo[] } | null;
   /** The last line the user sent, for Retry. */
   lastUserText: string | null;
   /** What a thread with no model or effort of its own uses (from the kernel's hello). */
@@ -87,6 +91,8 @@ export const initialState: ChatState = {
   streamRaw: "",
   notice: null,
   companion: null,
+  roster: [],
+  search: null,
   lastUserText: null,
   defaults: null,
   models: null,
@@ -186,10 +192,14 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
     }
     case "thread_list": {
       const data = frame.data as { query: string; threads: ThreadInfo[] };
-      if (data.query.trim()) return state; // search results belong to the sidebar's search (K1-03)
+      const threads = data.threads.filter((t) => !t.archived);
+      if (data.query.trim()) return { ...state, search: { query: data.query, threads } };
       // The list also carries the open thread's newest title (set from the first message).
       const fresh = state.thread ? data.threads.find((t) => t.id === state.thread?.id) : undefined;
-      return { ...state, thread: fresh ?? state.thread, threads: data.threads.filter((t) => !t.archived) };
+      // Open search results follow renames and deletes too.
+      const byId = new Map(threads.map((t) => [t.id, t]));
+      const search = state.search && { ...state.search, threads: state.search.threads.flatMap((t) => byId.get(t.id) ?? []) };
+      return { ...state, thread: fresh ?? state.thread, threads, search };
     }
     case "thread_updated": {
       const { thread } = frame.data as { thread: ThreadInfo };
@@ -262,9 +272,9 @@ function reduceLegacy(state: ChatState, msg: LegacyMessage): ChatState {
   switch (msg.type) {
     case "waifu_state": {
       const active = msg.active as string | null;
-      const roster = (msg.waifus as { id: string; name: string }[] | undefined) ?? [];
+      const roster = ((msg.waifus as Companion[] | undefined) ?? []).map((w) => ({ id: w.id, name: w.name }));
       const found = roster.find((w) => w.id === active);
-      return { ...state, companion: found ? { id: found.id, name: found.name } : null };
+      return { ...state, roster, companion: found ?? null };
     }
     case "surface_status":
       return { ...state, role: msg.role === "observer" ? "observer" : "driver" };

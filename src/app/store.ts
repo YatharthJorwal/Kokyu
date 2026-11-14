@@ -75,6 +75,28 @@ export const actions = {
     socket.send("thread_open", { id });
   },
 
+  // ── the sidebar (K1-03) ─────────────────────────────────────────────
+
+  /** Full-text search over titles and messages; an empty query shows the history again. */
+  searchThreads(query: string): void {
+    if (query.trim()) socket.send("thread_search", { query: query.trim() });
+  },
+
+  renameThread(id: string, title: string): void {
+    if (title.trim()) socket.send("thread_rename", { id, title: title.trim() });
+  },
+
+  deleteThread(id: string): void {
+    if (useChat.getState().turn !== "idle") return;
+    socket.send("thread_delete", { id });
+  },
+
+  /** Persona and voice only; model, memory and tools stay (FR-W-3). Mid-reply it waits for the reply. */
+  switchWaifu(id: string): void {
+    if (useChat.getState().companion?.id === id) return;
+    socket.sendLegacy({ type: "switch_waifu", id });
+  },
+
   // ── the model chip (K1-10) ──────────────────────────────────────────
 
   /** Opens the picker and asks the kernel what can be picked (fresh every time:
