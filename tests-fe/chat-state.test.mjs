@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { canRegenerate, canSend, initialState, reduce, visibleStream } from "../src/app/chat-state.ts";
+import { canRegenerate, canSend, initialState, lastExchange, reduce, visibleStream } from "../src/app/chat-state.ts";
 import { backoffMs, dispatchRaw } from "../src/net/kernel.ts";
 
 // K1-02: the chat window's behaviour, driven by kernel frames as they arrive.
@@ -120,6 +120,27 @@ test("a failed model is shown with Retry and Switch model, never silently swappe
   s = reduce(s, frame("turn_start", { user_text: "hi" }));
   s = reduce(s, frame("turn_done", { text: "hello again", stopped: false }));
   assert.deepEqual(s.messages.map((m) => [m.role, m.text]), [["user", "hi"], ["assistant", "hello again"]]);
+});
+
+test("Regenerate skips a trailing divider and puts the old reply back when nothing comes (review findings)", () => {
+  const opened = run(
+    online,
+    frame("thread_opened", {
+      thread: thread("t1"),
+      messages: [stored(1, "user", "hi"), stored(2, "assistant", "hello"), stored(3, "divider", "Switched to Luna")],
+    }),
+  );
+  assert.deepEqual(lastExchange(opened.messages), [0, 1]);
+  assert.equal(lastExchange([]), null);
+
+  let s = reduce(opened, { kind: "regenerating" });
+  assert.deepEqual(s.messages.map((m) => [m.role, m.text]), [["divider", "Switched to Luna"], ["user", "hi"]]);
+  s = reduce(s, frame("error", { code: "vision_unavailable", message: "No vision", reply_to: null }));
+  assert.equal(s.turn, "thinking"); // not about this turn
+  s = reduce(s, frame("turn_start", { user_text: "hi" }));
+  s = reduce(s, frame("turn_done", { text: "", stopped: true })); // stopped before a word
+  assert.equal(s.messages, opened.messages);
+  assert.equal(s.turn, "idle");
 });
 
 test("turn_running while busy does not end the turn; other errors show a notice", () => {

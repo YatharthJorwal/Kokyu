@@ -631,15 +631,16 @@ async def _send_speak(websocket: WebSocket, text: str) -> None:
     await _send_audio(websocket, prepared.display, await _synthesize_for(websocket, prepared.spoken))
 
 
-async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp: bool = False, speaker: str | None = None) -> None:
+async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp: bool = False, speaker: str | None = None) -> int | None:
     """Best-effort -- a DB hiccup here shouldn't take down the turn itself
     (turn_end still needs to reach the frontend either way), same
     degrade-gracefully pattern recall.py/forget.py already use for the
     same underlying DB."""
     try:
-        await asyncio.to_thread(partial(store.add_transcript_turn, user_text, assistant_text, temp=temp, speaker=speaker))
+        return await asyncio.to_thread(partial(store.add_transcript_turn, user_text, assistant_text, temp=temp, speaker=speaker))
     except MemoryUnavailableError as exc:
         print(f"[yuri] transcript log: write failed, skipping: {exc}", file=sys.stderr)
+        return None
 
 
 def _is_local_ref(model_ref: str | None) -> bool:
@@ -651,9 +652,9 @@ def _is_local_ref(model_ref: str | None) -> bool:
         return False
 
 
-async def _drop_replaced_transcript_turn_safely(user_text: str) -> None:
+async def _drop_transcript_turn_safely(row_id: int) -> None:
     try:
-        await asyncio.to_thread(store.drop_replaced_transcript_turn, user_text)
+        await asyncio.to_thread(store.drop_transcript_turn, row_id)
     except MemoryUnavailableError as exc:
         print(f"[kokyu] transcript log: could not drop the replaced turn: {exc}", file=sys.stderr)
 
@@ -755,7 +756,7 @@ async def _run_turn(
     user_text: str,
     temp_mode: bool = False,
     temp_turn_flags: list[bool] | None = None,
-    on_finished: "Callable[[str, str, bool], Awaitable[None]] | None" = None,
+    on_finished: "Callable[[str, str, bool, int | None], Awaitable[None]] | None" = None,
     thread_id: str | None = None,
     model_ref: str | None = None,
     effort: str | None = None,
@@ -1046,7 +1047,7 @@ async def _run_turn(
         # just on normal completion) so the log panel matches reality even
         # for a stopped-mid-sentence turn, same reasoning as the
         # history.append() above.
-        await _log_transcript_turn_safely(user_text, " ".join(spoken_parts), temp_mode, speaker=_speaker_of(websocket))
+        log_id = await _log_transcript_turn_safely(user_text, " ".join(spoken_parts), temp_mode, speaker=_speaker_of(websocket))
         # K1-00: the thread store records the exchange (user line, reply text, and
         # whether Stop cut it off, FR-C-2). Same "never fail the turn" rule as the
         # transcript log right above.
@@ -1057,7 +1058,7 @@ async def _run_turn(
         if on_finished is not None:
             stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
             try:
-                await on_finished(user_text, " ".join(reply_parts), stopped)
+                await on_finished(user_text, " ".join(reply_parts), stopped, log_id)
             except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                 print(f"[kokyu] could not save the exchange to the thread: {exc}", file=sys.stderr)
         with contextlib.suppress(Exception):
@@ -1493,13 +1494,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             "effort": effort or CONFIG.chat.default_effort,
         }
 
-    def _saver() -> "Callable[[str, str, bool], Awaitable[None]] | None":
+    def _saver() -> "Callable[[str, str, bool, int | None], Awaitable[None]] | None":
         """Binds the turn to the thread it started in."""
         thread = current_thread
         if thread is None:
             return None
 
-        async def _save(user_text: str, reply: str, stopped: bool) -> None:
+        async def _save(user_text: str, reply: str, stopped: bool, log_id: int | None = None) -> None:
             await manager.record_exchange(
                 thread.id,
                 user_text,
@@ -1508,24 +1509,31 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 model_ref=thread.model_ref or CONFIG.chat.default_model_ref,
                 effort=thread.effort or CONFIG.chat.default_effort,
                 stopped=stopped,
+                log_id=log_id,
             )
             await _send_thread_list(websocket)
 
         return _save
 
-    def _replacing(old_ids: list[int]) -> "Callable[[str, str, bool], Awaitable[None]] | None":
+    def _replacing(old_ids: list[int], old_log_id: int | None) -> "Callable[[str, str, bool, int | None], Awaitable[None]] | None":
         """Regenerate's saver: the old exchange gives way only once a new reply exists,
         so a failure or a Stop before the first word loses nothing (K1-04)."""
         save = _saver()
-        if save is None:
+        thread = current_thread
+        if save is None or thread is None:
             return None
 
-        async def _replace(user_text: str, reply: str, stopped: bool) -> None:
+        async def _replace(user_text: str, reply: str, stopped: bool, log_id: int | None = None) -> None:
             if not reply:
+                # The thread keeps the old exchange, so the model's context gets it back too.
+                history[:] = await manager.history(thread, _system_message(_waifu_of(websocket)))
+                temp_turn_flags[:] = [temp_mode] * (len(history) - 1)
+                unprompted_msgs.clear()
                 return
             await manager.delete_messages(old_ids)
-            await _drop_replaced_transcript_turn_safely(user_text)
-            await save(user_text, reply, stopped)
+            if old_log_id is not None:
+                await _drop_transcript_turn_safely(old_log_id)
+            await save(user_text, reply, stopped, log_id)
 
         return _replace
 
@@ -2103,14 +2111,14 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 if found is None:
                     await websocket.send_json(protocol.error_frame("bad_message", "There is no reply to regenerate."))
                     continue
-                again, old_ids = found
+                again, old_ids, old_log_id = found
                 # The history is rebuilt from the thread without the old exchange, so a
                 # remark or a divider after it cannot leave it in the model's context.
                 history[:] = await manager.history(current_thread, _system_message(_waifu_of(websocket)), exclude=old_ids)
                 temp_turn_flags[:] = [temp_mode] * (len(history) - 1)
                 unprompted_msgs.clear()
                 current_turn_task = _start_turn(
-                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
+                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids, old_log_id), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
                 )
                 continue
 

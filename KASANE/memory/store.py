@@ -432,7 +432,7 @@ def retire_episodes(episode_ids: list[int], marker: int = DECAYED) -> None:
 
 
 @_locked
-def add_transcript_turn(user_text: str, assistant_text: str, *, temp: bool = False, speaker: str | None = None) -> None:
+def add_transcript_turn(user_text: str, assistant_text: str, *, temp: bool = False, speaker: str | None = None) -> int | None:
     """One row per turn. It is both the user's reviewable log and the durable
     buffer the writer pass reads. `temp=True` (Temp Chat) still shows in the log
     but is never read by the writer, so a temporary chat leaves no memory. A turn
@@ -443,13 +443,14 @@ def add_transcript_turn(user_text: str, assistant_text: str, *, temp: bool = Fal
     user_text = user_text.strip()
     assistant_text = assistant_text.strip()
     if not user_text and not assistant_text:
-        return
+        return None
     conn = db.get_connection()
-    conn.execute(
+    cur = conn.execute(
         "INSERT INTO transcript_log (user_text, assistant_text, temp, speaker) VALUES (?, ?, ?, ?)",
         (user_text, assistant_text, int(temp), (speaker or "").strip() or None),
     )
     db.commit(conn)
+    return cur.lastrowid
 
 
 @_locked
@@ -481,18 +482,14 @@ def get_transcript_after(after_id: int, limit: int | None = None) -> list[dict[s
 
 
 @_locked
-def drop_replaced_transcript_turn(user_text: str) -> None:
+def drop_transcript_turn(row_id: int) -> None:
     """Regenerate (K1-04): the turn a new reply replaced leaves the log before the
-    writer reads it, so the rejected reply never becomes memory. The newest row with
-    this user line is the new turn; the one before it is the replaced one.
+    writer reads it, so the rejected reply never becomes memory. By row id: the same
+    words can be another turn, in this thread or another.
     shortcut: a row the writer already read stays remembered; fine until memory gets an undo."""
     checkpoint = int(get_meta("writer_checkpoint_id", "0") or 0)
     conn = db.get_connection()
-    conn.execute(
-        "DELETE FROM transcript_log WHERE id = (SELECT id FROM transcript_log"
-        " WHERE user_text = ? AND id > ? ORDER BY id DESC LIMIT 1 OFFSET 1)",
-        (user_text.strip(), checkpoint),
-    )
+    conn.execute("DELETE FROM transcript_log WHERE id = ? AND id > ?", (row_id, checkpoint))
     db.commit(conn)
 
 

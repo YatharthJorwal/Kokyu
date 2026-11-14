@@ -55,6 +55,9 @@ export interface ChatState {
   streamRaw: string;
   notice: Notice | null;
   companion: Companion | null;
+  /** The thread as it was before a Regenerate; it comes back if no new reply does
+   * (the kernel keeps the old exchange then). */
+  beforeRegenerate: ChatMessage[] | null;
   /** A switch asked for mid-reply; she takes over from the next turn (FR-S-2). */
   pendingCompanion: Companion | null;
   /** Every installed companion, for the sidebar (K1-03, FR-C-6). */
@@ -96,6 +99,7 @@ export const initialState: ChatState = {
   notice: null,
   companion: null,
   pendingCompanion: null,
+  beforeRegenerate: null,
   roster: [],
   search: null,
   defaults: null,
@@ -171,6 +175,17 @@ function forCurrentThread(state: ChatState, frame: Frame): boolean {
   return frame.thread === null || state.thread === null || frame.thread === state.thread.id;
 }
 
+/** The last exchange as the kernel's last_exchange finds it, dividers skipped: the
+ * indices of a user line and its reply, or of a failed turn's lone line. */
+export function lastExchange(messages: ChatMessage[]): number[] | null {
+  const said = messages.flatMap((m, i) => (m.role === "divider" ? [] : [i]));
+  const last = said[said.length - 1];
+  if (last === undefined) return null;
+  if (messages[last].role === "user") return [last];
+  const before = said[said.length - 2];
+  return before !== undefined && messages[before].role === "user" ? [before, last] : null;
+}
+
 function markLastUser(messages: ChatMessage[], patch: Partial<ChatMessage>): ChatMessage[] {
   for (let i = messages.length - 1; i >= 0; i -= 1) {
     if (messages[i].role === "user") {
@@ -196,6 +211,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         thread: data.thread,
         threads: upsertThread(state.threads, data.thread),
         messages: data.messages.map(fromStored),
+        beforeRegenerate: null,
         streamRaw: "",
         notice: null,
       };
@@ -248,6 +264,10 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       if (!forCurrentThread(state, frame)) return state;
       const { text, stopped } = frame.data as { text: string; stopped: boolean };
       const reply = text || visibleStream(state);
+      // A Regenerate that brought nothing back: the kernel kept the old exchange, so does the view.
+      if (!reply && state.beforeRegenerate) {
+        return { ...state, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle", streamRaw: "" };
+      }
       const messages = reply
         ? [
             ...state.messages,
@@ -260,7 +280,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
             },
           ]
         : state.messages;
-      return { ...state, messages, turn: "idle", streamRaw: "" };
+      return { ...state, messages, beforeRegenerate: null, turn: "idle", streamRaw: "" };
     }
     case "model_list":
       return { ...state, models: frame.data as ModelListData };
@@ -272,12 +292,17 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       const data = frame.data as { code: ErrorCode; message: string; actions?: ("retry" | "switch_model")[] };
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [] };
       const failedTurn = data.code === "model_blocked" || data.code === "model_failed";
+      // A failed turn still ends with turn_done; turn_running and a screen-companion
+      // refusal are not about the turn at all. Anything else refused the send itself.
+      const keepsTurn = failedTurn || data.code === "turn_running" || data.code === "vision_unavailable";
+      if (!keepsTurn && state.beforeRegenerate) {
+        return { ...state, notice, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle" };
+      }
       return {
         ...state,
         notice,
         messages: failedTurn ? markLastUser(state.messages, { failed: true, pending: false }) : state.messages,
-        // A refused send never started a turn; a failed turn still ends with turn_done.
-        turn: data.code === "turn_running" ? state.turn : failedTurn ? state.turn : "idle",
+        turn: keepsTurn ? state.turn : "idle",
       };
     }
     default:
@@ -324,7 +349,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // and re-sends its model status on reconnect.
       return event.status === "online"
         ? next
-        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, pendingCompanion: null };
+        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, pendingCompanion: null, beforeRegenerate: null };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };
@@ -340,13 +365,14 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
         pickerOpen: false,
       };
     case "regenerating": {
-      // The kernel runs the last exchange again (Regenerate, or Retry after a
-      // failure): the reply goes, the user line waits for turn_start to confirm it.
-      let messages = state.messages;
-      if (messages[messages.length - 1]?.role === "assistant") messages = messages.slice(0, -1);
-      const last = messages[messages.length - 1];
-      if (last?.role === "user") messages = [...messages.slice(0, -1), { ...last, pending: true, failed: false }];
-      return { ...state, messages, notice: null, turn: "thinking", streamRaw: "" };
+      // The kernel runs the last exchange again (Regenerate, or Retry after a failure),
+      // skipping dividers. The exchange leaves; its line goes last, where the store will
+      // have it, and waits for turn_start. The old view is kept in case nothing comes back.
+      const drop = lastExchange(state.messages);
+      if (!drop) return state;
+      const line = { ...state.messages[drop[0]], key: localKey(), pending: true, failed: false };
+      const messages = [...state.messages.filter((_, i) => !drop.includes(i)), line];
+      return { ...state, messages, beforeRegenerate: state.messages, notice: null, turn: "thinking", streamRaw: "" };
     }
     case "dismiss_notice":
       return { ...state, notice: null };

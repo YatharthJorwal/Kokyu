@@ -4,14 +4,14 @@
 
 import { useEffect, useRef } from "react";
 
-import { canRegenerate, visibleStream, type ChatMessage } from "../chat-state";
+import { canRegenerate, lastExchange, visibleStream, type ChatMessage } from "../chat-state";
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
 import { WakingCard } from "./WakingCard";
 
-function Message({ m, last }: { m: ChatMessage; last: boolean }) {
-  const regenerable = useChat((s) => last && m.role === "assistant" && canRegenerate(s));
+function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
+  const regenerable = useChat((s) => lastReply && canRegenerate(s));
   if (m.role === "divider") {
     return (
       <div className="divider" role="separator">
@@ -47,6 +47,9 @@ export function ThreadView() {
   const companion = useChat((s) => s.companion?.name ?? null);
   const modelState = useChat((s) => s.modelStatus?.state ?? null);
   const end = useRef<HTMLDivElement>(null);
+  // Regenerate sits on the reply the kernel would replace, even with a divider after it.
+  const exchange = lastExchange(messages);
+  const lastReplyKey = exchange && exchange.length === 2 ? messages[exchange[1]].key : null;
   // Whether the view is pinned to the newest message. A model load finishing
   // must not yank someone who scrolled up to read history.
   const atBottom = useRef(true);
@@ -74,8 +77,8 @@ export function ThreadView() {
           <p className="muted">Your conversations are saved on this PC.</p>
         </div>
       ) : null}
-      {messages.map((m, i) => (
-        <Message key={m.key} m={m} last={i === messages.length - 1} />
+      {messages.map((m) => (
+        <Message key={m.key} m={m} lastReply={m.key === lastReplyKey} />
       ))}
       <WakingCard />
       {turn !== "idle" ? (
