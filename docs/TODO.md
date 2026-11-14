@@ -101,7 +101,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-04b Record token counts per message where the backend reports them (FR-C-10)
 - [x] K1-05 Input box and `＋` tray with disabled stubs (FR-C-3, 4); port the heart animation (FR-C-5) (2d5c6c2; Upload file already live)
 - [x] K1-05b Screen companions: Task Guide and OCR watch toggles in the `＋` tray and Settings, status chip with one-click stop, refuse to start without a local vision model (FR-SC-1..5, D-048) (9d7ee4d; the Settings switches land with K1-13)
-- [ ] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2)
+- [x] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2) (5097f37)
 - [x] K1-07a Ollama/llama.cpp/API discovery for the picker (FR-M-3; D-054) (c2b1832)
 - [ ] K1-07b Capability registry (FR-M-10): where it lives (`models.yaml` per SPEC, or `config.yaml` as D-054 proposes) needs the user's answer; lands with the effort slider (K1-11)
 - [ ] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6)
