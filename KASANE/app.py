@@ -639,6 +639,13 @@ async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp:
         print(f"[yuri] transcript log: write failed, skipping: {exc}", file=sys.stderr)
 
 
+async def _drop_replaced_transcript_turn_safely(user_text: str) -> None:
+    try:
+        await asyncio.to_thread(store.drop_replaced_transcript_turn, user_text)
+    except MemoryUnavailableError as exc:
+        print(f"[kokyu] transcript log: could not drop the replaced turn: {exc}", file=sys.stderr)
+
+
 async def _get_transcript_log_safely() -> list[dict[str, str]]:
     try:
         return await asyncio.to_thread(store.get_transcript_log)
@@ -1481,6 +1488,22 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
         return _save
 
+    def _replacing(old_ids: list[int]) -> "Callable[[str, str, bool], Awaitable[None]] | None":
+        """Regenerate's saver: the old exchange gives way only once a new reply exists,
+        so a failure or a Stop before the first word loses nothing (K1-04)."""
+        save = _saver()
+        if save is None:
+            return None
+
+        async def _replace(user_text: str, reply: str, stopped: bool) -> None:
+            if not reply:
+                return
+            await manager.delete_messages(old_ids)
+            await _drop_replaced_transcript_turn_safely(user_text)
+            await save(user_text, reply, stopped)
+
+        return _replace
+
     # K1-10: every window hears about model loads (the "waking up" card).
     async def _push_model_status(status: dict[str, Any]) -> None:
         await websocket.send_json(protocol.frame("model_status", status))
@@ -2022,8 +2045,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
             if msg_type == "regenerate":
                 # K1-04 (FR-C-9): Regenerate the last reply, or Retry a failed turn. The
-                # last exchange leaves the thread and the history first, so the user
-                # line is never stored twice.
+                # new reply replaces the last exchange, so the user line is stored once.
                 if current_turn_task is not None and not current_turn_task.done():
                     await websocket.send_json(
                         protocol.error_frame("turn_running", "Wait for the reply to finish, or press Stop.")
@@ -2034,18 +2056,18 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                         protocol.error_frame("threads_unavailable", "Conversation history is unavailable right now.")
                     )
                     continue
-                popped = await manager.pop_last_exchange(current_thread.id)
-                if popped is None:
+                found = await manager.last_exchange(current_thread.id)
+                if found is None:
                     await websocket.send_json(protocol.error_frame("bad_message", "There is no reply to regenerate."))
                     continue
-                again, had_reply = popped
-                # A failed turn already left the history; a finished one is still its tail.
-                if had_reply and len(history) > 2 and history[-1]["role"] == "assistant" and history[-2]["content"] == again:
-                    del history[-2:]
-                    if temp_turn_flags is not None:
-                        del temp_turn_flags[-2:]
+                again, old_ids = found
+                # The history is rebuilt from the thread without the old exchange, so a
+                # remark or a divider after it cannot leave it in the model's context.
+                history[:] = await manager.history(current_thread, _system_message(_waifu_of(websocket)), exclude=old_ids)
+                temp_turn_flags[:] = [temp_mode] * (len(history) - 1)
+                unprompted_msgs.clear()
                 current_turn_task = asyncio.create_task(
-                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), **_thread_model())
+                    _run_turn(websocket, history, again, temp_mode, temp_turn_flags, on_finished=_replacing(old_ids), thread_id=_thread_id(), **_thread_model())
                 )
                 continue
 

@@ -298,6 +298,17 @@ def test_add_transcript_turn_keeps_real_user_text_with_blank_reply(memory_db):
     assert turns[0]["assistant"] == ""
 
 
+def test_regenerate_drops_the_replaced_turn_but_not_what_the_writer_read(memory_db):
+    store.add_transcript_turn("hi", "old reply")
+    store.add_transcript_turn("hi", "new reply")
+    store.drop_replaced_transcript_turn("hi")
+    assert [t["assistant"] for t in store.get_transcript_log()] == ["new reply"]
+    store.set_meta("writer_checkpoint_id", "99")              # everything already read
+    store.add_transcript_turn("hi", "newest")
+    store.drop_replaced_transcript_turn("hi")
+    assert [t["assistant"] for t in store.get_transcript_log()] == ["new reply", "newest"]
+
+
 def test_clear_transcript_log(memory_db):
     store.add_transcript_turn("hello", "hi")
     store.add_transcript_turn("bye", "bye bye")

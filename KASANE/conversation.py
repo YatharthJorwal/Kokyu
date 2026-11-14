@@ -18,6 +18,7 @@ from __future__ import annotations
 import asyncio
 import logging
 from dataclasses import dataclass
+from collections.abc import Collection
 from typing import Any
 
 from threads import Message, Thread, ThreadStore
@@ -137,9 +138,10 @@ class ConversationManager:
     async def messages(self, thread_id: str) -> list[Message]:
         return await self._run(self.store.messages, thread_id)
 
-    async def history(self, thread: Thread, system_message: str) -> list[dict[str, str]]:
-        recent = await self._run(self.store.messages, thread.id, limit=self.history_messages * 2)
-        return history_from(recent, system_message, self.history_messages)
+    async def history(self, thread: Thread, system_message: str, *, exclude: Collection[int] = ()) -> list[dict[str, str]]:
+        """`exclude`: message ids left out (Regenerate's old exchange)."""
+        recent = await self._run(self.store.messages, thread.id, limit=self.history_messages * 2 + len(exclude))
+        return history_from([m for m in recent if m.id not in exclude], system_message, self.history_messages)
 
     # -- recording -------------------------------------------------------------
 
@@ -172,20 +174,24 @@ class ConversationManager:
             )
         return user, reply
 
-    async def pop_last_exchange(self, thread_id: str) -> tuple[str, bool] | None:
-        """Removes the thread's last exchange so it can run again (K1-04: Regenerate,
-        and Retry after a failure). Returns the user line and whether a reply went
-        with it, or None when the thread does not end in an exchange. A failed turn
-        left only its user line; a finished one, the line and the reply."""
-        last = await self._run(self.store.messages, thread_id, limit=2)
-        if last and last[-1].role == "user":
-            drop = [last[-1]]
-        elif len(last) == 2 and last[-1].role == "assistant" and last[0].role == "user":
-            drop = last
+    async def last_exchange(self, thread_id: str) -> tuple[str, list[int]] | None:
+        """The thread's last exchange, for Regenerate and Retry (K1-04): its user line
+        and the message ids a new reply replaces (the line, and the reply if one came).
+        A failed turn left only the line. Dividers after it are skipped: a companion
+        switch does not end the exchange. None when the thread does not end in one."""
+        # A few dozen messages cover any run of dividers a user could click together.
+        recent = await self._run(self.store.messages, thread_id, limit=50)
+        tail = [m for m in recent if m.role != "divider"][-2:]
+        if tail and tail[-1].role == "user":
+            drop = tail[-1:]
+        elif len(tail) == 2 and tail[0].role == "user" and tail[1].role == "assistant":
+            drop = tail
         else:
             return None
-        await self._run(self.store.delete_messages, [m.id for m in drop])
-        return drop[0].content, len(drop) == 2
+        return drop[0].content, [m.id for m in drop]
+
+    async def delete_messages(self, ids: list[int]) -> None:
+        await self._run(self.store.delete_messages, ids)
 
     async def record_companion_change(self, thread_id: str, speaker: Speaker) -> Message:
         """FR-S-2: a divider marks where another companion took over; the thread

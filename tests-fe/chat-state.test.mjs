@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { canSend, initialState, reduce, visibleStream } from "../src/app/chat-state.ts";
+import { canRegenerate, canSend, initialState, reduce, visibleStream } from "../src/app/chat-state.ts";
 import { backoffMs, dispatchRaw } from "../src/net/kernel.ts";
 
 // K1-02: the chat window's behaviour, driven by kernel frames as they arrive.
@@ -158,6 +158,17 @@ test("frames for another thread are ignored; the list stays sorted and hides arc
   // search results are not the history list
   const searched = reduce(s, frame("thread_list", { query: "tea", threads: [] }, null));
   assert.equal(searched.threads.length, 2);
+});
+
+test("search hits older than the history list stay; Regenerate needs a saved thread (review findings)", () => {
+  let s = run(online, frame("thread_list", { query: "tea", threads: [thread("ancient", { title: "tea", updated_at: 0 })] }, null));
+  s = reduce(s, frame("thread_list", { query: "", threads: [thread("t1", { updated_at: 5 })] }, null));
+  assert.deepEqual(s.search.threads.map((t) => t.id), ["ancient"]);
+  // no thread store: the kernel would refuse, so the button is not offered
+  s = run(online, { kind: "sent", text: "hi" }, frame("turn_done", { text: "hey", stopped: false }, null));
+  assert.equal(canRegenerate(s), false);
+  s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [stored(1, "user", "hi"), stored(2, "assistant", "hey")] }));
+  assert.equal(canRegenerate(s), true);
 });
 
 test("companion name, observer role and a lost connection", () => {

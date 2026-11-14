@@ -128,6 +128,11 @@ export function canSend(state: ChatState): boolean {
   return state.connection === "online" && state.role === "driver" && state.turn === "idle";
 }
 
+/** Regenerate and Retry need a saved thread with a line in it (the kernel replaces its last exchange). */
+export function canRegenerate(state: ChatState): boolean {
+  return canSend(state) && state.thread !== null && state.messages.some((m) => m.role === "user");
+}
+
 /** Switching models waits for the reply (the kernel refuses it mid-turn). */
 export function canPickModel(state: ChatState): boolean {
   return canSend(state);
@@ -198,9 +203,14 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       if (data.query.trim()) return { ...state, search: { query: data.query, threads } };
       // The list also carries the open thread's newest title (set from the first message).
       const fresh = state.thread ? data.threads.find((t) => t.id === state.thread?.id) : undefined;
-      // Open search results follow renames and deletes too.
+      // Open search results follow renames and deletes too. The list holds only the
+      // newest threads, so a missing hit older than all of them may still exist.
       const byId = new Map(threads.map((t) => [t.id, t]));
-      const search = state.search && { ...state.search, threads: state.search.threads.flatMap((t) => byId.get(t.id) ?? []) };
+      const oldest = Math.min(...threads.map((t) => t.updated_at));
+      const search = state.search && {
+        ...state.search,
+        threads: state.search.threads.flatMap((t) => byId.get(t.id) ?? (t.updated_at < oldest ? [t] : [])),
+      };
       return { ...state, thread: fresh ?? state.thread, threads, search };
     }
     case "thread_updated": {

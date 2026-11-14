@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
-import { canPickModel, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
+import { canPickModel, canRegenerate, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
 import { VoicePlayer, type SpeakClip } from "./voice";
 
 /** A file ready to send: an image as base64 JPEG, or a text file's content (src/file-upload.ts). */
@@ -26,6 +26,12 @@ const voice = new VoicePlayer();
 
 const TYPING_EVERY_MS = 4000;
 let lastTypingSent = 0;
+
+/** Open search results follow a rename or a delete: the kernel answers in order. */
+function researchThreads(): void {
+  const query = useChat.getState().search?.query;
+  if (query) socket.send("thread_search", { query });
+}
 
 const socket = new KernelSocket({
   onFrame: (frame) => dispatch({ kind: "frame", frame }),
@@ -76,8 +82,7 @@ export const actions = {
    * the last exchange, so the user line is not stored twice. */
   regenerate(): void {
     const state = useChat.getState();
-    if (!canSend(state) || !state.messages.some((m) => m.role === "user")) return;
-    if (!socket.send("regenerate", {})) return;
+    if (!canRegenerate(state) || !socket.send("regenerate", {})) return;
     voice.stop();
     dispatch({ kind: "regenerating" });
   },
@@ -107,16 +112,20 @@ export const actions = {
 
   renameThread(id: string, title: string): void {
     if (title.trim()) socket.send("thread_rename", { id, title: title.trim() });
+    researchThreads();
   },
 
   deleteThread(id: string): void {
     if (useChat.getState().turn !== "idle") return;
     socket.send("thread_delete", { id });
+    researchThreads();
   },
 
   /** Persona and voice only; model, memory and tools stay (FR-W-3). Mid-reply it waits for the reply. */
   switchWaifu(id: string): void {
-    if (useChat.getState().companion?.id === id) return;
+    const state = useChat.getState();
+    // Mid-reply a click back to her undoes a switch still waiting for the reply.
+    if (state.companion?.id === id && state.turn === "idle") return;
     socket.sendLegacy({ type: "switch_waifu", id });
   },
 

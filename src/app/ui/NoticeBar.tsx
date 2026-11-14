@@ -2,18 +2,19 @@
 // model shows its message with Retry and Switch model (D-025, D-050); Switch
 // model opens the model chip's picker (K1-10).
 
-import { canPickModel } from "../chat-state";
+import { canPickModel, canRegenerate } from "../chat-state";
 import { actions, useChat } from "../store";
 
 export function NoticeBar() {
   const notice = useChat((s) => s.notice);
   const canPick = useChat(canPickModel);
+  const canRetry = useChat(canRegenerate);
   if (!notice) return null;
   return (
     <div className="notice" role="alert">
       <span className="notice-text">{notice.text}</span>
       <span className="notice-actions">
-        {notice.actions.includes("retry") ? (
+        {notice.actions.includes("retry") && canRetry ? (
           <button type="button" onClick={() => actions.regenerate()}>
             Retry
           </button>

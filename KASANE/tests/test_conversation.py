@@ -56,20 +56,25 @@ async def test_exchanges_are_recorded_with_speaker_model_effort_and_stop(manager
 
 
 @pytest.mark.asyncio
-async def test_the_last_exchange_can_be_taken_back_to_run_again(manager):
-    # K1-04 (FR-C-9): Regenerate drops the line and its reply; Retry after a
-    # failure drops the lone line. Either way the line is not stored twice.
+async def test_the_last_exchange_is_found_to_run_again(manager):
+    # K1-04 (FR-C-9): Regenerate replaces the line and its reply; Retry after a
+    # failure replaces the lone line. Finding it deletes nothing.
     yuri = Speaker("yuri", "Yuri")
     t = await manager.new_thread(waifu_id="yuri")
-    assert await manager.pop_last_exchange(t.id) is None                      # nothing yet
+    assert await manager.last_exchange(t.id) is None                          # nothing yet
     await manager.record_exchange(t.id, "hi", "hey", speaker=yuri)
     await manager.record_exchange(t.id, "joke?", "Why did…", speaker=yuri)
-    assert await manager.pop_last_exchange(t.id) == ("joke?", True)
-    await manager.record_exchange(t.id, "again?", "", speaker=yuri)          # a failed turn
-    assert await manager.pop_last_exchange(t.id) == ("again?", False)
-    assert [m.content for m in await manager.messages(t.id)] == ["hi", "hey"]
+    again, ids = await manager.last_exchange(t.id)
+    assert again == "joke?" and len(ids) == 2
+    assert len(await manager.messages(t.id)) == 4                             # nothing deleted yet
     await manager.record_companion_change(t.id, Speaker("luna", "Luna"))
-    assert await manager.pop_last_exchange(t.id) is None                      # a divider ends it: nothing to redo
+    assert (await manager.last_exchange(t.id))[0] == "joke?"                  # a divider does not end it
+    await manager.delete_messages(ids)
+    await manager.record_exchange(t.id, "again?", "", speaker=yuri)          # a failed turn
+    again, ids = await manager.last_exchange(t.id)
+    assert again == "again?" and len(ids) == 1
+    history = await manager.history(await manager.open(t.id), "sys", exclude=ids)
+    assert [m["content"] for m in history[1:]] == ["hi", "hey"]
 
 
 @pytest.mark.asyncio
@@ -272,6 +277,40 @@ def test_regenerate_replaces_the_last_reply_without_repeating_the_line(kernel, m
     assert seen[1] == ["tell me something"]
     stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
     assert [(m.role, m.content) for m in stored] == [("user", "tell me something"), ("assistant", "second try")]
+
+
+def test_regenerate_after_a_companion_switch_still_replaces_the_reply(kernel):
+    # review finding: a divider after the reply must not make Regenerate refuse
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _chat(ws, "hello")
+        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        _until(ws, "thread_message")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        done, _ = _until(ws, "turn_done")
+        _until(ws, "turn_end")
+    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    assert [m.role for m in stored] == ["divider", "user", "assistant"]
+    assert stored[-1].speaker_name == "Beta" and done["data"]["text"] == stored[-1].content
+
+
+def test_a_failed_regenerate_keeps_the_old_reply(kernel, monkeypatch):
+    # review finding: the old exchange goes only once a new reply exists
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _chat(ws, "hello")
+
+        async def silent(role, messages, tools, **kwargs):
+            return
+            yield  # an async generator that says nothing
+
+        monkeypatch.setattr(app.router, "stream_with_tools", silent)
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        _until(ws, "turn_end")
+    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    assert [(m.role, m.content) for m in stored] == [("user", "hello"), ("assistant", "You said: hello.")]
 
 
 def test_regenerate_with_nothing_to_redo_is_refused(kernel):

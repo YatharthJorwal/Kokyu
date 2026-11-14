@@ -481,6 +481,22 @@ def get_transcript_after(after_id: int, limit: int | None = None) -> list[dict[s
 
 
 @_locked
+def drop_replaced_transcript_turn(user_text: str) -> None:
+    """Regenerate (K1-04): the turn a new reply replaced leaves the log before the
+    writer reads it, so the rejected reply never becomes memory. The newest row with
+    this user line is the new turn; the one before it is the replaced one.
+    shortcut: a row the writer already read stays remembered; fine until memory gets an undo."""
+    checkpoint = int(get_meta("writer_checkpoint_id", "0") or 0)
+    conn = db.get_connection()
+    conn.execute(
+        "DELETE FROM transcript_log WHERE id = (SELECT id FROM transcript_log"
+        " WHERE user_text = ? AND id > ? ORDER BY id DESC LIMIT 1 OFFSET 1)",
+        (user_text.strip(), checkpoint),
+    )
+    db.commit(conn)
+
+
+@_locked
 def clear_transcript_log() -> None:
     conn = db.get_connection()
     conn.execute("DELETE FROM transcript_log")

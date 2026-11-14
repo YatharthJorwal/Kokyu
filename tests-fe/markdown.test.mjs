@@ -75,3 +75,23 @@ test("ordinary text is left alone", () => {
   assert.deepEqual(parseInline("an `unclosed tick"), [{ t: "text", v: "an `unclosed tick" }]);
   assert.deepEqual(parseMarkdown(""), []);
 });
+
+test("review findings: fences in lists, info strings, C#, deep nesting, parenthesised links", () => {
+  // a fence inside a list item opens a code block instead of flipping every later fence
+  const listed = parseMarkdown(["1. Run this:", "   ```bash", "   npm i", "   ```", "2. Then this"].join("\n"));
+  assert.deepEqual(listed.map((b) => b.t), ["list", "code", "list"]);
+  // the language is the info string's first word
+  const titled = parseMarkdown(['```python title="a.py"', "x = 1", "```", "after"].join("\n"));
+  assert.deepEqual(titled.map((b) => [b.t, b.lang]), [["code", "python"], ["p", undefined]]);
+  // a closing # sequence goes; a # that is part of the word stays
+  assert.deepEqual(parseMarkdown("## C#")[0].c, [{ t: "text", v: "C#" }]);
+  assert.deepEqual(parseMarkdown("## Title ##")[0].c, [{ t: "text", v: "Title" }]);
+  // hostile nesting comes back as text instead of overflowing the stack
+  assert.doesNotThrow(() => parseMarkdown("*".repeat(20000) + "x" + "*".repeat(20000)));
+  assert.doesNotThrow(() => parseMarkdown(">".repeat(20000) + " deep"));
+  // one level of parentheses belongs to the address; sentence punctuation does not
+  const wiki = "https://en.wikipedia.org/wiki/Foo_(bar)";
+  assert.equal(parseInline(`[Foo](${wiki})`)[0].href, wiki);
+  assert.equal(parseInline(`see ${wiki}.`)[1].href, wiki);
+  assert.equal(parseInline("(https://x.com)")[1].href, "https://x.com");
+});

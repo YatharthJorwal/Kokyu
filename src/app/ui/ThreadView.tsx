@@ -4,14 +4,14 @@
 
 import { useEffect, useRef } from "react";
 
-import { canSend, visibleStream, type ChatMessage } from "../chat-state";
+import { canRegenerate, visibleStream, type ChatMessage } from "../chat-state";
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
 import { WakingCard } from "./WakingCard";
 
 function Message({ m, last }: { m: ChatMessage; last: boolean }) {
-  const canRegenerate = useChat((s) => last && m.role === "assistant" && canSend(s));
+  const regenerable = useChat((s) => last && m.role === "assistant" && canRegenerate(s));
   if (m.role === "divider") {
     return (
       <div className="divider" role="separator">
@@ -29,7 +29,7 @@ function Message({ m, last }: { m: ChatMessage; last: boolean }) {
       {m.role === "assistant" ? (
         <div className="msg-actions">
           <CopyButton text={m.text} label="Copy reply" />
-          {canRegenerate ? (
+          {regenerable ? (
             <button type="button" className="msg-action" onClick={() => actions.regenerate()} title="Ask for another reply">
               Regenerate
             </button>
