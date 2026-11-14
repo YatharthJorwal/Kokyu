@@ -17,7 +17,7 @@
 7. Commercial and release work (Dodo, website, signing) is deferred until the product is developed (D-043).
 8. Spec v1.0 baseline is final (D-044). Changes go through new decisions.
 9. Since session 3, Claude works **directly on the user's Windows PC** (`D:\AI\Kokyu.ai`, via the Claude desktop app, often while the user is away) and commits and pushes `main` itself. Rust, Node, the venv, Ollama and the GPU are there; Claude cannot see the window or hear audio, so visual/audio results stay "not verified" until the user looks.
-10. Plan: `TODO.md`; K1 in progress (K1-00 to K1-00d, K1-01, K1-01b done; next K1-02).
+10. Plan: `TODO.md`; K1 in progress (K1-00 to K1-02 done; next K1-03).
 
 ## 2. How the user works
 
@@ -33,6 +33,7 @@ Solo developer, casual, wants direct commands (no manual file shuffling), phases
   - K1-00d (`3865ccd`): normal 1200×800 decorated window, centred; explicit CSP for build and dev; a frontend test guards both. Temp Chat per thread already existed (K1-00). **The window was not looked at.**
   - K1-01 (`e05154e`, D-051): spike, then a real `llamacpp` provider. The kernel starts `llama-server` (Ollama's bundled copy) per preset from `config.yaml` `llamacpp.presets`; `chat.default_model_ref` picks the default. Spike: all experts on the CPU (`--n-cpu-moe 40`) + 10 threads = ~3 GB VRAM, ~23 tok/s generation, 19.5 GB RAM mapped. Per-turn system notes ride on the user message so the server's prompt cache hits (second turn: 23 tokens re-read, first token 0.8 s).
   - K1-01b (`bd1de6d`, D-052): boot warm-up of the default chat model; **fixed an inherited bug**: the Ollama provider ignored the routed model, so the classifier and memory writer always ran on the 9B (and the audit log lied). Helpers now use their configured model; `null` = the reflex model (new default, so a 9B-only PC keeps one model in VRAM); `llama-server` start keeps the helpers loaded; tray Quit stops `llama-server`.
+  - K1-02 (`2387abf`, D-053): the **React chat window** replaced the widget as `index.html` (user chose "chat now, avatar in K2"; the widget lives at `widget.html`). Pure reducer `src/app/chat-state.ts` + Zustand `store.ts` + `src/net/kernel.ts`. Verified live in the built-in browser against the real kernel and the 35B (streaming, Stop, thread switching, auto-title). Not yet seen inside the Tauri window.
   - **Live result in the real kernel:** after the background warm-up (~2 min 20 s), the first WebSocket message got its first token in **1.7 s** (it was 49.7 s before the fix, 74 to 111 s without warm-up). VRAM 8.4 GB.
 - **The user's `config/config.yaml` now exists** (gitignored, a copy of the example plus: the 35B preset, `chat.default_model_ref: 'local:llamacpp/qwen3.6-35b-a3b'`, helpers on `qwen3.5:4b`).
 
@@ -42,13 +43,14 @@ Solo developer, casual, wants direct commands (no manual file shuffling), phases
 
 ## 4. Where we stopped
 
-K1-00d, K1-01 and K1-01b are done, green (`npm run check`: test:fe 83, cargo check, pytest 811) and pushed. **Next is K1-02 (React shell on the v1 protocol).** It is a large change, so its plan was put to the user for approval before any code; check the conversation or ask which option they chose. Nothing new is visible in the window yet: it still shows Yuri's widget, just in a normal window.
+K1-00d to K1-02 are done, green (`npm run check`: test:fe 92, cargo check, pytest 811) and pushed. **Next is K1-03** (sidebar: waifu list, history grouped by day with avatar badges, search, rename, delete, Settings entry; FR-C-6). The kernel already supports search/rename/delete (`thread_search`, `thread_rename`, `thread_delete`).
 
 ## 5. Next session: start here
 
 1. `git log -5`, `git status`, `npm run check` (`KOKYU_PYTHON` = `.venv\Scripts\python.exe`).
-2. K1-02 per the approved plan. Then K1-03 sidebar, K1-04 thread view, K1-05 input + tray, K1-05b screen companions.
-3. The K0 manual gate is still open (`STATE.md` §6): the premade packs need the user's VRM/wav paths and traits.
+2. Ask the user to run `npm run tauri dev` once and look at the new window (and hear a voice line): nothing Tauri-side has been seen yet.
+3. K1-03 sidebar, then K1-04 thread view (Markdown, Copy, Regenerate with a kernel-side retry so the user line is not duplicated), K1-05 input + tray + heart, K1-05b screen companions.
+4. The K0 manual gate is still open (`STATE.md` §6): the premade packs need the user's VRM/wav paths and traits.
 
 **Commands the user may want (PowerShell, in the repo folder):**
 
@@ -61,7 +63,6 @@ npm run tauri dev
 
 ## 6. Open questions for the user
 
-- K1-02 layout (asked this session): see the conversation.
 - Which traits describe Luna and Yuri (the build script needs 1 to 12 adjectives each)?
 - Track the licensed VRMA animation pack in git (K4)?
 
@@ -78,6 +79,8 @@ npm run tauri dev
 - Quit via the tray (or `POST /shutdown`); killing loses memory consolidation and, outside Tauri's Job Object, leaves `llama-server` running.
 - The 35B maps ~19.5 GB of RAM. With other heavy apps open, generation slows (one spike run: 7 tok/s).
 - TestClient WebSocket tests: patch `app._shutdown_event` with a fresh `asyncio.Event()`, `app._driver` and `app._conversation_manager` to None, and set `KOKYU_DATA_DIR` to tmp.
+- **Live UI tests:** start the kernel with a scratch `KOKYU_DATA_DIR` (copy `config.yaml` into `<dir>\config\`), run `npx vite --port 1420`, drive `http://localhost:1420/` with the built-in browser. **Stopping the background shell does not stop Vite's `node.exe`**: end it by PID or port 1420 stays taken.
+- Open only one of `index.html` / `widget.html`: the second connection becomes an observer and cannot send.
 - Git Bash on this PC: `python3` exists; use the venv Python for edit scripts; write long scripts to the scratchpad instead of inline heredocs with fallbacks.
 
 ## 8. Deliberately not done
