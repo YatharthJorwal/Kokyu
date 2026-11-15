@@ -88,10 +88,10 @@ def test_a_key_left_for_an_endpoint_that_is_gone_is_ignored():
     assert config.active_api_id(slot) == "openrouter"
 
 
-def test_a_developer_key_with_spaces_is_ignored_so_no_error_can_quote_it(tmp_path, monkeypatch, capsys):
+def test_a_developer_key_with_spaces_is_ignored_so_no_error_can_quote_it(tmp_path, monkeypatch, capsys, caplog):
     monkeypatch.setenv("DEEPSEEK_API_KEY", "sk-live SECRET123")
     assert config.resolve_api_key("DEEPSEEK_API_KEY", provider="deepseek", secrets_path=tmp_path / "none.yaml") is None
-    assert "SECRET123" not in capsys.readouterr().err
+    assert "SECRET123" not in capsys.readouterr().err + caplog.text
 
 
 @pytest.mark.parametrize(
@@ -148,10 +148,10 @@ def test_the_shell_handoff_leaves_the_environment_before_any_child_starts(monkey
     assert seen == "None"
 
 
-def test_unreadable_keys_from_the_shell_are_dropped_without_echoing_them(monkeypatch, capsys):
+def test_unreadable_keys_from_the_shell_are_dropped_without_echoing_them(monkeypatch, capsys, caplog):
     monkeypatch.setenv("KOKYU_API_KEYS", "{not json sk-SENTINEL-0123456789")
     shell_keys.take_from_environ()
-    assert shell_keys.app_provider() is None and "SENTINEL" not in capsys.readouterr().out
+    assert shell_keys.app_provider() is None and "SENTINEL" not in capsys.readouterr().out + caplog.text
 
 
 @pytest.mark.parametrize(
@@ -172,7 +172,7 @@ def test_a_pipe_line_is_a_key_message_or_nothing(line, parsed):
 
 
 @pytest.mark.asyncio
-async def test_the_pipe_reader_applies_each_change_in_order_and_never_prints_a_key(capsys):
+async def test_the_pipe_reader_applies_each_change_in_order_and_never_prints_a_key(capsys, caplog):
     seen = []
 
     async def apply(provider, key):
@@ -187,7 +187,7 @@ async def test_the_pipe_reader_applies_each_change_in_order_and_never_prints_a_k
     while thread.is_alive():
         await asyncio.sleep(0.01)
     assert seen == [("openrouter", "sk-or-1234567890"), ("openrouter", None)]
-    assert "SENTINEL" not in capsys.readouterr().out
+    assert "SENTINEL" not in capsys.readouterr().out + caplog.text
 
 
 def test_a_normal_exit_with_the_pipe_reader_running_is_clean():

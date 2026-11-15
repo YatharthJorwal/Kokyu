@@ -1,4 +1,4 @@
-# Yuri — config example
+# Kōkyū — config example
 #
 # Everything here is user-editable without touching Python. Every key has a code
 # default; this file is the full surface, not a required minimum. Copy to
@@ -227,8 +227,8 @@ voice:
     indicator: 'tray'
 
 # ─────────────────────────────────────────────────────────────────────────────
-# TTS. GPT-SoVITS is already installed on this machine; Yuri launches it, it is
-# not an install step. One request per clause (D-009).
+# TTS. GPT-SoVITS is installed separately (docs/TTS-BACKEND.md); the kernel starts it
+# when voice mode is turned on (D-061). One request per clause (D-009).
 # ─────────────────────────────────────────────────────────────────────────────
 tts:
   engine: 'gpt_sovits'
@@ -302,7 +302,7 @@ memory:
   db_path: 'data/memory.db'
   recall_top_k: 5
   # The writer pass distills new transcript turns into facts + one episode summary.
-  # It runs on a timer and at session end, never while Yuri is speaking.
+  # It runs on a timer and at session end, never while a companion is speaking.
   # max_tokens caps its reply; window_tokens caps how much transcript one pass reads.
   writer:
     on_session_end: true
@@ -364,30 +364,10 @@ vision:
   look_max_long_edge: 1600
   jpeg_quality: 85
 
-# ─────────────────────────────────────────────────────────────────────────────
-# Persona. Speech rules live in the persona file; speech.py enforces them.
-# ─────────────────────────────────────────────────────────────────────────────
-persona:
-  # Empty for now: the prompt is inline in KASANE/persona.py. P5 moves it
-  # to a swappable file so the tsundere voice and the reasoning stay separate.
-  file: ''
-  name: 'Yuri'
-  # The tag that comes back from the model, used for VRM expression + TTS style.
-  emotion_tag: '[emotion]'
-
 session:
   max_history_turns: 20
   max_unprompted_in_history: 3
   user_name: 'Yatharth'
-
-# ─────────────────────────────────────────────────────────────────────────────
-# Logs. One file, per-service tags.
-# ─────────────────────────────────────────────────────────────────────────────
-logs:
-  path: 'logs/yuri.log'
-  level: 'info'
-  rotate_mb: 20
-  keep_files: 5
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Conversation model (K1, D-051). Threads with no model chosen use this.

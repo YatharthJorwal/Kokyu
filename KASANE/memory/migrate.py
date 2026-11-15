@@ -14,9 +14,11 @@ Version 2 = provenance, supersede pointers, salience, derived profile card,
 
 from __future__ import annotations
 
+import logging
 import sqlite3
 import struct
-import sys
+
+log = logging.getLogger(__name__)
 
 SCHEMA_VERSION = 3
 
@@ -183,6 +185,6 @@ def import_luna(luna_db_path: str, *, dim: int | None = None) -> dict[str, int]:
             if vector is None:
                 counts["episodes_without_vector"] += 1
         store.log_event("import", "migrate", f"luna facts={counts['facts']} episodes={counts['episodes']}")
-    print(f"[yuri] imported from Luna: {counts}", file=sys.stderr)
+    log.info(f"imported from Luna: {counts}")
     return counts
 

@@ -13,6 +13,7 @@ file is gitignored (`logs/latency.jsonl`) and content-free.
 from __future__ import annotations
 
 import json
+import logging
 import pathlib
 import time
 import uuid
@@ -20,6 +21,8 @@ from dataclasses import dataclass, field
 
 from config import CONFIG
 from router.discovery import repo_path
+
+log = logging.getLogger(__name__)
 
 
 @dataclass
@@ -64,5 +67,5 @@ class LatencyRecorder:
             with open(self.path, "a", encoding="utf-8") as handle:
                 handle.write(json.dumps(row, separators=(",", ":")) + "\n")
         except OSError as exc:  # never let telemetry break a conversation
-            print(f"[yuri] latency: could not write {self.path}: {exc}", flush=True)
+            log.warning(f"latency: could not write {self.path}: {exc}")
         return row

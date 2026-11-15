@@ -80,7 +80,7 @@ async def test_preload_loads_the_model_once(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_a_failed_warm_up_never_raises_and_the_next_use_can_retry(monkeypatch, capsys):
+async def test_a_failed_warm_up_never_raises_and_the_next_use_can_retry(monkeypatch, caplog):
     attempts = []
 
     def flaky(*a, **k):
@@ -91,7 +91,7 @@ async def test_a_failed_warm_up_never_raises_and_the_next_use_can_retry(monkeypa
 
     monkeypatch.setattr(stt, "WhisperModel", flaky)
     await stt.preload()  # swallowed
-    assert "preload failed" in capsys.readouterr().err
+    assert "preload failed" in caplog.text
     assert stt._get_model() is not None and len(attempts) == 2
 
 

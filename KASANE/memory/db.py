@@ -17,9 +17,9 @@ without letting another thread's commit land in the middle of it.
 from __future__ import annotations
 
 import contextlib
+import logging
 import pathlib
 import sqlite3
-import sys
 import threading
 import time
 from collections.abc import Iterator
@@ -30,6 +30,8 @@ import paths
 from config import CONFIG
 
 from . import migrate
+
+log = logging.getLogger(__name__)
 
 _DB_PATH = paths.resolve(CONFIG.memory.db_path)
 _conn: sqlite3.Connection | None = None
@@ -142,11 +144,9 @@ def open_with_recovery(path: str | pathlib.Path | None = None, dimension: int | 
         if not _looks_corrupt(exc):
             raise
         moved = _quarantine(db_path)
-        print(
-            f"[yuri] WARNING: memory.db was corrupt ({exc}). Moved it to {moved} and starting "
+        log.warning(
+            f"memory.db was corrupt ({exc}). Moved it to {moved} and starting "
             "with an empty memory. Nothing was deleted.",
-            file=sys.stderr,
-            flush=True,
         )
         return _open_connection(db_path, dimension)
 
@@ -179,13 +179,11 @@ def check_embedding_dimension_matches() -> None:
             continue
         declared_sql = row[0] or ""
         if expected_fragment not in declared_sql:
-            print(
-                f"[yuri] WARNING: memory.db's {table} table doesn't declare {expected_fragment}, "
+            log.warning(
+                f"memory.db's {table} table doesn't declare {expected_fragment}, "
                 f"but config.yaml's memory.embedding.dimension is {configured_dim} -- the embedding "
                 f"model was changed after memory already existed. Table SQL: {declared_sql!r}. "
                 "Memory writes that carry an embedding are refused until this is resolved: revert "
                 f"the model/dimension, or move {_DB_PATH} aside to start fresh.",
-                file=sys.stderr,
-                flush=True,
             )
             return

@@ -36,7 +36,7 @@ no per-request way to set it (use OLLAMA_CONTEXT_LENGTH on the server).
 from __future__ import annotations
 
 import json
-import sys
+import logging
 import time
 from typing import Any, AsyncIterator
 
@@ -44,6 +44,8 @@ import httpx
 
 import context_budget
 from config import CONFIG
+
+log = logging.getLogger(__name__)
 
 
 def _ollama_options(**overrides: Any) -> dict[str, Any]:
@@ -248,7 +250,7 @@ async def stream_reply_with_tools(
     # not per chunk, so cheap enough to leave in rather than strip out
     # once this is confirmed working. Directly answers the question "did
     # Ollama even attempt this" the next time she doesn't use a tool she
-    # should have -- print(s) go to the orchestrator's own terminal, not
+    # should have -- the log lines go to logs/kernel.log, not
     # anywhere the user would see them mid-conversation.
     tool_names = [
         t["function"]["name"]
@@ -279,12 +281,11 @@ async def stream_reply_with_tools(
                             _NO_TOOLS_MODELS.add(CONFIG.llm.model)
                             payload.pop("tools", None)
                             tool_names = []
-                            print(
-                                f"[yuri] WARNING: '{CONFIG.llm.model}' doesn't support tool-calling "
+                            log.warning(
+                                f"'{CONFIG.llm.model}' doesn't support tool-calling "
                                 "(Ollama said so); retrying this turn without tools and not "
                                 "offering them again. Look/camera requests still work via the "
                                 "regex gate.",
-                                file=sys.stderr,
                             )
                             continue
                         raise LLMServerError(
@@ -303,10 +304,9 @@ async def stream_reply_with_tools(
                                 saw_tool_calls_key = True
                             calls = _normalize_tool_calls(message.get("tool_calls"))
                             if calls:
-                                print(
-                                    f"[yuri] tool-calling: model called "
+                                log.info(
+                                    f"tool-calling: model called "
                                     f"{[c['name'] for c in calls]}",
-                                    file=sys.stderr,
                                 )
                                 yield {"type": "tool_calls", "calls": calls}
                                 return
@@ -329,31 +329,28 @@ async def stream_reply_with_tools(
     sent_tools = payload.get("tools")
     raw_estimate = context_budget.estimate_prompt(messages, sent_tools)
     context_budget.observe(raw_estimate, prompt_tokens)
-    print(
-        f"[yuri] tool-calling: offered {tool_names}, replied directly "
+    log.info(
+        f"tool-calling: offered {tool_names}, replied directly "
         f"(saw_content={saw_any_content}, "
         f"'tool_calls' key ever present={saw_tool_calls_key}, "
         f"done={done_seen}, done_reason={done_reason!r}, chars={chars_streamed}, "
         f"prompt_tokens={prompt_tokens}, gen_tokens={gen_tokens}, "
         f"num_ctx={CONFIG.llm.num_ctx}, est_prompt_tokens={raw_estimate}, "
         f"calibration={context_budget.calibration_ratio():.2f})",
-        file=sys.stderr,
     )
     if done_reason == "length":
-        print(
-            "[yuri] WARNING: reply stopped by 'length' -- "
+        log.warning(
+            "reply stopped by 'length' -- "
             f"{explain_length_stop(prompt_tokens, gen_tokens)}",
-            file=sys.stderr,
         )
     elif (
         CONFIG.llm.num_ctx
         and prompt_tokens is not None
         and prompt_tokens >= CONFIG.llm.num_ctx * 0.85
     ):
-        print(
-            f"[yuri] WARNING: context nearly full (prompt {prompt_tokens} of "
+        log.warning(
+            f"context nearly full (prompt {prompt_tokens} of "
             f"num_ctx {CONFIG.llm.num_ctx}) -- the next reply may be cut short.",
-            file=sys.stderr,
         )
     if not done_seen or done_reason not in (None, "stop"):
         # The smoking gun for a reply that was cut off by the *model side*
@@ -361,11 +358,10 @@ async def stream_reply_with_tools(
         # ended with no done marker at all (Ollama aborted mid-generation),
         # or it ended for a reason other than a natural stop (e.g.
         # "length" = hit the max_tokens cap).
-        print(
-            f"[yuri] WARNING: LLM reply ended abnormally (done={done_seen}, "
+        log.warning(
+            f"LLM reply ended abnormally (done={done_seen}, "
             f"done_reason={done_reason!r}) after {chars_streamed} chars -- "
             "if she cut off mid-sentence, this is why.",
-            file=sys.stderr,
         )
 
 
@@ -399,7 +395,7 @@ def _vision_timing_summary(model: str, image_b64: str, elapsed_s: float, data: d
         return f"{value / 1e9:.1f}s" if isinstance(value, (int, float)) else "?"
 
     return (
-        f"[yuri] vision: model={model} image={len(image_b64) // 1024}KB total={elapsed_s:.1f}s "
+        f"vision: model={model} image={len(image_b64) // 1024}KB total={elapsed_s:.1f}s "
         f"load={secs('load_duration')} prompt_tokens={data.get('prompt_eval_count')} "
         f"prompt_eval={secs('prompt_eval_duration')} gen_tokens={data.get('eval_count')} "
         f"gen={secs('eval_duration')}"
@@ -430,7 +426,7 @@ def capability_warnings(
         )
     if chat_caps is not None and "tools" not in chat_caps:
         out.append(
-            f"'{chat_model}' reports no 'tools' capability. Chat still works (Yuri retries "
+            f"'{chat_model}' reports no 'tools' capability. Chat still works (the kernel retries "
             "without tools) and look/camera requests are handled by the regex gate, but the "
             "model can't call tools on its own."
         )
@@ -479,10 +475,9 @@ async def load_model(model: str | None = None) -> None:
         raise _request_error(url, exc) from exc
     if response.status_code >= 400:
         raise LLMServerError(f"Ollama answered {response.status_code} loading '{model}': {response.text[:300]}")
-    print(
-        f"[yuri] warm-up: '{model}' loaded in {time.monotonic() - started:.1f}s "
+    log.info(
+        f"warm-up: '{model}' loaded in {time.monotonic() - started:.1f}s "
         f"(num_ctx {CONFIG.llm.num_ctx})",
-        file=sys.stderr,
     )
 
 
@@ -495,7 +490,7 @@ async def warm_up_model(model: str | None = None) -> None:
     try:
         await load_model(model)
     except Exception as exc:  # noqa: BLE001 -- best-effort
-        print(f"[yuri] warm-up skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
+        log.warning(f"warm-up skipped: {type(exc).__name__}: {exc}")
 
 
 async def report_model_capabilities() -> None:
@@ -507,15 +502,14 @@ async def report_model_capabilities() -> None:
         vision = vision_model_name()
         chat_caps = await model_capabilities(chat)
         vision_caps = chat_caps if vision == chat else await model_capabilities(vision)
-        print(
-            f"[yuri] model capabilities: chat '{chat}' = {chat_caps if chat_caps is not None else 'unknown'}"
+        log.info(
+            f"model capabilities: chat '{chat}' = {chat_caps if chat_caps is not None else 'unknown'}"
             + ("" if vision == chat else f"; vision '{vision}' = {vision_caps if vision_caps is not None else 'unknown'}"),
-            file=sys.stderr,
         )
         for warning in capability_warnings(chat, chat_caps, vision, vision_caps):
-            print(f"[yuri] WARNING: {warning}", file=sys.stderr)
+            log.warning(f"{warning}")
     except Exception as exc:  # noqa: BLE001 -- diagnostics must never stop startup
-        print(f"[yuri] model capability check skipped: {exc}", file=sys.stderr)
+        log.warning(f"model capability check skipped: {exc}")
 
 
 def _int_or_none(value: Any) -> int | None:
@@ -571,7 +565,7 @@ async def describe_image(
     Uses llm.vision_model when set, else llm.model (see vision_model_name).
     Every image path -- screen looks, Continuous OCR, Task Guide, camera,
     image uploads -- goes through here; the main chat model never receives
-    pixels, so it can be a text-only model. Logs a `[yuri] vision:` timing
+    pixels, so it can be a text-only model. Logs a `vision:` timing
     line per call (model, image size, load / prompt-eval / generation time).
 
     json_schema: when given (the Task Guide and Continuous OCR checks, which
@@ -622,11 +616,10 @@ async def describe_image(
                     # a model with no vision, fails the retry too and is
                     # reported below as itself.
                     _NO_FORMAT_MODELS.add(model)
-                    print(
-                        f"[yuri] WARNING: '{model}' rejected the structured-output schema "
+                    log.warning(
+                        f"'{model}' rejected the structured-output schema "
                         f"({first_error}); it worked without it, so the schema won't be sent "
                         "again. The prompt alone has to produce the JSON.",
-                        file=sys.stderr,
                     )
             if response.status_code >= 400:
                 hint = ""
@@ -642,7 +635,7 @@ async def describe_image(
             data = response.json()
     except httpx.RequestError as exc:
         raise _request_error(url, exc) from exc
-    print(_vision_timing_summary(model, image_b64, time.monotonic() - started, data), file=sys.stderr)
+    log.info(_vision_timing_summary(model, image_b64, time.monotonic() - started, data))
 
     message = data.get("message")
     if not isinstance(message, dict):

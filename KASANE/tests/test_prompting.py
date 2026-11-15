@@ -26,3 +26,16 @@ def test_addendum_does_not_grant_or_name_capabilities():
     lowered = prompting.APP_ADDENDUM.lower()
     for word in ("memory", "tool:", "model:", "permission"):
         assert word not in lowered
+
+
+def test_every_companion_gets_the_same_tool_guidance():
+    # Once only in Yuri's own prompt, so other companions never learned to use the tools.
+    lowered = prompting.APP_ADDENDUM.lower()
+    assert "screenshot" in lowered and "clipboard" in lowered and "webcam" in lowered
+    assert "already done" in lowered
+    assert "never answer a request to look again with what you saw last time" in lowered
+    assert "you can only observe and advise" not in lowered   # once suppressed tool use outright
+
+
+def test_the_fallback_persona_is_nobody_in_particular():
+    assert "yuri" not in persona.FALLBACK_PERSONA.lower() and "luna" not in persona.FALLBACK_PERSONA.lower()

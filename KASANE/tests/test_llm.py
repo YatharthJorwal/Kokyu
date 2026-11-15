@@ -133,7 +133,7 @@ def _ndjson(*chunks):
 
 
 @pytest.mark.asyncio
-async def test_stream_reply_with_tools_sends_num_ctx_and_logs_token_counts(monkeypatch, capsys):
+async def test_stream_reply_with_tools_sends_num_ctx_and_logs_token_counts(monkeypatch, caplog):
     _with_num_ctx(monkeypatch, 8192)
     seen = {}
 
@@ -163,13 +163,13 @@ async def test_stream_reply_with_tools_sends_num_ctx_and_logs_token_counts(monke
     assert events == [{"type": "content", "text": "Hi."}]
     assert seen["payload"]["options"]["num_ctx"] == 8192
 
-    err = capsys.readouterr().err
+    err = caplog.text
     assert "prompt_tokens=8100" in err and "gen_tokens=9" in err and "num_ctx=8192" in err
     assert "reply stopped by 'length'" in err and "context window filled" in err
 
 
 @pytest.mark.asyncio
-async def test_stream_reply_with_tools_warns_when_context_nearly_full(monkeypatch, capsys):
+async def test_stream_reply_with_tools_warns_when_context_nearly_full(monkeypatch, caplog):
     _with_num_ctx(monkeypatch, 8192)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -188,7 +188,7 @@ async def test_stream_reply_with_tools_warns_when_context_nearly_full(monkeypatc
         lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
     )
     _ = [e async for e in llm.stream_reply_with_tools([{"role": "user", "content": "x"}], [])]
-    assert "context nearly full" in capsys.readouterr().err
+    assert "context nearly full" in caplog.text
 
 
 # --- separate vision model, no-tools fallback, capability report ------------
@@ -220,7 +220,7 @@ def test_vision_model_name_falls_back_to_the_chat_model(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_describe_image_sends_the_vision_model_and_logs_timing(monkeypatch, capsys):
+async def test_describe_image_sends_the_vision_model_and_logs_timing(monkeypatch, caplog):
     _patch_llm_config(monkeypatch, vision_model="small-vlm", model="chat-model")
     seen = {}
 
@@ -241,8 +241,8 @@ async def test_describe_image_sends_the_vision_model_and_logs_timing(monkeypatch
     _mock_http(monkeypatch, handler)
     assert await llm.describe_image("what is this", "aGVsbG8=") == "a cake"
     assert seen["payload"]["model"] == "small-vlm"
-    err = capsys.readouterr().err
-    assert "[yuri] vision: model=small-vlm" in err
+    err = caplog.text
+    assert "vision: model=small-vlm" in err
     assert "load=2.5s" in err and "prompt_tokens=2650" in err and "prompt_eval=3.1s" in err
 
 
@@ -260,7 +260,7 @@ async def test_describe_image_explains_a_model_without_vision(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_tool_calling_retries_without_tools_when_the_model_has_none(monkeypatch, capsys):
+async def test_tool_calling_retries_without_tools_when_the_model_has_none(monkeypatch, caplog):
     _patch_llm_config(monkeypatch, model="community-gguf")
     llm._NO_TOOLS_MODELS.clear()
     payloads = []
@@ -283,7 +283,7 @@ async def test_tool_calling_retries_without_tools_when_the_model_has_none(monkey
     first = [e async for e in llm.stream_reply_with_tools([{"role": "user", "content": "hi"}], tools)]
     assert first == [{"type": "content", "text": "Hello."}]
     assert "tools" in payloads[0] and "tools" not in payloads[1]  # retried without them
-    assert "doesn't support tool-calling" in capsys.readouterr().err
+    assert "doesn't support tool-calling" in caplog.text
 
     # remembered: the next turn doesn't pay for the failed attempt again
     payloads.clear()
@@ -349,7 +349,7 @@ def test_vision_timing_summary_tolerates_missing_fields():
 
 
 @pytest.mark.asyncio
-async def test_turn_log_pairs_the_estimate_with_the_real_count_and_calibrates(monkeypatch, capsys):
+async def test_turn_log_pairs_the_estimate_with_the_real_count_and_calibrates(monkeypatch, caplog):
     import context_budget
 
     context_budget.reset_calibration()
@@ -367,7 +367,7 @@ async def test_turn_log_pairs_the_estimate_with_the_real_count_and_calibrates(mo
 
     _mock_http(monkeypatch, handler)
     _ = [e async for e in llm.stream_reply_with_tools(big, [])]
-    err = capsys.readouterr().err
+    err = caplog.text
     assert "est_prompt_tokens=" in err and "prompt_tokens=3300" in err and "calibration=0.77" in err
     assert context_budget.calibration_ratio() < 1.0
     context_budget.reset_calibration()
@@ -432,7 +432,7 @@ async def test_describe_image_http_error_is_a_server_error(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_warm_up_loads_the_model_with_the_same_num_ctx(monkeypatch, capsys):
+async def test_warm_up_loads_the_model_with_the_same_num_ctx(monkeypatch, caplog):
     _patch_llm_config(monkeypatch, model="big-model", num_ctx=8192, warm_up_on_start=True)
     seen = {}
 
@@ -447,7 +447,7 @@ async def test_warm_up_loads_the_model_with_the_same_num_ctx(monkeypatch, capsys
     assert seen["payload"]["prompt"] == ""  # empty prompt = just load it
     assert seen["payload"]["model"] == "big-model"
     assert seen["payload"]["options"]["num_ctx"] == 8192  # a different value would force a reload
-    assert "warm-up: 'big-model' loaded" in capsys.readouterr().err
+    assert "warm-up: 'big-model' loaded" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -462,7 +462,7 @@ async def test_warm_up_can_be_disabled(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_warm_up_never_raises(monkeypatch, capsys):
+async def test_warm_up_never_raises(monkeypatch, caplog):
     _patch_llm_config(monkeypatch, warm_up_on_start=True)
 
     def handler(request: httpx.Request) -> httpx.Response:
@@ -470,14 +470,14 @@ async def test_warm_up_never_raises(monkeypatch, capsys):
 
     _mock_http(monkeypatch, handler)
     await llm.warm_up_model()
-    assert "warm-up skipped" in capsys.readouterr().err
+    assert "warm-up skipped" in caplog.text
 
     def handler500(request: httpx.Request) -> httpx.Response:
         return httpx.Response(500, text="no memory")
 
     _mock_http(monkeypatch, handler500)
     await llm.warm_up_model()
-    err = capsys.readouterr().err
+    err = caplog.text
     assert "warm-up skipped" in err and "500" in err and "no memory" in err
 
 
@@ -631,7 +631,7 @@ async def test_plain_streaming_request_survives_a_strict_template(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_token_estimate_is_taken_from_what_was_actually_sent(monkeypatch, capsys):
+async def test_token_estimate_is_taken_from_what_was_actually_sent(monkeypatch, caplog):
     import context_budget
 
     context_budget.reset_calibration()
@@ -639,7 +639,7 @@ async def test_token_estimate_is_taken_from_what_was_actually_sent(monkeypatch, 
     _mock_http(monkeypatch, _strict_template_server([]))
     _ = [e async for e in llm.stream_reply_with_tools(SPLICED, [])]
     folded_estimate = context_budget.estimate_prompt(llm.fold_system_messages(SPLICED), [])
-    assert f"est_prompt_tokens={folded_estimate}" in capsys.readouterr().err
+    assert f"est_prompt_tokens={folded_estimate}" in caplog.text
     context_budget.reset_calibration()
 
 
@@ -701,7 +701,7 @@ async def test_plain_look_sends_no_schema(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_schema_rejected_by_the_server_is_dropped_and_remembered(monkeypatch, capsys):
+async def test_schema_rejected_by_the_server_is_dropped_and_remembered(monkeypatch, caplog):
     _patch_llm_config(monkeypatch, vision_model=None, model="picky")
     llm._NO_FORMAT_MODELS.clear()
     payloads = []
@@ -716,7 +716,7 @@ async def test_schema_rejected_by_the_server_is_dropped_and_remembered(monkeypat
     _mock_http(monkeypatch, handler)
     assert await llm.describe_image("c", "aGk=", json_schema=SCHEMA) == "ok"
     assert "format" in payloads[0] and "format" not in payloads[1]
-    assert "rejected the structured-output schema" in capsys.readouterr().err
+    assert "rejected the structured-output schema" in caplog.text
 
     payloads.clear()
     await llm.describe_image("c", "aGk=", json_schema=SCHEMA)

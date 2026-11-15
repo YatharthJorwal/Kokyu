@@ -54,7 +54,7 @@ async def _run(refresh: bool) -> int:
 
 
 def main(argv: list[str] | None = None) -> int:
-    parser = argparse.ArgumentParser(description="Validate Yuri's config and show router state.")
+    parser = argparse.ArgumentParser(description="Validate Kōkyū's config and show router state.")
     parser.add_argument("--refresh", action="store_true", help="fetch the cloud model catalog now")
     parser.add_argument("--check", action="store_true", help="alias for the default behavior")
     args = parser.parse_args(argv)

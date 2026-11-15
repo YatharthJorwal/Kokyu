@@ -15,13 +15,15 @@ from __future__ import annotations
 
 import asyncio
 import contextlib
-import sys
+import logging
 from collections.abc import Awaitable, Callable
 from typing import Any
 
 import model_loader
 from audio import stt, tts
 from config import CONFIG
+
+log = logging.getLogger(__name__)
 
 VOICE_REF = "voice"
 Listener = Callable[[dict[str, Any]], Awaitable[None]]
@@ -106,7 +108,7 @@ class VoiceMode:
         await self.loader.stop()
         tts.stop_server()
         self.loader.reset()
-        print("[kokyu] voice: idle, voice server stopped", file=sys.stderr)
+        log.info("voice: idle, voice server stopped")
         await self._publish()
 
     async def shutdown(self) -> None:

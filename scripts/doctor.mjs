@@ -9,7 +9,7 @@ let results = [];
 try {
   results = await runChecks({ brief });
 } catch (err) {
-  console.error(`[yuri] doctor failed unexpectedly: ${err?.message ?? err}`);
+  console.error(`[kokyu] doctor failed unexpectedly: ${err?.message ?? err}`);
 }
 const text = formatReport(results, { brief });
 if (text) console.log(text);

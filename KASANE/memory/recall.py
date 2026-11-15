@@ -21,8 +21,8 @@ audit event listing exactly which ids were used.
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
-import sys
 import time
 from dataclasses import dataclass, field
 from typing import Any
@@ -33,6 +33,8 @@ from . import decay, settings, store
 from .contradiction import _stem
 from .db import MemoryUnavailableError
 from .embeddings import EmbeddingUnreachableError, embed
+
+log = logging.getLogger(__name__)
 
 DEFAULT_TOP_K = 5
 RECENCY_HALF_LIFE_DAYS = 180.0
@@ -156,13 +158,13 @@ async def select(user_text: str, top_k: int = DEFAULT_TOP_K, *, budget: str = "r
     try:
         selection.card = await asyncio.to_thread(store.get_profile_card)
     except MemoryUnavailableError as exc:
-        print(f"[yuri] memory recall: unavailable, skipping: {exc}", file=sys.stderr)
+        log.warning(f"memory recall: unavailable, skipping: {exc}")
         return selection
 
     try:
         query_embedding: list[float] | None = await embed(user_text)
     except EmbeddingUnreachableError as exc:
-        print(f"[yuri] memory recall: embedding unavailable, using keyword facts only: {exc}", file=sys.stderr)
+        log.warning(f"memory recall: embedding unavailable, using keyword facts only: {exc}")
         query_embedding = None
 
     try:
@@ -195,7 +197,7 @@ async def select(user_text: str, top_k: int = DEFAULT_TOP_K, *, budget: str = "r
         ranked.sort(key=lambda pair: -pair[0])
         selection.episodes = [e for _, e in ranked[:max_eps]]
     except MemoryUnavailableError as exc:
-        print(f"[yuri] memory recall: search unavailable, skipping: {exc}", file=sys.stderr)
+        log.warning(f"memory recall: search unavailable, skipping: {exc}")
     return selection
 
 
@@ -240,4 +242,4 @@ async def _record(fitted: Selection, budget: str) -> None:
     try:
         await asyncio.to_thread(_write)
     except MemoryUnavailableError as exc:
-        print(f"[yuri] memory recall: couldn't record usage: {exc}", file=sys.stderr)
+        log.warning(f"memory recall: couldn't record usage: {exc}")

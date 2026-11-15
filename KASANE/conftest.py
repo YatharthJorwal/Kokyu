@@ -5,7 +5,15 @@ import sys
 sys.path.insert(0, str(pathlib.Path(__file__).parent))
 
 
+import logging
+
 import pytest
+
+
+@pytest.fixture(autouse=True)
+def _info_logs(caplog):
+    """The kernel logs through `logging` (R-13); tests read its lines from `caplog.text`."""
+    caplog.set_level(logging.INFO)
 
 
 @pytest.fixture(autouse=True)

@@ -24,7 +24,7 @@ class OllamaNativeProvider:
 
     async def complete(self, request: ModelRequest, *, model: str) -> AsyncIterator[ModelChunk]:
         messages = [dict(message) for message in request.messages]
-        # The router's choice is the model (K1-01b, D-052). Yuri passed nothing
+        # The router's choice is the model (K1-01b, D-052). The seed passed nothing
         # here, so every local role silently ran on llm.model whatever the
         # config and the audit log said.
         overrides: dict = {}

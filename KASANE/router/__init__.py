@@ -1,4 +1,4 @@
-"""The router: the only way Yuri reaches a model.
+"""The router: the only way the kernel reaches a model.
 
 Callers ask for a role, never a model. The router decides (pure function), writes
 the audit row, checks the budget, and executes -- local unless the decision says
@@ -14,6 +14,7 @@ from __future__ import annotations
 import asyncio
 import dataclasses
 import json
+import logging
 import time
 from functools import partial
 from typing import Any, AsyncIterator
@@ -41,6 +42,8 @@ from router.types import (
     RouterState,
     Usage,
 )
+
+log = logging.getLogger(__name__)
 
 __all__ = [
     "Router",
@@ -147,7 +150,7 @@ class Router:
         leak the key (not https, user info in it) gets none."""
         problem = url_problem(cfg.base_url)
         if key and problem:
-            print(f"[kokyu] router: API endpoint {cfg.label or cfg.preset} not used: base_url {problem}", flush=True)
+            log.info(f"router: API endpoint {cfg.label or cfg.preset} not used: base_url {problem}")
         usable = bool(key) and problem is None
         self.cloud_provider = AirouterProvider(cfg, key) if usable else None
         self._api_key_present = usable
@@ -231,7 +234,7 @@ class Router:
             if fetch and (not loaded or self.catalog.is_stale()):
                 await self.catalog.refresh(force=not loaded)
         except Exception as exc:  # noqa: BLE001 -- a toggle must not crash the app
-            print(f"[yuri] router: catalog refresh failed: {exc}", flush=True)
+            log.warning(f"router: catalog refresh failed: {exc}")
         self.state.cloud_available = bool(self.catalog.available and self._api_key_present)
         return self.state.cloud_available
 
@@ -259,10 +262,9 @@ class Router:
                 await self.catalog.refresh(force=not loaded)
             cloud_ok = self.catalog.available
             if not cloud_ok:
-                print(
-                    "[yuri] router: cloud catalog unavailable -- Mind stays local"
+                log.warning(
+                    "router: cloud catalog unavailable -- Mind stays local"
                     + (f" ({self.catalog.last_error})" if self.catalog.last_error else ""),
-                    flush=True,
                 )
         self.state.cloud_available = cloud_ok
         await self._refresh_spend()
@@ -275,7 +277,7 @@ class Router:
         try:
             totals = await asyncio.to_thread(self.ledger.totals, self.clock())
         except Exception as exc:  # noqa: BLE001 -- a ledger hiccup must not end a turn
-            print(f"[kokyu] router: spend ledger read failed: {exc}", flush=True)
+            log.warning(f"router: spend ledger read failed: {exc}")
             return
         self.state.spend_hour_usd, self.state.spend_day_usd, self.state.spend_month_usd = totals
 
@@ -567,7 +569,7 @@ class Router:
             try:
                 self.audit.finish(trace_id, **finish)
             except Exception as exc:  # noqa: BLE001
-                print(f"[kokyu] router: audit write failed: {type(exc).__name__}", flush=True)
+                log.warning(f"router: audit write failed: {type(exc).__name__}")
         return totals
 
     def _record(self, bills: list[tuple[str, float, Usage]], api_id: str) -> tuple[float, float, float] | None:
@@ -587,7 +589,7 @@ class Router:
             if bills:
                 totals = self.ledger.totals(self.clock())
         except Exception as exc:  # noqa: BLE001 -- bookkeeping must not kill a reply
-            print(f"[kokyu] router: spend ledger write failed: {type(exc).__name__}", flush=True)
+            log.warning(f"router: spend ledger write failed: {type(exc).__name__}")
         return totals
 
     async def _audit_start(
@@ -608,7 +610,7 @@ class Router:
                 )
             )
         except Exception as exc:  # noqa: BLE001
-            print(f"[kokyu] router: audit write failed: {type(exc).__name__}", flush=True)
+            log.warning(f"router: audit write failed: {type(exc).__name__}")
             return None
 
     def _audit_blocked(self, request: ModelRequest, decision: RouteDecision) -> None:
@@ -633,7 +635,7 @@ class Router:
                 error=f"blocked: {decision.reason}",
             )
         except Exception as exc:  # noqa: BLE001 -- the audit must never hide the real error
-            print(f"[kokyu] router: audit of a blocked turn failed: {exc}", flush=True)
+            log.warning(f"router: audit of a blocked turn failed: {exc}")
 
     async def warm(self, model_ref: str, messages: list[dict], tools: list[dict]) -> None:
         """Loads a chat model and has it read `messages` + `tools` once, so the

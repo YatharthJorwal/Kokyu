@@ -1,12 +1,12 @@
 [package]
-name = "yuri"
+name = "kokyu"
 version = "0.1.0"
-description = "Yuri - a local AI desktop companion"
+description = "Kokyu - a chat app for AI companions"
 edition = "2021"
 rust-version = "1.77"
 
 [lib]
-name = "yuri_lib"
+name = "kokyu_lib"
 crate-type = ["staticlib", "cdylib", "rlib"]
 
 [build-dependencies]
@@ -14,13 +14,10 @@ tauri-build = { version = "2", features = [] }
 
 [dependencies]
 tauri = { version = "2", features = ["tray-icon", "image-png"] }
-tauri-plugin-global-shortcut = "2"
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
-# Windows Job Object wrapper -- see lib.rs's install_kill_on_close_job() for
-# why (children must die with the parent on End Task / Ctrl+C, not just on
-# tray Quit).
+# Windows Job Object: child processes end with the app (lib.rs, install_kill_on_close_job).
 [target.'cfg(windows)'.dependencies]
 win32job = "2"
 # K1-08b (FR-R-6, D-059): API keys in the Windows Credential Manager. Already in

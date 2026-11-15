@@ -6,8 +6,8 @@
 Inputs, per companion:
   * voice clip + transcript: KASANE/voice_files/<Name>/ (exactly one .wav and transcript.txt)
   * VRM: the path you pass
-  * persona prompt: Yuri's from KASANE/persona.py (SYSTEM_PROMPT), Luna's from the Luna repo
-    (--luna-repo, default ../Luna, file orchestrator/persona.py). The prompt text is read from
+  * persona prompt: each from her own repo's orchestrator/persona.py (SYSTEM_PROMPT): Yuri's
+    (--yuri-persona, default ../Yuri), Luna's (--luna-repo, default ../Luna). The prompt text is read from
     those files and copied verbatim; this script never writes or edits persona text.
 
 Output: assets/premade/<id>/{waifu.yaml, prompt.md, model.vrm, voice/ref.wav}, validated with the
@@ -112,7 +112,7 @@ def main(argv: list[str] | None = None) -> int:
     ap.add_argument("--yuri-vrm", type=Path, required=True)
     ap.add_argument("--luna-vrm", type=Path, required=True)
     ap.add_argument("--luna-repo", type=Path, default=ROOT.parent / "Luna", help="Luna checkout (default: ../Luna)")
-    ap.add_argument("--yuri-persona", type=Path, default=ROOT / "KASANE" / "persona.py")
+    ap.add_argument("--yuri-persona", type=Path, default=ROOT.parent / "Yuri" / "orchestrator" / "persona.py", help="Yuri's persona.py (default: ../Yuri/orchestrator/persona.py)")
     ap.add_argument("--voice-root", type=Path, default=ROOT / "KASANE" / "voice_files")
     ap.add_argument("--out", type=Path, default=ROOT / "assets" / "premade")
     ap.add_argument("--yuri-traits", help="comma-separated adjectives, e.g. 'calm,teasing'")

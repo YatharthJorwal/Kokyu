@@ -10,7 +10,7 @@ the new checkpoint, in ONE transaction. A crash before commit reprocesses the
 same turns and writes nothing twice; a crash after commit has nothing to redo.
 
 When it runs: on a timer (`memory.writer.interval_s`), at session end, and on
-shutdown. The timer pass never starts while Yuri is listening, thinking or
+shutdown. The timer pass never starts while a companion is listening, thinking or
 speaking and is cancelled if a turn begins (`preempt`), so memory work never
 competes with a reply for the model. Session-end and shutdown passes always run.
 
@@ -24,8 +24,8 @@ Failure behaviour, by design:
 from __future__ import annotations
 
 import asyncio
+import logging
 import re
-import sys
 import time
 from collections.abc import Callable
 from dataclasses import dataclass, field
@@ -37,10 +37,12 @@ from . import db
 from .db import MemoryUnavailableError
 from .embeddings import EmbeddingUnreachableError, embed
 
+log = logging.getLogger(__name__)
+
 MAX_CHUNKS_PER_RUN = 6
 MAX_TURN_CHARS = 1500
 BACKFILL_BATCH = 50
-SPEAKER = "Yuri"   # only for rows written before waifus existed (no speaker recorded)
+SPEAKER = "Companion"   # only for rows written before companions existed (no speaker recorded)
 
 BASE_SALIENCE = 0.5
 CORRECTION_SALIENCE = 0.8
@@ -137,7 +139,7 @@ class MemoryWriter:
             try:
                 await self.run_pass("shutdown")
             except Exception as exc:  # noqa: BLE001 -- shutdown must not hang on memory
-                print(f"[yuri] writer: shutdown pass failed: {exc}", file=sys.stderr)
+                log.warning(f"writer: shutdown pass failed: {exc}")
 
     def preempt(self) -> None:
         """A turn is starting: abandon an in-flight *timer* pass. Safe at any
@@ -162,7 +164,7 @@ class MemoryWriter:
                     raise
                 delay = retry  # only the pass was preempted; try again shortly
             except Exception as exc:  # noqa: BLE001 -- the loop must survive anything
-                print(f"[yuri] writer: pass failed: {exc}", file=sys.stderr)
+                log.warning(f"writer: pass failed: {exc}")
 
     # ---- the pass --------------------------------------------------------
 
@@ -197,7 +199,7 @@ class MemoryWriter:
                     )
                 await self._maintenance(result)
             except MemoryUnavailableError as exc:
-                print(f"[yuri] writer: memory unavailable, will retry: {exc}", file=sys.stderr)
+                log.warning(f"writer: memory unavailable, will retry: {exc}")
                 result.skipped = "memory_unavailable"
         return result
 
@@ -259,7 +261,7 @@ class MemoryWriter:
                     embedding = await embed(cand.text)
                 except EmbeddingUnreachableError as exc:
                     embedder_down = True
-                    print(f"[yuri] writer: embedding unavailable, facts saved without vectors: {exc}", file=sys.stderr)
+                    log.warning(f"writer: embedding unavailable, facts saved without vectors: {exc}")
             candidates = await asyncio.to_thread(self._candidates, cand.text, embedding, int(cfg["candidates"]))
             source, confidence = ("correction", 1.0) if cand.correction else ("writer_pass", 0.7)
             decision = await contradiction.decide(
@@ -284,7 +286,7 @@ class MemoryWriter:
                 try:
                     plan.episode_embedding = await embed(plan.episode_summary)
                 except EmbeddingUnreachableError as exc:
-                    print(f"[yuri] writer: embedding unavailable, episode not stored (facts still are): {exc}", file=sys.stderr)
+                    log.warning(f"writer: embedding unavailable, episode not stored (facts still are): {exc}")
                     plan.episode_summary = ""
         return plan
 
@@ -381,7 +383,7 @@ class MemoryWriter:
         except MemoryUnavailableError:
             raise
         except Exception as exc:  # noqa: BLE001
-            print(f"[yuri] writer: maintenance step failed: {exc}", file=sys.stderr)
+            log.warning(f"writer: maintenance step failed: {exc}")
 
 
 WRITER = MemoryWriter()

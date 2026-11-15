@@ -8,6 +8,7 @@ from fastapi.testclient import TestClient
 
 import app
 from audio import voice_mode
+import persona
 import prompting
 import waifus
 from waifu_fixtures import make_pack
@@ -132,7 +133,7 @@ async def test_dead_voice_backend_leaves_a_text_only_reply(registry, monkeypatch
 
 
 def test_system_message_is_the_legacy_prompt_without_a_waifu():
-    assert app._system_message(None) == app.SYSTEM_PROMPT
+    assert app._system_message(None) == prompting.build_system_prompt(persona.FALLBACK_PERSONA)
 
 
 def test_vrm_endpoint_serves_a_known_waifu_and_only_a_known_waifu(registry):

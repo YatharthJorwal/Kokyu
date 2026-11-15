@@ -127,7 +127,7 @@ class _FakeConfig:
         self.memory = _FakeMemoryCfg(dimension)
 
 
-def test_dimension_mismatch_warns(tmp_path, monkeypatch, capsys):
+def test_dimension_mismatch_warns(tmp_path, monkeypatch, caplog):
     path = tmp_path / "mismatch.db"
     conn = db._open_connection(path=path, dimension=4)
     monkeypatch.setattr(db, "_conn", conn)
@@ -139,13 +139,12 @@ def test_dimension_mismatch_warns(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(db, "CONFIG", _FakeConfig(dimension=999))  # deliberately doesn't match dim=4
 
     db.check_embedding_dimension_matches()
-    captured = capsys.readouterr()
-    assert "WARNING" in captured.err
-    assert "999" in captured.err
+    assert [r.levelname for r in caplog.records] == ["WARNING"]
+    assert "999" in caplog.text
     conn.close()
 
 
-def test_dimension_match_is_silent(tmp_path, monkeypatch, capsys):
+def test_dimension_match_is_silent(tmp_path, monkeypatch, caplog):
     path = tmp_path / "match.db"
     conn = db._open_connection(path=path, dimension=4)
     monkeypatch.setattr(db, "_conn", conn)
@@ -153,8 +152,7 @@ def test_dimension_match_is_silent(tmp_path, monkeypatch, capsys):
     monkeypatch.setattr(db, "CONFIG", _FakeConfig(dimension=4))  # matches
 
     db.check_embedding_dimension_matches()
-    captured = capsys.readouterr()
-    assert captured.err == ""
+    assert caplog.text == ""
     conn.close()
 
 

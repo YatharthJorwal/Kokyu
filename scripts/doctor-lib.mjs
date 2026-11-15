@@ -1,7 +1,7 @@
 // The checks behind `npm run doctor` (see doctor.mjs). Core Node modules only. Every check is
 // wrapped so the doctor itself can never be the thing that breaks `npm run dev` or `tauri dev`.
 import { spawnSync } from "node:child_process";
-import { existsSync, readdirSync } from "node:fs";
+import { existsSync } from "node:fs";
 import net from "node:net";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
@@ -88,19 +88,6 @@ export async function runChecks({ brief = false } = {}) {
       );
   });
 
-  await guard(() => {
-    const dir = join(root, "public", "vrm");
-    const models = existsSync(dir) ? readdirSync(dir).filter((f) => f.toLowerCase().endsWith(".vrm")) : [];
-    if (!existsSync(join(dir, "yuri.vrm")))
-      add(
-        "warn",
-        models.length
-          ? `public/vrm/yuri.vrm is missing (found: ${models.join(", ")}), so no avatar will appear`
-          : "public/vrm/yuri.vrm is missing, so no avatar will appear",
-        models.length ? "rename your model to yuri.vrm, or set window.__YURI_MODEL_PATH__" : "put your avatar at public/vrm/yuri.vrm (see public/vrm/README.txt)",
-      );
-  });
-
   if (!brief) {
     await guard(async () => {
       if (!(await portOpen(BACKEND_PORT)))
@@ -123,9 +110,9 @@ export async function runChecks({ brief = false } = {}) {
 }
 
 export function formatReport(results, { brief = false } = {}) {
-  if (results.length === 0) return brief ? "" : "[yuri] doctor: everything looks fine.";
+  if (results.length === 0) return brief ? "" : "[kokyu] doctor: everything looks fine.";
   const mark = { fail: "✗", warn: "!" };
-  const lines = [brief ? "[yuri] heads-up before the dev server starts:" : "[yuri] doctor:"];
+  const lines = [brief ? "[kokyu] heads-up before the dev server starts:" : "[kokyu] doctor:"];
   for (const r of results) {
     lines.push(`  ${mark[r.level] ?? "-"} ${r.title}`);
     if (r.fix) lines.push(`      fix: ${r.fix}`);

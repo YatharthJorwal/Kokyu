@@ -90,7 +90,7 @@ async def test_a_real_change_still_gets_a_comment_once_the_gap_has_passed(monkey
 
 
 @pytest.mark.asyncio
-async def test_typing_that_starts_during_the_check_keeps_her_quiet(monkeypatch, _isolate, capsys):
+async def test_typing_that_starts_during_the_check_keeps_her_quiet(monkeypatch, _isolate, caplog):
     # FR-SC-5 (review finding): the check takes seconds; the loop's typing check ran before it.
     spoken = _isolate
 
@@ -100,16 +100,16 @@ async def test_typing_that_starts_during_the_check_keeps_her_quiet(monkeypatch, 
 
     monkeypatch.setattr(app.ocr_watch, "check_for_comment", typed_meanwhile)
     await app._run_ocr_watch_check(FakeWebSocket(), [{"role": "system", "content": "persona"}], False, [], [])
-    assert spoken == [] and "the user is typing" in capsys.readouterr().err
+    assert spoken == [] and "the user is typing" in caplog.text
 
 
 @pytest.mark.asyncio
-async def test_suppression_reason_is_logged(monkeypatch, capsys):
+async def test_suppression_reason_is_logged(monkeypatch, caplog):
     _vlm(monkeypatch, ["Minecraft gameplay with anime avatar overlay"] * 2)
     ws, history = FakeWebSocket(), [{"role": "system", "content": "persona"}]
     await app._run_ocr_watch_check(ws, history, False, [], [])
     await app._run_ocr_watch_check(ws, history, False, [], [])
-    assert "[no comment: same screen as the last check]" in capsys.readouterr().err
+    assert "[no comment: same screen as the last check]" in caplog.text
 
 
 @pytest.mark.asyncio
@@ -131,14 +131,14 @@ def test_fit_for_llm_leaves_a_short_conversation_alone():
     assert app._fit_for_llm(messages) == messages
 
 
-def test_fit_for_llm_trims_a_flooded_history_and_says_so(capsys):
+def test_fit_for_llm_trims_a_flooded_history_and_says_so(caplog):
     messages = [{"role": "system", "content": "p" * 9000}]
     messages += [{"role": "assistant", "content": "c" * 400} for _ in range(120)]
     messages.append({"role": "user", "content": "what should I do next?"})
     fitted = app._fit_for_llm(messages, app.tools.TOOL_SCHEMAS)
     assert fitted[0] is messages[0] and fitted[-1] is messages[-1]
     assert len(fitted) < len(messages)
-    assert "left out the" in capsys.readouterr().err
+    assert "left out the" in caplog.text
 
 
 # --- what she says when the LLM call fails ------------------------------------

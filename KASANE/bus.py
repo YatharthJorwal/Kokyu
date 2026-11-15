@@ -1,5 +1,5 @@
 """
-Typed event bus between Yuri's services.
+Typed event bus between the kernel's services.
 
 Services never call each other directly (SCOPE.md §6). They emit events and
 subscribe to patterns, which is what makes a later split into separate

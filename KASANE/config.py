@@ -1,5 +1,5 @@
 """
-Yuri config loader.
+Kōkyū config loader.
 
 One YAML file holds every model, engine, budget and routing choice. Two shapes
 are accepted:
@@ -30,9 +30,9 @@ section of `secrets.local.yaml` (gitignored), `.env`.
 from __future__ import annotations
 
 import dataclasses
+import logging
 import os
 import pathlib
-import sys
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
@@ -42,12 +42,14 @@ import paths
 import shell_keys  # noqa: F401 -- takes the shell's keys out of os.environ before any child starts
 from provider_presets import API_PRESETS, ENDPOINT_FIELDS, PROVIDER_ID
 
-_ORCHESTRATOR_DIR = pathlib.Path(__file__).parent
+log = logging.getLogger(__name__)
+
+_KERNEL_DIR = pathlib.Path(__file__).parent
 EXAMPLE_PATH = paths.config_example_path()
 SECRETS_PATH = paths.secrets_path()
 
 _SEARCH_PATHS = (
-    _ORCHESTRATOR_DIR / "config.yaml",
+    _KERNEL_DIR / "config.yaml",
     paths.config_dir() / "config.yaml",
     EXAMPLE_PATH,
 )
@@ -284,22 +286,6 @@ class LatencyConfig:
     )
 
 
-@dataclass(frozen=True)
-class PersonaConfig:
-    # Where the swappable persona will live (P5). The prompt is inline in
-    # KASANE/persona.py today, so this may be empty.
-    file: str = ""
-    name: str = "Yuri"
-    emotion_tag: str = "[emotion]"
-
-
-@dataclass(frozen=True)
-class LogsConfig:
-    path: str = "logs/yuri.log"
-    level: str = "info"
-    rotate_mb: int = 20
-    keep_files: int = 5
-
 
 # ─── v1 views (the flat shape the older modules read) ────────────────────────
 
@@ -331,8 +317,8 @@ class GPTSoVITSConfig:
     media_type: str = "wav"
     prefetch_depth: int = 2
     first_clause_buffer_ms: int = 800
-    # Where the server lives and how to start it. Yuri launches it; the user
-    # never has to remember to start GPT-SoVITS first.
+    # Where the server lives and how to start it. The kernel starts it when voice
+    # mode is turned on (D-061); the user never starts GPT-SoVITS by hand.
     launch: Mapping[str, Any] = field(
         default_factory=lambda: {
             # Off by default and no machine paths in code (R-40). Point `dir` at the
@@ -508,8 +494,6 @@ class Config:
     voice: VoiceConfig = field(default_factory=VoiceConfig)
     speech: SpeechConfig = field(default_factory=SpeechConfig)
     latency: LatencyConfig = field(default_factory=LatencyConfig)
-    persona: PersonaConfig = field(default_factory=PersonaConfig)
-    logs: LogsConfig = field(default_factory=LogsConfig)
     llamacpp: LlamaCppConfig = field(default_factory=LlamaCppConfig)
     chat: ChatConfig = field(default_factory=ChatConfig)
 
@@ -567,7 +551,7 @@ def resolve_api_key(
     key = _developer_key(api_key_env, provider, secrets_path, dotenv_path)
     if key is not None and not shell_keys.valid_key(key):
         # A space or control character would put the key into an HTTP error message.
-        print(f"[kokyu] config: the developer key for {api_key_env} has spaces or odd characters; ignored", file=sys.stderr)
+        log.warning(f"config: the developer key for {api_key_env} has spaces or odd characters; ignored")
         return None
     return key
 
@@ -919,8 +903,6 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
         "targets_ms": {**LatencyConfig().targets_ms, **_section(latency_raw, "targets_ms")},
     })
 
-    persona = _build(PersonaConfig, _section(raw, "persona"))
-    logs = _build(LogsConfig, _section(raw, "logs"))
     budget = _build(BudgetConfig, _section(raw, "budget"))
     audit = _build(AuditConfig, _section(raw, "audit"))
 
@@ -946,8 +928,6 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
         voice=voice,
         speech=speech,
         latency=latency,
-        persona=persona,
-        logs=logs,
         llamacpp=_derive_llamacpp(raw),
         chat=_build(ChatConfig, _section(raw, "chat")),
         llm=llm,
@@ -964,7 +944,7 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
 
     if warnings and not (quiet or explicit):
         for warning in warnings:
-            print(f"[yuri] config: {warning}", file=sys.stderr)
+            log.warning(f"config: {warning}")
 
     return cfg
 
@@ -976,7 +956,7 @@ CONFIG = load_config()
 
 def print_summary(cfg: Config = CONFIG) -> str:
     """One-line-per-role view of what actually resolved. Used by
-    `python -m orchestrator --check` and at startup."""
+    `python KASANE/check.py` and at startup."""
     lines = [f"config: {cfg.source_path}"]
     reflex_model = cfg.models.local_model("reflex")
     for name, role in cfg.roles.items():

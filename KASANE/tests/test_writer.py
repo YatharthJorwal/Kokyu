@@ -78,14 +78,14 @@ async def test_plain_string_facts_are_still_accepted(memory_db, monkeypatch, w):
 
 
 @pytest.mark.asyncio
-async def test_unparseable_output_is_kept_as_a_raw_episode(memory_db, monkeypatch, capsys, w):
+async def test_unparseable_output_is_kept_as_a_raw_episode(memory_db, monkeypatch, caplog, w):
     stub_model(monkeypatch, "I don't think I can do that in JSON, sorry!")
     stub_embed(monkeypatch)
     log("hi")
     await w.run_pass("session_end")
     assert store.get_all_facts() == []
     assert "I don't think I can do that" in store.search_episodes(fake_vector(0.2), 1)[0]
-    assert "didn't parse as the expected" in capsys.readouterr().err
+    assert "didn't parse as the expected" in caplog.text
 
 
 @pytest.mark.asyncio

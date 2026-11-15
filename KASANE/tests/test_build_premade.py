@@ -89,6 +89,9 @@ def test_persona_without_a_plain_constant_is_rejected(tmp_path):
         build_premade.extract_system_prompt(tmp_path / "missing.py")
 
 
-def test_the_real_yuri_persona_file_is_readable_by_the_extractor():
-    text = build_premade.extract_system_prompt(paths.repo_root() / "KASANE" / "persona.py")
-    assert len(text) > 200
+def test_a_triple_quoted_prompt_with_line_continuations_is_read_as_one_text(tmp_path):
+    # The shape the Luna and Yuri repos use: a backslash ends every line.
+    path = tmp_path / "persona.py"
+    source = ['"""doc"""', 'SYSTEM_PROMPT = """\\', "You are someone, \\", "and you stay short.", '"""', ""]
+    path.write_text("\n".join(source), encoding="utf-8")
+    assert build_premade.extract_system_prompt(path) == "You are someone, and you stay short."

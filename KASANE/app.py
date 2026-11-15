@@ -40,12 +40,12 @@ not anticipated up front -- see docs/DECISIONS.md.
 import asyncio
 import base64
 import contextlib
+import logging
 import os
 import signal
 import subprocess
 import sys
 import time
-import traceback
 from collections.abc import AsyncIterator, Awaitable, Callable, Coroutine
 from functools import partial
 from pathlib import Path
@@ -87,8 +87,10 @@ from audio.chunking import extract_ready_chunks, flush
 from config import CONFIG
 from memory import embeddings, forget, recall, store, writer
 from memory.db import MemoryUnavailableError
-from persona import SYSTEM_PROMPT, apply_persona_pass, extract_emotion_tag
+from persona import FALLBACK_PERSONA, apply_persona_pass, extract_emotion_tag
 from tools import vision
+
+log = logging.getLogger(__name__)
 
 # One recorder for the process; every turn appends one row.
 LATENCY = latency.LatencyRecorder()
@@ -109,7 +111,7 @@ async def _boot_model_ref() -> str:
     try:
         thread = await _conversations().last_thread()
     except Exception as exc:  # noqa: BLE001 -- no store: the default model
-        print(f"[kokyu] warm-up: threads store unavailable ({exc}); using the default model", file=sys.stderr)
+        log.warning(f"warm-up: threads store unavailable ({exc}); using the default model")
     return model_listing.effective_ref(thread.model_ref if thread else None, CONFIG)
 
 
@@ -134,10 +136,10 @@ async def _warm_default_chat_model() -> None:
     try:
         model_refs.parse(ref_text)
     except model_refs.ModelRefError as exc:
-        print(f"[kokyu] warm-up skipped: {ref_text!r} is not a usable model ({exc})", file=sys.stderr)
+        log.warning(f"warm-up skipped: {ref_text!r} is not a usable model ({exc})")
         return
     if not _loads_without_asking(ref_text):
-        print(f"[kokyu] {ref_text} starts when it is picked or messaged (D-060)", file=sys.stderr)
+        log.info(f"{ref_text} starts when it is picked or messaged (D-060)")
         return
     task = model_loader.LOADER.request(ref_text)
     if task is not None:
@@ -159,7 +161,7 @@ async def _load_chat_model(ref_text: str) -> None:
     rt = router.get_router()
     if ref.provider == "local_ollama":
         if await rt.stop_llamacpp():
-            print("[kokyu] stopped llama-server: an Ollama chat model was picked", file=sys.stderr)
+            log.info("stopped llama-server: an Ollama chat model was picked")
         await llm.load_model(ref.model)
         await _warm_helpers()
         return
@@ -191,7 +193,7 @@ async def _warm_helpers() -> None:
     try:
         await embeddings.embed("warm-up")
     except Exception as exc:  # noqa: BLE001 -- recall reports its own failures per turn
-        print(f"[kokyu] warm-up of the embedding model failed: {exc}", file=sys.stderr)
+        log.warning(f"warm-up of the embedding model failed: {exc}")
 
 
 async def _check_router() -> None:
@@ -200,15 +202,14 @@ async def _check_router() -> None:
         cloud = await rt.startup()
         saved = runtime_settings.initial(CONFIG)
         rt.set_use_api_model(saved.use_api_model)
-        print(
-            f"[yuri] router: mode={rt.config.routing.mode} "
+        log.info(
+            f"router: mode={rt.config.routing.mode} "
             f"cloud={'available' if cloud else 'local-only'} "
             f"catalog={len(rt.catalog.model_ids())} models "
             f"api-model={'on' if saved.use_api_model else 'off'}",
-            flush=True,
         )
     except Exception as exc:  # noqa: BLE001 -- diagnostics must never stop startup
-        print(f"[yuri] router startup skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
+        log.warning(f"router startup skipped: {type(exc).__name__}: {exc}")
 
 
 # Set by the first window that connects (D-060).
@@ -237,14 +238,14 @@ async def _after_first_window() -> None:
         try:
             await step()
         except Exception as exc:  # noqa: BLE001 -- one failed step must not stop the rest
-            print(f"[kokyu] boot step {step.__name__} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            log.warning(f"boot step {step.__name__} failed: {type(exc).__name__}: {exc}")
 
 
 async def _startup_memory_pass() -> None:
     try:
         await writer.WRITER.run_pass("startup")
     except Exception as exc:  # noqa: BLE001 -- memory work must never affect startup
-        print(f"[yuri] memory catch-up pass failed: {exc}", file=sys.stderr)
+        log.warning(f"memory catch-up pass failed: {exc}")
 
 
 @contextlib.asynccontextmanager
@@ -338,7 +339,7 @@ def _speaker_of(websocket: Any) -> str | None:
 def _system_message(waifu: "waifus.Waifu | None") -> str:
     """Persona prompt plus the shared app addendum. With no waifu installed the legacy
     built-in persona is used unchanged, so a fresh checkout still talks."""
-    return SYSTEM_PROMPT if waifu is None else prompting.build_system_prompt(waifu.prompt)
+    return prompting.build_system_prompt(FALLBACK_PERSONA if waifu is None else waifu.prompt)
 
 
 def _active_id_path() -> Path:
@@ -358,7 +359,7 @@ def _save_active_id(waifu_id: str) -> None:
         path.parent.mkdir(parents=True, exist_ok=True)
         path.write_text(waifu_id, encoding="utf-8")
     except OSError as exc:
-        print(f"[kokyu] could not remember the active companion: {exc}", file=sys.stderr)
+        log.warning(f"could not remember the active companion: {exc}")
 
 
 async def _send_waifu_state(websocket: Any, registry: "waifus.WaifuRegistry", pending: str | None = None) -> None:
@@ -445,10 +446,9 @@ async def _apply_shell_key(provider_id: str, key: str | None) -> None:
     window the new list (D-059). Logs the provider id only, never the key."""
     rt = router.get_router()
     usable = await rt.use_app_key(provider_id, key)
-    print(
-        f"[kokyu] keys: {provider_id} key {'saved' if key else 'removed'} in the app; "
+    log.info(
+        f"keys: {provider_id} key {'saved' if key else 'removed'} in the app; "
         f"API models {'usable' if usable else 'not usable yet'} ({rt.api_status()['label']})",
-        flush=True,
     )
     listed = await model_listing.model_list(rt, cfg=CONFIG)
     frames = (
@@ -504,7 +504,7 @@ async def _synthesize_for(websocket: Any, spoken: str) -> bytes:
             return await tts.synthesize(spoken)
         return await tts.synthesize(spoken, voice_params)
     except tts.TTSUnreachableError as exc:
-        print(f"[kokyu] voice backend unavailable, reply stays text-only: {exc}", file=sys.stderr)
+        log.warning(f"voice backend unavailable, reply stays text-only: {exc}")
         return b""
 
 HOST = "127.0.0.1"
@@ -686,7 +686,7 @@ async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp:
     try:
         return await asyncio.to_thread(partial(store.add_transcript_turn, user_text, assistant_text, temp=temp, speaker=speaker))
     except MemoryUnavailableError as exc:
-        print(f"[yuri] transcript log: write failed, skipping: {exc}", file=sys.stderr)
+        log.warning(f"transcript log: write failed, skipping: {exc}")
         return None
 
 
@@ -703,14 +703,14 @@ async def _drop_transcript_turn_safely(row_id: int) -> None:
     try:
         await asyncio.to_thread(store.drop_transcript_turn, row_id)
     except MemoryUnavailableError as exc:
-        print(f"[kokyu] transcript log: could not drop the replaced turn: {exc}", file=sys.stderr)
+        log.warning(f"transcript log: could not drop the replaced turn: {exc}")
 
 
 async def _get_transcript_log_safely() -> list[dict[str, str]]:
     try:
         return await asyncio.to_thread(store.get_transcript_log)
     except MemoryUnavailableError as exc:
-        print(f"[yuri] transcript log: read failed, returning empty: {exc}", file=sys.stderr)
+        log.warning(f"transcript log: read failed, returning empty: {exc}")
         return []
 
 
@@ -718,7 +718,7 @@ async def _clear_transcript_log_safely() -> None:
     try:
         await asyncio.to_thread(store.clear_transcript_log)
     except MemoryUnavailableError as exc:
-        print(f"[yuri] transcript log: clear failed: {exc}", file=sys.stderr)
+        log.warning(f"transcript log: clear failed: {exc}")
 
 
 def _fit_for_llm(
@@ -738,18 +738,16 @@ def _fit_for_llm(
         extra=extra,
     )
     if dropped:
-        print(
-            f"[yuri] context: left out the {dropped} oldest history message(s) this call "
+        log.info(
+            f"context: left out the {dropped} oldest history message(s) this call "
             f"to fit num_ctx={CONFIG.llm.num_ctx} (estimated prompt {est_tokens} tokens, "
             f"budget {budget}).",
-            file=sys.stderr,
         )
     if budget and est_tokens > budget:
-        print(
-            f"[yuri] WARNING: the persona prompt + memory block alone (~{est_tokens} tokens) "
+        log.warning(
+            f"the persona prompt + memory block alone (~{est_tokens} tokens) "
             f"exceed the prompt budget ({budget}) for num_ctx={CONFIG.llm.num_ctx}; raise "
             "llm.num_ctx.",
-            file=sys.stderr,
         )
     return fitted
 
@@ -1028,7 +1026,7 @@ async def _run_turn(
         # Logged: this branch used to swallow the exception completely, so a
         # 400/500 or a timeout from a server that was running looked exactly
         # like "server not running" and left nothing to diagnose from.
-        print(f"[yuri] LLM call failed ({type(exc).__name__}): {exc}", file=sys.stderr)
+        log.warning(f"LLM call failed ({type(exc).__name__}): {exc}")
         line = llm_failure_line(exc)
         # FR-R-5: the chosen model failed or may not run. Say so plainly with a
         # typed error the chat view turns into Retry / Switch model; never
@@ -1054,8 +1052,7 @@ async def _run_turn(
         # finally visible, and the flow falls through to the normal
         # turn_end. CancelledError (the stop button) is a BaseException and
         # deliberately NOT caught here -- stop must still cancel the turn.
-        print("[yuri] turn failed with an unexpected error (reply cut off):", file=sys.stderr)
-        traceback.print_exc(file=sys.stderr)
+        log.exception("turn failed with an unexpected error (reply cut off)")
         # Something in the voice path may have died; make sure a worker task
         # is not left behind holding clauses nobody will hear.
         stream.abort()
@@ -1112,7 +1109,7 @@ async def _run_turn(
                 meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to}
                 await on_finished(user_text, " ".join(reply_parts), stopped, {k: v for k, v in meta.items() if v is not None})
             except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
-                print(f"[kokyu] could not save the exchange to the thread: {exc}", file=sys.stderr)
+                log.warning(f"could not save the exchange to the thread: {exc}")
         with contextlib.suppress(Exception):
             await websocket.send_json(
                 protocol.frame(
@@ -1206,22 +1203,21 @@ async def _run_task_guide_check(
     try:
         image_b64 = await asyncio.to_thread(vision.capture_screen, CONFIG.vision.ambient_max_long_edge)
     except vision.ToolUnavailableError as exc:
-        print(f"[yuri] task guide: capture failed, skipping this check: {exc}", file=sys.stderr)
+        log.warning(f"task guide: capture failed, skipping this check: {exc}")
         return
 
     result = await task_guide.check_task_progress(task_description, image_b64)
     if result is None:
-        print("[yuri] task guide: check result didn't parse, skipping this check", file=sys.stderr)
+        log.warning("task guide: check result didn't parse, skipping this check")
         return
     # Logged unconditionally (not just on drift) so the loop's actual
     # cadence is visible in orchestrator.log without needing to wait for
     # a real chide -- useful for confirming it's alive at all during
     # testing, or for tuning capture_interval_seconds against how often
     # checks are really landing.
-    print(
-        f"[yuri] task guide: checked '{task_description}' -> "
+    log.info(
+        f"task guide: checked '{task_description}' -> "
         f"on_task={result['on_task']} ({result['note'] or 'no note'})",
-        file=sys.stderr,
     )
     if result["on_task"]:
         return
@@ -1234,7 +1230,7 @@ async def _run_task_guide_check(
         ):
             buffer += delta
     except llm.LLMUnreachableError as exc:
-        print(f"[yuri] task guide: LLM unreachable for chide, skipping: {exc}", file=sys.stderr)
+        log.warning(f"task guide: LLM unreachable for chide, skipping: {exc}")
         return
 
     buffer, detected_emotion = extract_emotion_tag(buffer)
@@ -1244,7 +1240,7 @@ async def _run_task_guide_check(
 
     allowed, reason = ARBITER.may_speak_ambient()
     if not allowed:
-        print(f"[yuri] task guide: chide suppressed ({reason})", file=sys.stderr)
+        log.info(f"task guide: chide suppressed ({reason})")
         return
     for chunk in reply_parts:
         await _send_speak(websocket, apply_persona_pass(chunk))
@@ -1307,14 +1303,14 @@ async def _run_ocr_watch_check(
     try:
         image_b64 = await asyncio.to_thread(vision.capture_screen, CONFIG.vision.ambient_max_long_edge)
     except vision.ToolUnavailableError as exc:
-        print(f"[yuri] ocr watch: capture failed, skipping this check: {exc}", file=sys.stderr)
+        log.warning(f"ocr watch: capture failed, skipping this check: {exc}")
         return
 
     previous_summary = ocr_watch.get_state().last_seen_summary
     last_comment_at = ocr_watch.get_state().last_comment_at
     result = await ocr_watch.check_for_comment(previous_summary, image_b64)
     if result is None:
-        print("[yuri] ocr watch: check result didn't parse, skipping this check", file=sys.stderr)
+        log.warning("ocr watch: check result didn't parse, skipping this check")
         return
     ocr_watch.mark_checked(result["summary"])
     # The model's comment_worthy is necessary, not sufficient: code applies
@@ -1331,10 +1327,9 @@ async def _run_ocr_watch_check(
         CONFIG.ocr_watch.same_screen_similarity,
     )
     suppressed = f" [no comment: {reason}]" if result["comment_worthy"] and not speak else ""
-    print(
-        f"[yuri] ocr watch: checked -> comment_worthy={result['comment_worthy']} "
+    log.info(
+        f"ocr watch: checked -> comment_worthy={result['comment_worthy']} "
         f"({result['summary'] or 'no summary'}){suppressed}",
-        file=sys.stderr,
     )
     if not speak:
         return
@@ -1347,7 +1342,7 @@ async def _run_ocr_watch_check(
         ):
             buffer += delta
     except llm.LLMUnreachableError as exc:
-        print(f"[yuri] ocr watch: LLM unreachable for comment, skipping: {exc}", file=sys.stderr)
+        log.warning(f"ocr watch: LLM unreachable for comment, skipping: {exc}")
         return
 
     buffer, detected_emotion = extract_emotion_tag(buffer)
@@ -1359,7 +1354,7 @@ async def _run_ocr_watch_check(
     if allowed and _typing_recently():
         allowed, reason = False, "the user is typing"   # FR-SC-5: the check took seconds
     if not allowed:
-        print(f"[yuri] ocr watch: comment suppressed ({reason})", file=sys.stderr)
+        log.info(f"ocr watch: comment suppressed ({reason})")
         return
     for chunk in reply_parts:
         await _send_speak(websocket, apply_persona_pass(chunk))
@@ -1538,7 +1533,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 protocol.frame("thread_message", {"message": divider.to_dict()}, thread=current_thread.id)
             )
         except Exception as exc:  # noqa: BLE001 -- the switch itself already happened
-            print(f"[kokyu] could not record the companion change: {exc}", file=sys.stderr)
+            log.warning(f"could not record the companion change: {exc}")
 
     def _thread_id() -> str | None:
         return current_thread.id if current_thread is not None else None
@@ -1612,7 +1607,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 try:
                     await _apply_pending_switch()
                 except Exception as exc:  # noqa: BLE001 -- a failed switch must not fail the turn or the teardown
-                    print(f"[kokyu] companion switch after the reply failed: {exc}", file=sys.stderr)
+                    log.warning(f"companion switch after the reply failed: {exc}")
 
         return asyncio.create_task(_turn_then_switch())
 
@@ -1636,7 +1631,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             load=CONFIG.llm.warm_up_on_start,
         )
     except Exception as exc:  # noqa: BLE001 -- chat must still work without the store
-        print(f"[kokyu] threads store unavailable, this session is not saved: {exc}", file=sys.stderr)
+        log.warning(f"threads store unavailable, this session is not saved: {exc}")
         current_thread = None
 
     # Streaming voice: 20 ms PCM frames from this connection's open mic. The
@@ -1677,7 +1672,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         try:
             user_text = (await stt.transcribe(wav)).strip()
         except stt.STTError as exc:
-            print(f"[yuri] voice: STT failed: {exc}", file=sys.stderr)
+            log.warning(f"voice: STT failed: {exc}")
             await websocket.send_json({"type": "transcript", "text": ""})
             await websocket.send_json(
                 {"type": "turn_end", "emotion": EMOTION_STT_UNREACHABLE}
@@ -1763,15 +1758,14 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             if paused and not pause_announced:
                 # Said once, because "Continuous OCR does nothing" was
                 # reported when it was really paused by a (phantom) task.
-                print(
-                    f"[yuri] ocr watch: paused while Task Guide tracks "
+                log.info(
+                    f"ocr watch: paused while Task Guide tracks "
                     f"'{task_guide.get_state().description}' (ocr_watch.pause_during_task); "
                     "it resumes when that task ends.",
-                    file=sys.stderr,
                 )
                 pause_announced = True
             elif not paused and pause_announced:
-                print("[yuri] ocr watch: resumed (no task being tracked)", file=sys.stderr)
+                log.info("ocr watch: resumed (no task being tracked)")
                 pause_announced = False
             if paused:
                 # Task Guide is already watching the screen; ambient remarks
@@ -2015,7 +2009,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                         else:
                             await _send_thread_list(websocket)
                 except Exception as exc:  # noqa: BLE001 -- report, keep the connection
-                    print(f"[kokyu] thread request {msg_type} failed: {exc}", file=sys.stderr)
+                    log.warning(f"thread request {msg_type} failed: {exc}")
                     await websocket.send_json(
                         protocol.error_frame("threads_unavailable", "Conversation history is unavailable right now.")
                     )
@@ -2093,17 +2087,15 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 await websocket.send_json({"type": "settings", **runtime_settings.describe(rt, CONFIG)})
                 state = runtime_settings.describe(rt, CONFIG)
                 if enabled and not state["cloud_available"]:
-                    print(
-                        "[yuri] api model: ON requested but cloud is unavailable "
+                    log.warning(
+                        "api model: ON requested but cloud is unavailable "
                         "(no API key, or the catalog could not load) -- "
                         "Mind stays local.",
-                        file=sys.stderr,
                     )
                 else:
-                    print(
-                        f"[yuri] api model: {'on' if enabled else 'off'} "
+                    log.info(
+                        f"api model: {'on' if enabled else 'off'} "
                         f"(mode={CONFIG.routing.mode})",
-                        file=sys.stderr,
                     )
                 continue
 
@@ -2203,7 +2195,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     # Malformed base64 -- nothing recoverable, drop it.
                     continue
 
-                print(f"[yuri] received {len(audio_bytes)} bytes of audio", file=sys.stderr, flush=True)
+                log.info(f"received {len(audio_bytes)} bytes of audio")
 
                 if current_turn_task is not None and not current_turn_task.done():
                     # Already mid-reply -- drop this clip without even
@@ -2216,7 +2208,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 try:
                     user_text = (await stt.transcribe(audio_bytes)).strip()
                 except stt.STTError as exc:
-                    print(f"[yuri] STT failed: {exc}", file=sys.stderr)
+                    log.warning(f"STT failed: {exc}")
                     await websocket.send_json({"type": "transcript", "text": ""})
                     await _send_speak(websocket, apply_persona_pass(STT_UNREACHABLE_LINE))
                     # This path never reaches _run_turn (there's no
@@ -2285,7 +2277,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     try:
                         description = await router.describe_image("vision", prompt, content)
                     except llm.LLMUnreachableError as exc:
-                        print(f"[yuri] describe_image failed for upload: {exc}", file=sys.stderr)
+                        log.warning(f"describe_image failed for upload: {exc}")
                         await _send_speak(websocket, apply_persona_pass(UPLOAD_VISION_UNREACHABLE_LINE))
                         await websocket.send_json(protocol.error_frame("vision_unavailable", "Couldn't look at that image: the vision model isn't reachable."))
                         await websocket.send_json(
@@ -2371,7 +2363,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         try:
             await writer.WRITER.run_pass("session_end")
         except Exception as exc:  # noqa: BLE001 -- a session ending must never be blocked by memory work
-            print(f"[yuri] memory writer failed unexpectedly: {exc}", file=sys.stderr)
+            log.warning(f"memory writer failed unexpectedly: {exc}")
         # Only reachable for the shutdown-event break above -- a real
         # WebSocketDisconnect means the socket's already gone. Harmless
         # either way; already-closed is a no-op error we don't care about.
@@ -2435,7 +2427,7 @@ def _take_over_stale_orchestrator(pid_file: Path) -> None:
         except (ValueError, OSError):
             old_pid = None
         if old_pid is not None and old_pid != our_pid and _pid_is_alive(old_pid):
-            print(f"[yuri] found a stale orchestrator still running (pid {old_pid}) -- taking over", flush=True)
+            log.warning(f"found a stale orchestrator still running (pid {old_pid}) -- taking over")
             if sys.platform == "win32":
                 subprocess.run(["taskkill", "/PID", str(old_pid), "/F"], capture_output=True)
             else:
@@ -2450,6 +2442,9 @@ def _take_over_stale_orchestrator(pid_file: Path) -> None:
 
 if __name__ == "__main__":
     import uvicorn
+
+    # One line per event on stderr; the shell writes it to logs/kernel.log (R-13).
+    logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
 
     from memory import db as memory_db
 

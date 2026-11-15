@@ -349,10 +349,10 @@ async def test_check_sends_the_schema(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_unparseable_output_is_logged_raw(monkeypatch, capsys):
+async def test_unparseable_output_is_logged_raw(monkeypatch, caplog):
     async def prose(prompt, image_b64, json_schema=None):
         return "The user appears to be playing a racing game right now."
 
     monkeypatch.setattr(task_guide.llm, "describe_image", prose)
     assert await task_guide.check_task_progress("write the essay", "b64") is None
-    assert "unparseable check output: 'The user appears to be playing a racing game" in capsys.readouterr().err
+    assert "unparseable check output: 'The user appears to be playing a racing game" in caplog.text

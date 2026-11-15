@@ -10,7 +10,7 @@ assumed -- see docs/DECISIONS.md and docs/MODELS.md's STT section.
 Model loading is lazy (first call to transcribe(), not import time like
 config.py's CONFIG) -- WhisperModel() pulls weights from Hugging Face on
 first-ever run and takes a real moment to load onto CPU/GPU after that, and
-unlike the LLM/TTS configs there's no reason to pay that cost at orchestrator
+unlike the LLM/TTS configs there's no reason to pay that cost at kernel
 startup for a feature the user might not use in a given session.
 """
 
@@ -18,13 +18,15 @@ from __future__ import annotations
 
 import asyncio
 import io
-import sys
+import logging
 import threading
 import time
 
 from faster_whisper import WhisperModel
 
 from config import CONFIG
+
+log = logging.getLogger(__name__)
 
 _model: WhisperModel | None = None
 _model_lock = threading.Lock()
@@ -73,20 +75,16 @@ def _load_model() -> None:
     # actually recording something, the problem is upstream of stt.py
     # entirely (audio never reached the backend) -- see app.py's own
     # "received N bytes" log line right before this gets called.
-    print(
-        f"[yuri] loading faster-whisper model '{cfg.model_size}' on "
+    log.info(
+        f"loading faster-whisper model '{cfg.model_size}' on "
         f"{cfg.device} ({cfg.compute_type}) -- once per run. Downloads "
         "from Hugging Face on a genuinely first-ever run, which can take "
         "a while depending on your connection.",
-        file=sys.stderr,
-        flush=True,
     )
     start = time.monotonic()
     _model = WhisperModel(cfg.model_size, device=cfg.device, compute_type=cfg.compute_type)
-    print(
-        f"[yuri] faster-whisper model loaded in {time.monotonic() - start:.1f}s",
-        file=sys.stderr,
-        flush=True,
+    log.info(
+        f"faster-whisper model loaded in {time.monotonic() - start:.1f}s",
     )
 
 
@@ -99,7 +97,7 @@ async def preload() -> None:
     try:
         await asyncio.to_thread(_get_model)
     except Exception as exc:  # noqa: BLE001 -- the first transcription retries
-        print(f"[kokyu] stt preload failed (will retry on first use): {type(exc).__name__}: {exc}", file=sys.stderr)
+        log.warning(f"stt preload failed (will retry on first use): {type(exc).__name__}: {exc}")
 
 
 def _transcribe_sync(audio_bytes: bytes) -> str:
@@ -109,7 +107,7 @@ def _transcribe_sync(audio_bytes: bytes) -> str:
     # and resamples to the 16kHz mono its feature extractor wants, so the
     # WebM/Opus blob MediaRecorder produces in the frontend doesn't need any
     # conversion on this end. No temp file needed either.
-    print(f"[yuri] transcribing {len(audio_bytes)} bytes of audio...", file=sys.stderr, flush=True)
+    log.info(f"transcribing {len(audio_bytes)} bytes of audio...")
     start = time.monotonic()
     # model.transcribe() itself returns near-instantly -- `segments` is a
     # lazy generator, the actual GPU/CPU work happens while iterating it
@@ -123,10 +121,8 @@ def _transcribe_sync(audio_bytes: bytes) -> str:
     # leading space from faster-whisper's tokenizer, so join without adding
     # more, then collapse the whole thing's outer whitespace once.
     result = "".join(segment.text for segment in segments).strip()
-    print(
-        f"[yuri] transcribe() finished in {time.monotonic() - start:.1f}s: {result!r}",
-        file=sys.stderr,
-        flush=True,
+    log.info(
+        f"transcribe() finished in {time.monotonic() - start:.1f}s: {result!r}",
     )
     return result
 

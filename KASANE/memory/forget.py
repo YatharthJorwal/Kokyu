@@ -20,7 +20,7 @@ philosophy:
 
 Returns a short instruction fragment (not literal text to speak) for
 app.py to fold into the same ephemeral system message recall.py's block
-goes into -- so the *main* Yuri model (already carrying full persona
+goes into -- so the main chat model (already carrying full persona
 context) is the one that actually acknowledges the removal in character,
 rather than this module's own small classification call also trying to
 write in-character flavor text it has no persona context for.
@@ -30,13 +30,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import re
-import sys
 
 import llm
 import router
 from . import db, store
 from .db import MemoryUnavailableError
+
+log = logging.getLogger(__name__)
 
 # Deliberately narrow and explicit-language-only, matching the user's own
 # framing ("when I tell her to"). Implicit corrections ("actually I like X
@@ -82,7 +84,7 @@ async def maybe_forget(user_text: str) -> str | None:
     try:
         facts_with_ids = await asyncio.to_thread(store.get_all_facts_with_ids, MAX_FACTS_FOR_FORGET_LOOKUP)
     except MemoryUnavailableError as exc:
-        print(f"[yuri] forget: facts unavailable, skipping: {exc}", file=sys.stderr)
+        log.warning(f"forget: facts unavailable, skipping: {exc}")
         return None
     if not facts_with_ids:
         return None
@@ -98,7 +100,7 @@ async def maybe_forget(user_text: str) -> str | None:
         async for delta in router.stream_text("memory_writer", messages):
             raw_output += delta
     except llm.LLMUnreachableError as exc:
-        print(f"[yuri] forget: LLM unreachable, skipping this turn's forget check: {exc}", file=sys.stderr)
+        log.warning(f"forget: LLM unreachable, skipping this turn's forget check: {exc}")
         return None
 
     indices = _parse_remove_indices(raw_output)
@@ -115,7 +117,7 @@ async def maybe_forget(user_text: str) -> str | None:
     try:
         await asyncio.to_thread(_forget, ids_to_remove, user_text)
     except MemoryUnavailableError as exc:
-        print(f"[yuri] forget: couldn't delete facts: {exc}", file=sys.stderr)
+        log.warning(f"forget: couldn't delete facts: {exc}")
         return None
 
     joined = "; ".join(removed_contents)

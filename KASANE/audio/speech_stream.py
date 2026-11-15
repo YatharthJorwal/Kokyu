@@ -14,11 +14,13 @@ Pure enough to test without a model: `synth` and `send` are injected.
 from __future__ import annotations
 
 import asyncio
-import sys
+import logging
 from typing import Awaitable, Callable
 
 from audio import speech
 from audio.tts import synthesize as default_synthesize
+
+log = logging.getLogger(__name__)
 
 Send = Callable[[str, bytes], Awaitable[None]]
 Synth = Callable[[str], Awaitable[bytes]]
@@ -121,12 +123,12 @@ class SpeechStream:
         except asyncio.CancelledError:
             raise
         except Exception as exc:  # noqa: BLE001 -- one clause must not kill the turn
-            print(f"[yuri] speech: synthesis failed for a clause ({exc})", file=sys.stderr)
+            log.warning(f"speech: synthesis failed for a clause ({exc})")
             return
         try:
             await self._send(display, audio)
         except Exception as exc:  # noqa: BLE001 -- a closed socket ends the send, not the app
-            print(f"[yuri] speech: send failed ({exc})", file=sys.stderr)
+            log.warning(f"speech: send failed ({exc})")
             return
         if not self._first_audio_done:
             self._first_audio_done = True

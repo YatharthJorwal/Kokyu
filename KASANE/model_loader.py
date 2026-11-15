@@ -21,10 +21,12 @@ first.
 from __future__ import annotations
 
 import asyncio
-import sys
+import logging
 import time
 from collections.abc import Awaitable, Callable
 from typing import Any
+
+log = logging.getLogger(__name__)
 
 IDLE, LOADING, READY, FAILED = "idle", "loading", "ready", "failed"
 STATES = (IDLE, LOADING, READY, FAILED)
@@ -182,10 +184,10 @@ class ModelLoader:
             raise
         except Exception as exc:  # noqa: BLE001 -- shown to the user, with Try again
             # stderr like the rest of the kernel's log lines (logging is not configured).
-            print(f"[kokyu] loading {ref} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
+            log.warning(f"loading {ref} failed: {type(exc).__name__}: {exc}")
             await self._set(ref, FAILED, failure_text(exc))
             return
-        print(f"[kokyu] model ready: {ref} after {self.status()['elapsed_s']} s", file=sys.stderr)
+        log.info(f"model ready: {ref} after {self.status()['elapsed_s']} s")
         await self._set(ref, READY)
 
     async def mark_ready(self, ref: str) -> None:

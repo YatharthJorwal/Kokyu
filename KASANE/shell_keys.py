@@ -14,12 +14,15 @@ from __future__ import annotations
 
 import asyncio
 import json
+import logging
 import os
 import sys
 import threading
 from typing import Any, Awaitable, BinaryIO, Callable
 
 from provider_presets import PROVIDER_ID
+
+log = logging.getLogger(__name__)
 
 _keys: dict[str, str] = {}
 PIPE_ENABLED = False
@@ -43,7 +46,7 @@ def take_from_environ() -> None:
     except ValueError:
         handed = None
     if not isinstance(handed, dict):
-        print("[kokyu] keys: ignored the keys from the shell (not readable)", flush=True)
+        log.warning("keys: ignored the keys from the shell (not readable)")
         return
     for provider, key in handed.items():
         if isinstance(provider, str) and PROVIDER_ID.match(provider) and valid_key(key):
@@ -113,13 +116,13 @@ def start_reader(
                 continue
             parsed = parse_line(raw.strip())
             if parsed is None:
-                print("[kokyu] keys: ignored a line from the shell that was not a key message", flush=True)
+                log.warning("keys: ignored a line from the shell that was not a key message")
                 continue
             future = asyncio.run_coroutine_threadsafe(apply(*parsed), loop)
             try:
                 future.result()
             except Exception as exc:  # noqa: BLE001 -- one bad change must not stop the reader
-                print(f"[kokyu] keys: applying a key change failed: {type(exc).__name__}", flush=True)
+                log.warning(f"keys: applying a key change failed: {type(exc).__name__}")
 
     thread = threading.Thread(target=run, name="kokyu-key-pipe", daemon=True)
     thread.start()

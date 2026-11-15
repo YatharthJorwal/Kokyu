@@ -12,6 +12,7 @@ from __future__ import annotations
 
 import difflib
 import json
+import logging
 import pathlib
 import time
 from dataclasses import dataclass
@@ -20,6 +21,8 @@ from typing import Any
 import httpx
 
 import paths
+
+log = logging.getLogger(__name__)
 
 def repo_path(value: str | pathlib.Path) -> pathlib.Path:
     """Kept for callers; every location now comes from paths.py (R-40)."""
@@ -197,7 +200,7 @@ class ModelCatalog:
         try:
             self._save_cache()
         except OSError as exc:  # a read-only repo must not kill the app; the list itself is fresh
-            print(f"[kokyu] router: model list cache not written: {exc}", flush=True)
+            log.warning(f"router: model list cache not written: {exc}")
         return True
 
 

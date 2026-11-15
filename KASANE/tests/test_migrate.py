@@ -14,7 +14,7 @@ from memory_helpers import fake_vector
 
 
 def _v1_database(path, dim=4):
-    """A database exactly as Luna / pre-Phase-3 Yuri wrote it."""
+    """A database exactly as the older Luna app wrote it."""
     conn = sqlite3.connect(str(path))
     conn.enable_load_extension(True)
     sqlite_vec.load(conn)
@@ -74,7 +74,7 @@ def test_fresh_database_lands_on_current_version_with_dimension_recorded(memory_
     assert store.get_meta("embedding_dim") == "4"
 
 
-def test_corrupt_file_is_quarantined_not_deleted(tmp_path, capsys):
+def test_corrupt_file_is_quarantined_not_deleted(tmp_path, caplog):
     path = tmp_path / "memory.db"
     garbage = b"this is not a sqlite database at all" * 40
     path.write_bytes(garbage)
@@ -84,7 +84,7 @@ def test_corrupt_file_is_quarantined_not_deleted(tmp_path, capsys):
         moved = list(tmp_path.glob("memory.db.corrupt-*"))
         assert len(moved) == 1 and moved[0].read_bytes() == garbage
         assert migrate.get_version(conn) == migrate.SCHEMA_VERSION  # fresh, usable
-        assert "corrupt" in capsys.readouterr().err.lower()
+        assert "corrupt" in caplog.text.lower()
     finally:
         conn.close()
 

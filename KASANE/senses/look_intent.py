@@ -2,7 +2,7 @@
 Explicit "look at X" requests, handled deterministically instead of leaving
 them to the model's own native tool-calling.
 
-Real usage (a pasted orchestrator.log) showed capture_screen firing for
+Real usage (a pasted kernel log) showed capture_screen firing for
 only 2 of ~9 requests that were plainly asking her to look -- "see what i
 am playing", "look at my screen", "use OCR", "use your damn tools to see",
 "whats on my screen", "tell me what do you see now". Every miss was a
@@ -34,13 +34,15 @@ frame.
 
 from __future__ import annotations
 
+import logging
 import re
-import sys
 import time
 
 from senses import camera
 import llm
 from tools import vision
+
+log = logging.getLogger(__name__)
 
 # Explicit screen requests. Objects limited to screen/monitor/display/
 # desktop/wallpaper (not "window"/"tab") -- those are common enough in
@@ -177,7 +179,7 @@ async def maybe_look(user_text: str, websocket) -> str | None:
         else:
             description = await vision.describe_screen()
     except vision.ToolUnavailableError as exc:
-        print(f"[yuri] look: {target} capture failed: {exc}", file=sys.stderr)
+        log.warning(f"look: {target} capture failed: {exc}")
         extra = (
             " If it was the camera, they probably need to turn it on from "
             "their quick-action menu."
@@ -190,7 +192,7 @@ async def maybe_look(user_text: str, websocket) -> str | None:
             f"see it.{extra} Do NOT make up or guess what you would have seen."
         )
     except llm.LLMUnreachableError as exc:
-        print(f"[yuri] look: vision model unreachable: {exc}", file=sys.stderr)
+        log.warning(f"look: vision model unreachable: {exc}")
         return (
             f"The user just asked you to look {where}, but your vision "
             "isn't working right now. Tell them plainly, in character, "
@@ -200,7 +202,7 @@ async def maybe_look(user_text: str, websocket) -> str | None:
 
     # 300 chars, not 80: the short version made it impossible to tell
     # whether a wrong-sounding reply was the vision model's fault or hers.
-    print(f"[yuri] look: {target} -> {description[:300]!r}", file=sys.stderr)
+    log.info(f"look: {target} -> {description[:300]!r}")
     return (
         f"You just looked {where} right now, because they asked. What you "
         f"saw: {description} Begin your reply by naming, accurately and in "

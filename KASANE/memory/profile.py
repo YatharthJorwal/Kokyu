@@ -11,12 +11,14 @@ instead, and the card stays marked stale so a later pass replaces it.
 from __future__ import annotations
 
 import asyncio
-import sys
+import logging
 
 import router
 from config import CONFIG
 
 from . import store
+
+log = logging.getLogger(__name__)
 
 _MAX_FACTS = 60
 
@@ -72,7 +74,7 @@ async def rebuild_if_dirty() -> bool:
     try:
         card = "".join([d async for d in router.stream_text("memory_writer", messages)]).strip()
     except Exception as exc:  # noqa: BLE001 -- the deterministic card below covers it
-        print(f"[yuri] profile card: model unavailable, using a plain card for now: {exc}", file=sys.stderr)
+        log.warning(f"profile card: model unavailable, using a plain card for now: {exc}")
 
     used_model = bool(card) and len(card) <= limit * 2
     final = _cut(card, limit) if used_model else _fallback(facts)

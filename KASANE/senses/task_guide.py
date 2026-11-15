@@ -20,14 +20,16 @@ make sense for one person at one screen.
 from __future__ import annotations
 
 import json
+import logging
 import re
-import sys
 import time
 from dataclasses import dataclass, replace
 
 import llm
 
 import router
+
+log = logging.getLogger(__name__)
 
 
 @dataclass(frozen=True)
@@ -192,13 +194,13 @@ async def check_task_progress(task_description: str, image_b64: str) -> dict | N
     try:
         raw_output = await router.describe_image("vision", prompt, image_b64, json_schema=CHECK_SCHEMA)
     except llm.LLMUnreachableError as exc:
-        print(f"[yuri] task guide: vision call failed ({type(exc).__name__}): {exc}", file=sys.stderr)
+        log.warning(f"task guide: vision call failed ({type(exc).__name__}): {exc}")
         return None
     result = _parse_check_result(raw_output)
     if result is None:
         # The raw text is the only way to tell "the model wrote prose" from
         # "the model wrote JSON with the wrong shape" -- it used to be dropped.
-        print(f"[yuri] task guide: unparseable check output: {raw_output[:300]!r}", file=sys.stderr)
+        log.info(f"task guide: unparseable check output: {raw_output[:300]!r}")
     return result
 
 
@@ -319,7 +321,7 @@ async def maybe_update_task(user_text: str) -> str | None:
         async for delta in router.stream_text("classifier", messages):
             raw_output += delta
     except llm.LLMUnreachableError as exc:
-        print(f"[yuri] task guide: detection LLM unreachable, skipping: {exc}", file=sys.stderr)
+        log.warning(f"task guide: detection LLM unreachable, skipping: {exc}")
         return None
 
     parsed = _parse_task_detection(raw_output)
@@ -329,7 +331,7 @@ async def maybe_update_task(user_text: str) -> str | None:
     if parsed["action"] == "start":
         description = parsed["description"] or "an unspecified task"
         set_active_task(True, description)
-        print(f"[yuri] task guide: detected task start -> '{description}'", file=sys.stderr)
+        log.info(f"task guide: detected task start -> '{description}'")
         return (
             f"The user just described a task, and it is now being "
             f"tracked: {description!r}. You do not need to explicitly "
@@ -341,7 +343,7 @@ async def maybe_update_task(user_text: str) -> str | None:
     if not get_state().active:
         return None
     set_active_task(False)
-    print("[yuri] task guide: detected task stop", file=sys.stderr)
+    log.info("task guide: detected task stop")
     return (
         "The user just indicated the task you were tracking is done, "
         "dropped, or paused, and tracking has been stopped. React "

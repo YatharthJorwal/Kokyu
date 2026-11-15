@@ -8,7 +8,7 @@ tts.engine, same pattern as the LLM's config-driven backend choice.
   sounds robotic. Also used as an automatic fallback if the configured
   engine is "gpt_sovits" but its API server can't be reached, so a
   turn never goes silent just because that server isn't running -- the
-  real error is printed to the orchestrator's terminal when this happens,
+  real error goes to logs/kernel.log when this happens,
   so "wrong voice came out" is diagnosable instead of a silent mystery --
   see synthesize() below.
 - "gpt_sovits": real cloned voice, via GPT-SoVITS's own API server
@@ -23,10 +23,10 @@ tts.engine, same pattern as the LLM's config-driven backend choice.
 """
 
 import asyncio
+import logging
 import os
 import socket
 import subprocess
-import sys
 import tempfile
 from dataclasses import dataclass
 from urllib.parse import urlparse
@@ -36,6 +36,8 @@ import pyttsx3
 
 import paths
 from config import CONFIG
+
+log = logging.getLogger(__name__)
 
 
 class TTSUnreachableError(Exception):
@@ -93,10 +95,9 @@ async def _synthesize_gpt_sovits(text: str, voice: VoiceParams | None = None) ->
         async with httpx.AsyncClient(timeout=httpx.Timeout(60.0, connect=5.0)) as client:
             response = await client.post(cfg.api_url, json=payload)
             content_type = response.headers.get("content-type", "")
-            print(
-                f"[yuri] gpt_sovits response: {response.status_code}, "
+            log.info(
+                f"gpt_sovits response: {response.status_code}, "
                 f"content-type={content_type!r}, {len(response.content)} bytes",
-                file=sys.stderr,
             )
             if response.status_code >= 400:
                 raise TTSUnreachableError(
@@ -116,7 +117,7 @@ async def _synthesize_gpt_sovits(text: str, voice: VoiceParams | None = None) ->
                 raise TTSUnreachableError(f"empty response body from {cfg.api_url}")
             if "audio" not in content_type.lower():
                 body_preview = response.text[:1000]
-                print(f"[yuri] gpt_sovits non-audio body: {body_preview!r}", file=sys.stderr)
+                log.info(f"gpt_sovits non-audio body: {body_preview!r}")
                 raise TTSUnreachableError(
                     f"expected audio from {cfg.api_url}, got content-type "
                     f"{content_type!r}: {body_preview[:300]!r}"
@@ -165,7 +166,7 @@ async def synthesize(text: str, voice: VoiceParams | None = None) -> bytes:
             # meant "wrong voice came out" had no visible cause anywhere --
             # printing it here is the whole difference between "check the
             # terminal" and "guess blindly."
-            print(f"[yuri] gpt_sovits unreachable, falling back to pyttsx3: {exc}", file=sys.stderr)
+            log.warning(f"gpt_sovits unreachable, falling back to pyttsx3: {exc}")
 
     return await asyncio.to_thread(_synthesize_pyttsx3_sync, text)
 
@@ -212,10 +213,9 @@ def _launch_gpt_sovits() -> subprocess.Popen | None:
     script = str(launch.get("script") or (os.path.join(root, "api_v2.py") if root else ""))
     cwd = str(launch.get("cwd") or root)
     if not (python and script and os.path.isfile(python) and os.path.isfile(script)):
-        print(
-            "[yuri] gpt_sovits: launch paths are missing or wrong "
+        log.warning(
+            "gpt_sovits: launch paths are missing or wrong "
             f"(python={python!r}, script={script!r}) -- not starting it",
-            file=sys.stderr,
         )
         return None
     args = [str(part) for part in (launch.get("args") or [])]
@@ -223,25 +223,25 @@ def _launch_gpt_sovits() -> subprocess.Popen | None:
     env.pop("KOKYU_API_KEYS", None)
     try:
         paths.logs_dir().mkdir(parents=True, exist_ok=True)
-        log = open(paths.logs_dir() / "gpt_sovits.log", "wb")  # noqa: SIM115 -- the child keeps it
+        log_file = open(paths.logs_dir() / "gpt_sovits.log", "wb")  # noqa: SIM115 -- the child keeps it
     except OSError:
-        log = subprocess.DEVNULL
+        log_file = subprocess.DEVNULL
     try:
         return subprocess.Popen(  # noqa: S603 -- local, configured executable
             [python, script, *args],
             cwd=cwd or None,
             env=env,
             stdin=subprocess.DEVNULL,   # the kernel's stdin carries API keys from the shell (D-059)
-            stdout=log,
+            stdout=log_file,
             stderr=subprocess.STDOUT,
             creationflags=_CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
     except OSError as exc:
-        print(f"[kokyu] gpt_sovits: could not start the server: {exc}", file=sys.stderr)
+        log.warning(f"gpt_sovits: could not start the server: {exc}")
         return None
     finally:
-        if log is not subprocess.DEVNULL:
-            log.close()
+        if log_file is not subprocess.DEVNULL:
+            log_file.close()
 
 
 async def _wait_for_health(timeout: float, interval: float = 0.5) -> bool:
@@ -277,9 +277,8 @@ async def _start_server() -> bool:
         return True
     launch = dict(CONFIG.tts.gpt_sovits.launch or {})
     if not launch.get("enabled", False):
-        print(
-            "[kokyu] gpt_sovits: not running and tts.gpt_sovits.launch is off -- replies stay text-only",
-            file=sys.stderr,
+        log.info(
+            "gpt_sovits: not running and tts.gpt_sovits.launch is off -- replies stay text-only",
         )
         return False
 
@@ -292,16 +291,15 @@ async def _start_server() -> bool:
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         if await health():
-            print("[kokyu] gpt_sovits: server is up", file=sys.stderr, flush=True)
+            log.info("gpt_sovits: server is up")
             return True
         if process.poll() is not None:
-            print(
-                f"[kokyu] gpt_sovits: exited during startup (code {process.returncode}); see logs/gpt_sovits.log",
-                file=sys.stderr,
+            log.info(
+                f"gpt_sovits: exited during startup (code {process.returncode}); see logs/gpt_sovits.log",
             )
             return False
         await asyncio.sleep(1.0)
-    print(f"[kokyu] gpt_sovits: still not listening after {timeout:.0f}s", file=sys.stderr)
+    log.warning(f"gpt_sovits: still not listening after {timeout:.0f}s")
     return False
 
 

@@ -21,11 +21,13 @@ Writing the results (dedupe, contradictions, checkpoint) is writer.py's job.
 from __future__ import annotations
 
 import json
+import logging
 import re
-import sys
 from dataclasses import dataclass, field
 
 import router
+
+log = logging.getLogger(__name__)
 
 _SYSTEM_PROMPT = """\
 You distill a conversation transcript between a user and their AI \
@@ -91,7 +93,7 @@ async def distill(transcript: str) -> Distilled | None:
         async for delta in router.stream_text("memory_writer", messages):
             raw += delta
     except Exception as exc:  # noqa: BLE001 -- a background pass must never take the app down
-        print(f"[yuri] writer: model unreachable, will retry next pass: {exc}", file=sys.stderr)
+        log.warning(f"writer: model unreachable, will retry next pass: {exc}")
         return None
     return parse_output(raw)
 
@@ -125,9 +127,8 @@ def parse_output(raw_output: str) -> Distilled:
         facts = [f for f in (_fact_from(i) for i in (raw_facts if isinstance(raw_facts, list) else [])) if f]
         return Distilled(facts, str(parsed.get("episode_summary", "")).strip())
 
-    print(
-        f"[yuri] writer: model output didn't parse as the expected JSON shape, falling back to "
+    log.warning(
+        f"writer: model output didn't parse as the expected JSON shape, falling back to "
         f"storing it as a raw episode summary: {raw_output[:300]!r}",
-        file=sys.stderr,
     )
     return Distilled([], raw_output.strip()[:500])

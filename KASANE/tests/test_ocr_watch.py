@@ -294,10 +294,10 @@ async def test_watch_check_sends_the_schema(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_watch_unparseable_output_is_logged_raw(monkeypatch, capsys):
+async def test_watch_unparseable_output_is_logged_raw(monkeypatch, caplog):
     async def prose(prompt, image_b64, json_schema=None):
         return "Nothing much is going on."
 
     monkeypatch.setattr(ocr_watch.llm, "describe_image", prose)
     assert await ocr_watch.check_for_comment("", "b64") is None
-    assert "unparseable check output: 'Nothing much is going on.'" in capsys.readouterr().err
+    assert "unparseable check output: 'Nothing much is going on.'" in caplog.text
