@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
-import type { Effort, ServerData } from "../net/protocol";
+import type { Effort, ServerData, SettingsChange } from "../net/protocol";
 import {
   canPickModel,
   canRegenerate,
@@ -174,12 +174,18 @@ export const actions = {
     dispatch({ kind: "picker", open: false });
   },
 
-  /** K1-13: Settings opens on a section; the Doctor and Memory ask the kernel for fresh data. */
+  /** K1-13: Settings opens on a section; each asks the kernel for fresh data. */
   openSettings(section: SettingsSection = "models"): void {
     dispatch({ kind: "settings", section });
     if (section === "doctor") socket.send("doctor", {});
     if (section === "memory") socket.send("memory_list", {});
     if (section === "models") socket.send("model_list", {});
+    if (section === "models" || section === "screen") socket.send("settings_get", {});
+  },
+
+  /** K1-13b (FR-SET-2): saved to settings.json and applied at once; every window gets the result. */
+  saveSettings(change: SettingsChange): boolean {
+    return socket.send("settings_set", change);
   },
 
   closeSettings(): void {

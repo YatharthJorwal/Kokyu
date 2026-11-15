@@ -14,10 +14,13 @@ import sys
 import time
 from pathlib import Path
 
+import ambient
 import companions
 import conversation
+import hub
 import llm
 import model_loader
+import protocol
 import router
 import tools
 import vram
@@ -26,6 +29,7 @@ from config import CONFIG
 from memory import embeddings, writer
 from router import listing as model_listing
 from router import model_ref as model_refs
+from senses import ocr_watch, task_guide
 
 log = logging.getLogger(__name__)
 
@@ -171,11 +175,34 @@ async def boot_sequence() -> None:
 
 async def after_first_window() -> None:
     await first_window_event().wait()
-    for step in (check_chat_model, startup_memory_pass):
+    for step in (check_chat_model, start_screen_companions, startup_memory_pass):
         try:
             await step()
         except Exception as exc:  # noqa: BLE001 -- one failed step must not stop the rest
             log.warning(f"boot step {step.__name__} failed: {type(exc).__name__}: {exc}")
+
+
+async def start_screen_companions() -> None:
+    """FR-SC-1 (D-070): a screen companion set in Settings to start with Kōkyū turns
+    on once a window is up, after the same vision check as the + tray (FR-SC-3).
+    Without a local vision model it stays off and the window says why."""
+    wanted = [mode for mode, on in (
+        ("task_guide", CONFIG.task_guide.on_at_start),
+        ("ocr_watch", CONFIG.ocr_watch.on_at_start),
+    ) if on]
+    if not wanted:
+        return
+    problem = await ambient.vision_problem()
+    if problem:
+        log.warning(f"screen companions not started: {problem}")
+        await hub.broadcast(protocol.error_frame("vision_unavailable", problem))
+        return
+    if "task_guide" in wanted:
+        task_guide.set_enabled(True)
+    if "ocr_watch" in wanted:
+        ocr_watch.set_active(True)
+    log.info(f"screen companions on at start: {', '.join(wanted)}")
+    await hub.broadcast_screen_status()
 
 
 async def startup_memory_pass() -> None:

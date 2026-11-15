@@ -32,6 +32,7 @@ import paths
 import protocol
 import router
 import session
+import settings_file
 import shell_keys
 import waifus
 from audio import arbiter, tts, voice_mode
@@ -58,6 +59,8 @@ ALLOWED_ORIGINS = (
 async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     """Boot runs in the background (D-060), so the port opens at once. On the way out
     everything the kernel started stops with it."""
+    # settings.json over config.yaml (FR-SET-2, D-070), before anything builds on it.
+    await settings_file.apply_saved()
     boot_task = asyncio.create_task(boot.boot_sequence())
     if shell_keys.PIPE_ENABLED:
         # FR-R-6, D-059: a key saved or removed in the app arrives on stdin, live.

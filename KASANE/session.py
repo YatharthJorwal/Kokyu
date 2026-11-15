@@ -28,6 +28,7 @@ import llm
 import model_loader
 import protocol
 import router
+import settings_file
 import turns
 import waifus
 from audio import voice_mode
@@ -560,6 +561,30 @@ class Session:
     async def on_memory_restore(self, msg: Any) -> None:
         await memory_viewer.restore(msg.data.id)
         await self.send_memory_facts()
+
+    # ── Settings (K1-13b): what the user edits, in settings.json (D-070) ────
+
+    async def on_settings_get(self, msg: Any) -> None:
+        saved = await asyncio.to_thread(settings_file.read)
+        await self.ws.send_json(protocol.frame("settings", settings_file.view(CONFIG, saved)))
+
+    async def on_settings_set(self, msg: Any) -> None:
+        """FR-SET-2 (D-070): only the keys sent change; saved to settings.json and
+        applied with no restart. A refused value changes nothing and says why."""
+        async with settings_file.LOCK:
+            saved = await asyncio.to_thread(settings_file.read)
+            try:
+                updated = settings_file.change(saved, msg.data.model_dump(exclude_unset=True))
+                cfg = await settings_file.save(updated)
+            except Exception as exc:  # noqa: BLE001 - shown to the user, nothing applied
+                problem = str(exc) if isinstance(exc, settings_file.SettingsError) else f"Not saved: {exc}"
+                await self.ws.send_json(protocol.frame("settings", settings_file.view(CONFIG, saved, problem)))
+                return
+            rt = router.get_router()
+            await rt.reconfigure(cfg)
+        log.info(f"settings: saved {sorted(msg.data.model_dump(exclude_unset=True))} to {settings_file.path()}")
+        await hub.broadcast(protocol.frame("settings", settings_file.view(cfg, updated)))
+        await hub.broadcast(protocol.frame("model_list", await model_listing.model_list(rt, cfg=cfg)))
 
     async def on_model_load(self, msg: Any) -> None:
         # Try again after a failed load. Observers only watch; the driver never reloads mid-reply.

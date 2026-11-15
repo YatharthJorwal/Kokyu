@@ -78,6 +78,16 @@ def is_embedding_model(name: str, details: Mapping[str, Any] | None) -> bool:
 LOCAL_BADGES = ("vision", "thinking", "tools")
 
 
+def _key_targets(cfg: Config) -> list[dict[str, str]]:
+    """The endpoints a key can be saved for (D-059): the presets, and the slot's own
+    endpoint when it is a custom one (from config.yaml or Settings, D-070)."""
+    targets = [{"id": pid, "label": preset["label"]} for pid, preset in API_PRESETS.items()]
+    slot = cfg.providers.get("airouter")
+    if slot is not None and slot.enabled and slot.preset and slot.preset not in API_PRESETS:
+        targets.append({"id": slot.preset, "label": slot.label or "Custom"})
+    return targets
+
+
 def _bare(name: str) -> str:
     return name[: -len(":latest")] if name.endswith(":latest") else name
 
@@ -312,6 +322,6 @@ async def model_list(
         "api_key": key_present,
         # D-059: the one active endpoint and the ones a key can be saved for. Never a key.
         "api_provider": status,
-        "api_presets": [{"id": pid, "label": preset["label"]} for pid, preset in API_PRESETS.items()],
+        "api_presets": _key_targets(cfg),
         "spend": spend,
     }

@@ -308,3 +308,22 @@ test("Settings opens on a section and keeps the Doctor's and memory's last answe
   assert.equal(s.settings, null);
   assert.deepEqual(s.doctor, checks); // shown at once next time, then refreshed
 });
+
+test("the editable settings arrive as one frame, a refusal with its reason (K1-13b, FR-SET-2)", () => {
+  let s = reduce(initialState, { kind: "settings", section: "models" });
+  assert.equal(s.prefs, null);
+  const prefs = {
+    ollama_url: "http://127.0.0.1:11434",
+    budget: { enabled: true, hourly_usd: 0.25, daily_usd: null, monthly_usd: 20 },
+    custom_api: null,
+    screen: { task_guide: false, ocr_watch: true },
+    saved: ["screen"],
+    file: "C:/data/settings.json",
+    problem: null,
+  };
+  s = reduce(s, frame("settings", prefs, null));
+  assert.deepEqual(s.prefs, prefs);
+  s = reduce(s, frame("settings", { ...prefs, problem: "Ollama must run on this PC." }, null));
+  assert.equal(s.prefs.problem, "Ollama must run on this PC.");
+  assert.equal(s.settings, "models"); // the dialog stays open on its section
+});

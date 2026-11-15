@@ -175,7 +175,7 @@ class LlamaCppServer:
         self._keep = helper_models() if keep_loaded is None else keep_loaded
         self._spawn = spawn
         self._transport = transport
-        self._ollama_url = ollama_url or CONFIG.llm.base_url
+        self._ollama_url = ollama_url   # None: the running config's, read when needed (D-070)
         self._poll_s = poll_s
         self._lock = asyncio.Lock()
         self.process: Any = None
@@ -226,7 +226,7 @@ class LlamaCppServer:
                     f"another program is already serving on {self.base_url} (often a leftover "
                     "llama-server.exe from a crash: end it in Task Manager), or change llamacpp.port."
                 )
-            await unload_ollama(self._ollama_url, keep=self._keep, transport=self._transport)
+            await unload_ollama(self._ollama_url or CONFIG.llm.base_url, keep=self._keep, transport=self._transport)
             before = await vram.gpu_memory()   # K1-09: what the server takes, measured
             log_path = paths.logs_dir() / LOG_NAME
             log_path.parent.mkdir(parents=True, exist_ok=True)

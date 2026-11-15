@@ -125,6 +125,41 @@ class FactEdit(_Data):
     text: str = Field(min_length=1, max_length=2000)
 
 
+class BudgetSettings(_Data):
+    """K1-13b (FR-SET-2, FR-M-7): the spending caps; None is no cap."""
+
+    # Ranges and names are checked in settings_file.change, which says what is wrong
+    # in the Settings form; these only bound the size.
+    enabled: bool = True
+    hourly_usd: float | None = None
+    daily_usd: float | None = None
+    monthly_usd: float | None = None
+
+
+class CustomApi(_Data):
+    """K1-13b (FR-R-6, D-059, D-070): an OpenAI-compatible endpoint of the user's own."""
+
+    label: str = Field(max_length=200)
+    base_url: str = Field(max_length=300)
+
+
+class ScreenAtStart(_Data):
+    """K1-13b (FR-SC-1): which screen companions turn on when Kōkyū starts."""
+
+    task_guide: bool | None = None
+    ocr_watch: bool | None = None
+
+
+class SettingsChange(_Data):
+    """K1-13b (FR-SET-2, D-070): only the keys sent change. `ollama_url` "" or null
+    and `custom_api` null go back to config.yaml's value."""
+
+    ollama_url: str | None = Field(default=None, max_length=300)
+    budget: BudgetSettings | None = None
+    custom_api: CustomApi | None = None
+    screen: ScreenAtStart | None = None
+
+
 # Client -> kernel, versioned. The data model for each type.
 CLIENT_TYPES: dict[str, type[_Data]] = {
     "hello": Hello,
@@ -153,6 +188,8 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "memory_edit": FactEdit,          # correct a fact (the old one is superseded, not deleted)
     "memory_forget": FactRef,         # forget a fact (restorable)
     "memory_restore": FactRef,        # bring a forgotten fact back
+    "settings_get": Empty,            # K1-13b (FR-SET-2): the editable settings
+    "settings_set": SettingsChange,   # change them; saved to settings.json, applied at once
 }
 
 # Kernel -> client, versioned.
@@ -176,6 +213,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "camera_request", # the kernel wants one camera frame (K2-07)
     "doctor_report",  # K1-13 (FR-SET-3): one row per component, with a fix hint
     "memory_facts",   # K1-13 (FR-MEM-4): live facts, then forgotten ones
+    "settings",       # K1-13b (FR-SET-2): the editable settings in effect
 )
 
 ERROR_CODES: tuple[str, ...] = (

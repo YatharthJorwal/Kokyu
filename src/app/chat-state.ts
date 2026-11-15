@@ -14,6 +14,7 @@ import {
   type ModelStatus,
   type ScreenCompanions,
   type ServerData,
+  type SettingsData,
   type VoiceStatus,
   type ThreadInfo,
   type ThreadMessage,
@@ -22,7 +23,7 @@ import { shortRef } from "./models";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
 /** K1-13: the Settings dialog's sections (FR-SET-1; the rest arrive with their phases). */
-export type SettingsSection = "models" | "memory" | "doctor" | "about";
+export type SettingsSection = "models" | "screen" | "memory" | "doctor" | "about";
 export type TurnPhase = "idle" | "thinking" | "replying";
 export type SurfaceRole = "driver" | "observer";
 
@@ -90,6 +91,8 @@ export interface ChatState {
   doctor: DoctorCheck[] | null;
   /** The remembered facts (FR-MEM-4); null until asked. */
   memory: MemoryFact[] | null;
+  /** K1-13b: the editable settings (FR-SET-2); null until asked. */
+  prefs: SettingsData | null;
 }
 
 export type ChatEvent =
@@ -126,6 +129,7 @@ export const initialState: ChatState = {
   settings: null,
   doctor: null,
   memory: null,
+  prefs: null,
 };
 
 let localCounter = 0;
@@ -370,6 +374,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, doctor: (frame.data as ServerData["doctor_report"]).checks };
     case "memory_facts":
       return { ...state, memory: (frame.data as ServerData["memory_facts"]).facts };
+    case "settings":
+      return { ...state, prefs: frame.data as SettingsData };
     case "error": {
       const data = frame.data as ServerData["error"];
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };

@@ -35,6 +35,8 @@ export const CLIENT_TYPES = [
   "memory_edit",
   "memory_forget",
   "memory_restore",
+  "settings_get",
+  "settings_set",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -57,6 +59,7 @@ export const SERVER_TYPES = [
   "camera_request",
   "doctor_report",
   "memory_facts",
+  "settings",
 ] as const;
 
 export const ERROR_CODES = [
@@ -215,6 +218,36 @@ export interface ServerData {
   camera_request: Record<string, never>;
   doctor_report: { checks: DoctorCheck[] };
   memory_facts: { facts: MemoryFact[] };
+  settings: SettingsData;
+}
+
+/** K1-13b (FR-SET-2, D-070): the editable settings in effect. `saved` names the ones
+ * set in settings.json (the rest come from config.yaml); `problem` says why the
+ * last change was refused. */
+export interface SettingsData {
+  ollama_url: string;
+  budget: BudgetCaps;
+  custom_api: { id: string; label: string; base_url: string } | null;
+  screen: { task_guide: boolean; ocr_watch: boolean };
+  saved: ("ollama_url" | "budget" | "custom_api" | "screen")[];
+  file: string;
+  problem: string | null;
+}
+
+/** A null cap is no cap (FR-M-7). */
+export interface BudgetCaps {
+  enabled: boolean;
+  hourly_usd: number | null;
+  daily_usd: number | null;
+  monthly_usd: number | null;
+}
+
+/** Only the keys sent change; `ollama_url` "" and `custom_api` null go back to config.yaml. */
+export interface SettingsChange {
+  ollama_url?: string;
+  budget?: BudgetCaps;
+  custom_api?: { label: string; base_url: string } | null;
+  screen?: Partial<SettingsData["screen"]>;
 }
 
 /** K1-13 (FR-SET-3): one component's state and how to fix it. */
@@ -263,6 +296,8 @@ export interface ClientData {
   memory_edit: { id: number; text: string };
   memory_forget: { id: number };
   memory_restore: { id: number };
+  settings_get: Record<string, never>;
+  settings_set: SettingsChange;
 }
 
 export type Effort = "off" | "low" | "medium" | "high" | "max";

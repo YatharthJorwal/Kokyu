@@ -33,6 +33,7 @@ import dataclasses
 import logging
 import os
 import pathlib
+import sys
 from dataclasses import dataclass, field
 from typing import Any, Iterable, Mapping
 
@@ -419,6 +420,8 @@ class TaskGuideConfig:
     capture_interval_seconds: int = 90
     idle_timeout_seconds: int = 1800
     model_can_start_tasks: bool = False
+    # FR-SC-1 (D-070): on when Kōkyū starts; set from Settings. Off by default.
+    on_at_start: bool = False
 
 
 @dataclass(frozen=True)
@@ -427,6 +430,7 @@ class OCRWatchConfig:
     min_comment_gap_seconds: int = 120
     same_screen_similarity: float = 0.6
     pause_during_task: bool = True
+    on_at_start: bool = False   # FR-SC-1 (D-070), as task_guide.on_at_start
 
 
 @dataclass(frozen=True)
@@ -830,8 +834,24 @@ def _derive_llamacpp(raw: Mapping[str, Any]) -> LlamaCppConfig:
     return _build(LlamaCppConfig, {**data, "presets": tuple(presets)})
 
 
-def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) -> Config:
-    """Load and normalize a config file. `path=None` uses the search order."""
+def _merge(base: Mapping[str, Any], over: Mapping[str, Any]) -> dict[str, Any]:
+    """`over` wins key by key; mappings on both sides merge (settings.json over
+    config.yaml, D-070)."""
+    out = dict(base)
+    for key, value in over.items():
+        here = out.get(key)
+        out[key] = _merge(here, value) if isinstance(value, Mapping) and isinstance(here, Mapping) else value
+    return out
+
+
+def load_config(
+    path: pathlib.Path | str | None = None,
+    *,
+    quiet: bool = False,
+    overlay: Mapping[str, Any] | None = None,
+) -> Config:
+    """Load and normalize a config file. `path=None` uses the search order.
+    `overlay` (settings.json, D-070) wins over the file, key by key."""
     explicit = path is not None
     config_path = pathlib.Path(path) if explicit else _find_config_path()
     warnings: list[str] = []
@@ -858,6 +878,8 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
             raise RuntimeError(f"{config_path} must contain a YAML mapping at the top level.")
         else:
             raw = dict(loaded)
+    if overlay:
+        raw = _merge(raw, overlay)
 
     llm_raw = _section(raw, "llm")
     providers = _normalize_providers(raw, llm_raw, warnings)
@@ -962,9 +984,25 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
     return cfg
 
 
-# Loaded once at import time. Restart to pick up edits (no hot reload -- not
-# worth the complexity for a single-user local app).
+# Loaded at import from config.yaml alone; the kernel lays settings.json over it at
+# start and after each change in Settings (`install`, D-070). Hand edits to
+# config.yaml still need a restart.
 CONFIG = load_config()
+
+
+def install(cfg: Config) -> None:
+    """Makes `cfg` the running config, no restart (FR-SET-2, D-070). Every loaded
+    module that bound the old CONFIG at import is pointed at the new one; modules
+    read CONFIG when they run, so the next request uses it."""
+    global CONFIG
+    old = CONFIG
+    for module in list(sys.modules.values()):
+        try:
+            if vars(module).get("CONFIG") is old:
+                module.CONFIG = cfg
+        except TypeError:   # a module object without a __dict__
+            continue
+    CONFIG = cfg
 
 
 def print_summary(cfg: Config = CONFIG) -> str:

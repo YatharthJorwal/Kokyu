@@ -1914,3 +1914,109 @@ button:disabled {
 .doctor-hint {
   font-size: 13px;
 }
+
+/* K1-13b: the editable settings (FR-SET-2, D-070) */
+.settings-form {
+  display: flex;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 8px;
+  margin: 8px 0 14px;
+}
+
+.settings-form-title {
+  margin: 6px 0 0;
+  font-weight: 600;
+}
+
+.settings-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  align-self: stretch;
+}
+
+.settings-form > .settings-field {
+  align-self: stretch;
+}
+
+.settings-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+/* in a row the fields share the width (in the column form, a basis would be a height) */
+.settings-row .settings-field {
+  flex: 1 1 220px;
+}
+
+.settings-row .settings-field.narrow {
+  flex: 0 1 180px;
+}
+
+.settings-row .settings-field.money {
+  flex: 1 1 120px;
+}
+
+.settings-field input {
+  padding: 7px 9px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 14px;
+}
+
+.settings-field input:focus {
+  border-color: var(--accent);
+  outline: none;
+}
+
+.settings-field input:disabled {
+  opacity: 0.5;
+}
+
+.settings-actions {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.settings-body button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}
+
+.settings-status {
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.settings-status.failed {
+  color: var(--danger);
+}
+
+.settings-hint {
+  margin: 0;
+  font-size: 13px;
+}
+
+.settings-file {
+  margin-top: 22px;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.settings-list.screen li {
+  gap: 16px;
+}
+
+.settings-list.screen .switch {
+  flex: none;
+  font-size: 13px;
+}

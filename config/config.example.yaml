@@ -7,6 +7,10 @@
 # Secrets never live in this file. Keys come from the environment or from
 # secrets.local.yaml (gitignored), named by `api_key_env`.
 #
+# What the app's Settings edits (the Ollama address, the budget, a custom API
+# endpoint, screen companions at start) is saved in settings.json in the app
+# data folder and wins over this file, key by key (D-070).
+#
 # WINDOWS PATHS: wrap any path containing backslashes in SINGLE quotes, e.g.
 #   'C:\Users\you\file.wav'
 # Double quotes treat \U \n \t as escapes and will fail to parse.
@@ -345,6 +349,9 @@ task_guide:
   # The classifier owns task start/stop; the model calling the tool itself
   # once started a phantom task from a bare "hi" (seen in real logs). Leave false.
   model_can_start_tasks: false
+  # FR-SC-1: turn it on when Kokyu starts (Settings -> Screen sets this in
+  # settings.json). Off by default; it still needs a local vision model.
+  on_at_start: false
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Continuous OCR: ambient remarks about the screen. Rare by design, and code
@@ -355,6 +362,7 @@ ocr_watch:
   min_comment_gap_seconds: 120
   same_screen_similarity: 0.6
   pause_during_task: true
+  on_at_start: false   # as task_guide.on_at_start
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Screenshot sizing. Image cost grows with pixel count; full 1080p was the

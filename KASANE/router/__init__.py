@@ -156,21 +156,36 @@ class Router:
         restart. Returns whether API models are usable afterwards."""
         async with self._lock:
             shell_keys.set(provider_id, key)
-            new_id = active_api_id(self._api_slot)
-            cfg = api_endpoint(self._api_slot, new_id) if self._api_slot else None
-            if new_id != self.api_id or cfg is None:
-                self.catalog = self._catalog_for(cfg)
-            self.api_id = self.state.api_id = new_id
-            self._cloud_cfg = cfg
-            self.state.offline_until = 0.0   # a new key deserves a fresh try
-            self.cloud_provider = None
-            self._api_key_present = False
-            if cfg is not None:
-                from config import resolve_api_key
-
-                found = await asyncio.to_thread(resolve_api_key, cfg.api_key_env, provider=new_id)
-                self._install_key(cfg, found)
+            await self._point_api_slot()
         return await self.ensure_cloud()
+
+    async def reconfigure(self, config: Config) -> bool:
+        """Settings changed (FR-SET-2, D-070): budget, roles and the API slot follow
+        the new config at once; a custom endpoint from Settings becomes the slot's
+        own. The app's key stays where it is. Returns whether API models are usable."""
+        async with self._lock:
+            self.config = config
+            self._api_slot = config.providers.get("airouter")
+            await self._point_api_slot()
+        return await self.ensure_cloud()
+
+    async def _point_api_slot(self) -> None:
+        """Points the API slot at its active endpoint (D-059) and installs that
+        endpoint's key. The caller holds the lock."""
+        new_id = active_api_id(self._api_slot)
+        cfg = api_endpoint(self._api_slot, new_id) if self._api_slot else None
+        if new_id != self.api_id or cfg is None or cfg != self._cloud_cfg:
+            self.catalog = self._catalog_for(cfg)
+        self.api_id = self.state.api_id = new_id
+        self._cloud_cfg = cfg
+        self.state.offline_until = 0.0   # a new key deserves a fresh try
+        self.cloud_provider = None
+        self._api_key_present = False
+        if cfg is not None:
+            from config import resolve_api_key
+
+            found = await asyncio.to_thread(resolve_api_key, cfg.api_key_env, provider=new_id)
+            self._install_key(cfg, found)
 
     def api_status(self) -> dict[str, Any]:
         """The active endpoint for the picker and the key dialog. Never the key."""
@@ -783,7 +798,7 @@ _router: Router | None = None
 def get_router() -> Router:
     global _router
     if _router is None:
-        _router = Router()
+        _router = Router(CONFIG)   # the running config (settings.json applied), not the import-time default
     return _router
 
 
