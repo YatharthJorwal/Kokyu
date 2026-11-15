@@ -2,12 +2,12 @@
 
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15 (about 01:30), end of session 3
+- **Last updated:** 2026-11-15 (about 12:45), session 4 (in progress)
 - **Current phase:** **K1 in progress.** Done: K1-00 to K1-08b except K1-04b and K1-07b. Left: K1-04b, K1-07b, K1-09, K1-11, K1-12, K1-13, K1-14, then the K1 gate. The K0 manual gate (window, voice) is still open (§6).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, pushed directly from the user's PC by Claude (no bundle). Last code commit `5b04a30` (K1-08b).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commits `9a667ba` (lazy boot, D-060) and `d89c094` (app icon). **Not pushed:** the push was blocked by a permission prompt; the user pushes.
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's PC, 2026-11-15):** `npm run check` with cargo: tsc, frontend tests (121, one of them from the peer's uncommitted effort slider), vite build, `cargo check`, pytest (948). Also `cargo test --lib` (2, plus 7 opt-in live Credential Manager tests).
+- **Last green run (the user's PC, 2026-11-15, session 4):** tsc, frontend tests (121, one from the peer's uncommitted effort slider), vite build, `cargo check`; pytest 951 after D-060.
 
 ## 1. What exists
 
@@ -17,6 +17,8 @@
 | Kernel `KASANE/` (flat modules): seeded from Yuri, renamed, port 8780, `paths.py`, waifu packs and registry, `prompting.py`, per-waifu TTS, speaker-tagged memory, `switch_waifu` | Done and tested |
 | Threads store, conversation manager, typed protocol v1 with token streaming, per-thread model and effort, D-025 egress rules (K1-00 to K1-00c) | Done and tested; live local calls verified |
 | Normal 1200×800 app window, explicit CSP (K1-00d) | Done; **the window was not looked at** |
+| Lazy boot (D-060): port first, nothing heavy until a window connects, then chat model → GPT-SoVITS → (opt-in) STT → memory pass; llama.cpp only when picked or messaged; the kernel owns GPT-SoVITS (`tts.gpt_sovits.launch` in config.yaml; `launcher.local.txt` gone); default chat model on this PC `local:ollama/qwen3.5:9b` | Done; **live verified** with the real config in a scratch data dir (not in the Tauri window) |
+| App icon from the owner's reference, transparent corners (`src-tauri/app-icon.png`, `icons/`, favicon) | Done; not looked at in the taskbar or tray |
 | llama.cpp backend, Qwen3.6-35B-A3B as the default chat model, boot warm-up (K1-01, K1-01b; D-051, D-052) | Done; **live verified** |
 | React chat window (K1-02, D-053); Yuri's widget still at `widget.html` | Done; verified live in a browser |
 | Model chip and popover in the input row: Local (llama.cpp presets, Ollama) and API sections, search, badges, spend footer; one background loader with a "waking up" card, Try again / Switch model; an Ollama pick stops llama-server (K1-10, K1-07a; D-054) | Done; verified live in the browser pane (35B load 109 s, switch to the 9B 54 s) |
@@ -69,7 +71,8 @@ Run-to-run variance is large (the file is memory-mapped), so treat these as rang
 |---|---|
 | Current tree on Windows: pytest 948, test:fe 121, tsc, vite build, cargo check, cargo test | **Verified** (user's PC, 2026-11-15) |
 | Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; router signatures carry no waifu | **Verified** (tests) |
-| Real kernel + 35B: boot warm-up, first WebSocket message's first token 1.7 s, classifier on `qwen3.5:4b`, `/shutdown` frees ports | **Verified** (user's PC, 2026-11-14) |
+| Real kernel + 35B: boot warm-up, first WebSocket message's first token 1.7 s, classifier on `qwen3.5:4b`, `/shutdown` frees ports | **Verified** (user's PC, 2026-11-14); boot no longer starts the 35B (D-060) |
+| D-060 boot: kernel port answers 1.2 s after start with nothing loaded; after the window connects, `qwen3.5:9b` ready in 51 s (cold disk: 9B 36.7 s + 4B 12.3 s), then GPT-SoVITS up; no `llama-server`; `/shutdown` frees 8780 and 9880 and ends GPT-SoVITS | **Verified** (user's PC, 2026-11-15, browser pane + scratch data dir) |
 | React chat window in a browser against the real kernel: streaming, Stop, threads, sidebar, Markdown, Regenerate, tray upload, model picker loads and switches, companion chip and dividers | **Verified** (built-in browser pane, 2026-11-14) |
 | Anything inside the Tauri window (`npm run tauri dev`): the window itself, voice playback in WebView2, drag-drop, the native file dialog, the Key form | **Not verified** (Claude cannot see the window) |
 | Credential Manager: write, read back, list, replace, delete, keys written by Windows' own tools, bad names refused without echo | **Verified** (`cargo test -- --ignored`, live vault, cleaned up) |
@@ -81,6 +84,8 @@ Run-to-run variance is large (the file is memory-mapped), so treat these as rang
 
 ## 4. Known issues and risks
 
+- **Explorer crashes / lag at boot (D-060):** the cause was everything loading at once. The PC's page file is only 3.5 GB (commit limit 35.4 GB on 32 GB of RAM), so a 35B load plus the rest can come close to the limit. The user can set a system-managed page file (Windows setting; Claude does not change system settings). Not reproduced.
+- **A blank window for several seconds on the first `tauri dev`** is Vite's first page transform (reproduced in a plain browser with no kernel); it renders after a few seconds.
 - **No API key on this PC**, so nothing on the API side has run against a real provider. The first live check should be: `npm run tauri dev`, model menu → API → Key, save a key, pick an API model, send a message, then look at `data/spend.db` and `logs/audit.jsonl`.
 - **Open questions waiting for the user:** D-058 (unpriced models such as DeepSeek's: block or flag while a cap is on; currently blocked), D-055 (relax the persona's "no markdown" rule), D-057 (move the websocket token check earlier), speaker tags. See `HANDOFF.md` §6.
 - **The 35B needs about 2 minutes to load** (from boot, or after switching back to it). The "waking up" card shows it; the user asked to keep the model selector as documented and offer other models, which K1-10 did.
@@ -88,7 +93,7 @@ Run-to-run variance is large (the file is memory-mapped), so treat these as rang
 - **The 35B maps ~19.5 GB of RAM** while loaded; with other heavy apps open, generation can drop to ~7 tok/s.
 - **Tests read the user's `config/config.yaml`** when it exists. The suite passes with the 35B default, but it is not isolated from local config.
 - **Peer files sit untracked in the tree** (§1): `git add -A` would commit them, and the VRM/WAV files with them. Always stage explicit paths.
-- **Cosmetic leftovers:** Cargo package/binary `yuri`, log file `orchestrator.log`, some `[yuri]` log prefixes (K7 / cleanup).
+- **Yuri leftovers (proposed cleanup, awaiting approval, see TODO "Session 4 proposal"):** Cargo package/binary `yuri`, `orchestrator.log`, `[yuri]` log prefixes, `widget.html` + Yuri's engine in `src/*.ts`, the legacy flat protocol, the tray's API-model and click-through items, `KASANE/vrm/` and `KASANE/voice_files/` (gitignored copies of the premade assets), a 2,429-line `app.py`.
 - **Inherited:** faster-whisper on CUDA failed on this machine (CPU STT); port 1420 is shared by `dev:ui` and `tauri dev`; killing instead of tray Quit loses that session's memory consolidation.
 - Risks from the scope still apply (`SCOPE.md` §13).
 

@@ -2,7 +2,7 @@
 
 Phased plan with gates. Work **top to bottom inside the current phase**, one item at a time. Tick items with the commit hash: `- [x] K0-03 … (a1b2c3d)`. Do not start the next phase until its gate passed **and** the user approved (R-32). Requirement IDs refer to `SPEC.md`.
 
-Last updated: 2026-11-11 (session 1, docs only: inventory and corrections).
+Last updated: 2026-11-15 (session 4: D-060 lazy boot, app icon; cleanup and UI plan proposed).
 
 ## Phase overview
 
@@ -112,6 +112,16 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-12 Inline API failure UX with Retry / Switch model (FR-R-5)
 - [ ] K1-13 Settings (FR-SET-1, 2), Doctor panel (FR-SET-3), Memory viewer (FR-MEM-4)
 - [ ] K1-14 Tests, `STATE`/`HANDOFF` update
+- [x] K1-B1 Lazy boot (user request, D-060): nothing heavy before the window; llama.cpp only when picked; the kernel owns GPT-SoVITS; Vite ignores runtime folders (9a667ba)
+- [x] K1-B2 App icon from the owner's reference, transparent corners (d89c094)
+
+### Session 4 proposal (awaiting the user's approval; R-46, R-50)
+
+The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a tidy tree, K1 finished and the UI matched to `docs/reference-images/chat-ui.webp`. Proposed order, each a separate commit:
+
+- [ ] C-1 Tidy the tree: delete the Yuri widget (`widget.html`, `src/*.ts`, `src/style.css`; Yuri's repo stays the reference for K2) once the window speaks v1 only; remove `KASANE/vrm/`, `KASANE/voice_files/`; rename Cargo `yuri` → `kokyu`, `orchestrator.log` → `kernel.log`; drop the tray's API-model and click-through items; folder map in `CLAUDE.md` §4 (D-061)
+- [ ] C-2 Kernel rebuild in place: split `app.py` into `server.py`, `boot.py`, `session.py` (one class per window, a handler per message type), `turns.py`; `logging` instead of `print("[yuri] …")` (R-13); retire the legacy flat protocol and the shadow-mode API toggle (D-049); lazy imports for STT, camera, OCR, pyttsx3; measure boot and first token before and after
+- [ ] K1-15 UI to the reference: frameless window with its own title-bar buttons; top bar (companion chip with avatar, Temp Chat switch); sidebar (logo, New chat, search, groups, Settings gear); composer (attach, mic, round send); model chip under the composer; popover badges (fits, vision, thinking, tools), effort slider, spend footer
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 
 ## Phase K1b: Installer walking skeleton (D-035)

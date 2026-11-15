@@ -2,8 +2,8 @@
 
 **Read this at the start of every session. Rewrite it thoroughly at the end.** If the date below is old, trust `git log` over this file and ask the user. Status and numbers are in `STATE.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15, about 01:30 (the user went to sleep; the PC had been on since 13:00)
-- **Session:** 3, a long one (14 to 15 November): K1-03 to K1-08b
+- **Last updated:** 2026-11-15, about 12:45
+- **Session:** 4 (15 November): lazy boot (D-060), app icon; cleanup, kernel rebuild and UI plan proposed, **waiting for the user's approval**
 - **Written by:** Claude, with the user (Yatharth)
 
 ## 1. The project in ten lines
@@ -14,7 +14,7 @@
 4. The code is **proprietary** (D-040); keep the repo private.
 5. Zero-shot voices through the existing GPT-SoVITS at `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (D-042).
 6. Kernel on 127.0.0.1:8780; llama-server 8080; GPT-SoVITS 9880; Vite 1420.
-7. Default chat model on this PC: **Qwen3.6-35B-A3B on llama.cpp** (D-051), warmed at boot (D-052); about 2 minutes to load.
+7. Default chat model on this PC: **`qwen3.5:9b` on Ollama** (D-060). The 35B on llama.cpp starts only when picked or messaged (about 2 minutes).
 8. Spec v1.0 is the baseline (D-044); changes go through new decisions, and **every commit and decision cites its FR/D IDs** (the user checks this).
 9. Claude works **directly on the user's Windows PC** (`D:\AI\Kokyu.ai`, Claude desktop app), often while the user is away, and commits and pushes `main` item by item after a green `npm run check`. Claude cannot see the Tauri window or hear audio: those results stay "not verified" until the user looks.
 10. Plan: `TODO.md`. K1 is most of the way done (§4).
@@ -24,6 +24,13 @@
 Solo developer, casual, wants direct commands and no manual file shuffling, phases with gates, honesty about verified vs not. Standing goal for this stretch: **"continue till K1 is done"**, with the note that loading the 35B is slow, so keep the model selector as documented and offer other models (done in K1-10 and K1-08b). Commit and push item by item. "Ultracode" is often on: run Workflow reviews (find, then adversarially verify) on substantive changes; they have found real bugs every time. The user sometimes toggles a "ponytail" mode (smallest complete change; end replies with what was skipped and the risks).
 
 ## 3. What happened
+
+### Session 4 (15 November 2026)
+- The user reported: `npm run tauri dev` barely loads, lags the PC, needs the venv, sometimes crashes File Explorer; the code "feels slow"; the tree is cluttered; they want K1 and the UI finished, the icon placed, and a cleaner, faster kernel than the Yuri copy (Yuri is a reference only).
+- **Diagnosis (D-060):** the boot itself, not a package. At kernel start the 35B (21 GB mapped, all cores), GPT-SoVITS, faster-whisper, the Ollama helpers and a memory pass all loaded at once. The page file is only 3.5 GB, so RAM/commit pressure is the likely Explorer cause (not reproduced). Vite watched `.venv` (8,160 files). The blank window for the first seconds is Vite's first transform (also seen in a plain browser with no kernel). The kernel imports in about 1 s.
+- **Fixed (`9a667ba`):** lazy boot. Port first; nothing heavy until a window connects; then the chat model, GPT-SoVITS, the opt-in STT and the memory pass, one after another. llama.cpp only on a pick, a message or Try again. The kernel owns GPT-SoVITS (folder in `config.yaml`; `launcher.local.txt` deleted). Default model `local:ollama/qwen3.5:9b` in the user's config. Verified live: port in 1.2 s, 9B ready 51 s after the window connected, then GPT-SoVITS; clean shutdown.
+- **Icon (`d89c094`):** transparent-corner 1024 PNG from the reference, `tauri icon` sizes, favicon.
+- **The push was blocked** by a permission prompt (auto mode). Both commits are local; the user pushes.
 
 ### Session 3 (14 to 15 November 2026)
 - **First half (14th):** ran on the PC for the first time; K1-00 to K1-02 (threads, protocol, per-thread model, window, llama.cpp 35B, warm-up, React chat window). See `git log` up to `4d72af6`.
@@ -45,53 +52,30 @@ Solo developer, casual, wants direct commands and no manual file shuffling, phas
 
 ## 4. Where we stopped
 
-K1-08b is committed and pushed (`5b04a30`). This docs commit closes the session. **K1 items left, in TODO order:**
-
-1. **K1-04b** Token counts per message (FR-C-10): small.
-2. **K1-07b** Capability registry in `config/models.yaml` (FR-M-10), with a DECISIONS entry superseding D-054's "Proposed" bullet and quoting the user's answer. It lands together with K1-11.
-3. **K1-09** VRAM manager v1 (FR-M-6): integrate the peer's `KASANE/vram.py` (NVML via ctypes) into `model_loader.py`, `router/listing.py` (fits hints) and `app.py`. Add config keys `vram.headroom_mb: 512`, `vram.margin_mb: 512`, `vram.large_model_mb: 4096` and `vram.kv_mb_per_1k_ctx: 96`. Open design points:
-   - cache the measurement per `ref@ctx`;
-   - put a sanity cap on the measured delta.
-
-   Deviations to record: multi-GPU counts as unknown; an unknown never refuses a load; a model that spilled to the CPU is never recorded.
-4. **K1-11** Effort slider (FR-M-8, 9, 11): integrate the peer's `src/app/effort-slider.ts`, `ui/EffortSlider.tsx` and CSS, and add "max" to the `Effort` type and the kernel's EFFORTS.
-5. **K1-12** Inline API failure UX with Retry / Switch model (FR-R-5), including error classes.
-6. **K1-13** Settings (FR-SET-1, 2), Doctor (FR-SET-3), Memory viewer (FR-MEM-4). This is the big one. It also gets the custom API endpoint form (D-059).
-7. **K1-14** Tests and the STATE/HANDOFF update.
-8. **Gate K1:**
-   - chat with one local and one API model;
-   - change model, effort and companion mid-thread;
-   - a forced API error shows the failure UX;
-   - the user signs off on the layout against the reference (now `docs/reference-images/chat-ui.webp`).
-
-Rough size: K1-04b and K1-07b are small. K1-09, K1-11 and K1-12 are medium, with two of them half-written by the peer. K1-13 is the largest. Expect one to two more long sessions to finish K1.
+`9a667ba` and `d89c094` are committed on `main`, **not pushed**. The plan for the rest of the user's request is in `TODO.md` → "Session 4 proposal": C-1 tidy the tree, C-2 kernel rebuild in place, then the K1 items in order (K1-04b, K1-07b with K1-11, K1-09, K1-12, K1-13, K1-15 UI to the reference, K1-14), then the K1 gate. **Nothing of the proposal has started**: it needs the user's approval (R-46).
 
 ## 5. Next session: start here
 
-1. `git log -5`, `git status`, then `KOKYU_PYTHON="$PWD/.venv/Scripts/python.exe" npm run check` (Git Bash) from `D:\AI\Kokyu.ai`.
-2. Ask the user to run `npm run tauri dev` once. Ask them to check:
-   - the window opens;
-   - a voice line plays;
-   - **model menu → API → Key**: save an AI Router key, pick an API model, send a message.
-
-   Nothing Tauri-side and nothing API-side has been seen live yet.
-3. Then K1-04b, K1-07b with K1-11, and K1-09, in TODO order (§4).
-
-```powershell
-npm run check
-npm run tauri dev
-```
+1. `git log -5`, `git status`; push if `origin/main` is behind. Then `KOKYU_PYTHON="$PWD/.venv/Scripts/python.exe" npm run check`.
+2. If the user approved the proposal: C-1, then C-2, then the K1 items. Record the layout as D-061.
+3. Ask the user to run `npm run tauri dev` once and report: how fast the window appears, whether the 9B answers, whether a voice line plays (GPT-SoVITS now starts after the model is ready, about a minute after the window opens on a cold disk).
 
 ## 6. Open questions for the user
 
-- **D-058:** models with no published price (DeepSeek's) are **blocked** while a spending cap is on. Keep blocking, or allow them with a warning?
-- **D-055:** the persona prompts say "no markdown", but replies now render Markdown. Relax that rule?
-- **D-057:** move the websocket token check earlier (before the Origin check)?
-- **Speaker tags** in memory: keep as they are?
-- **Premade packs:** commit `assets/premade/` (the VRM and WAV files are large; D-041 un-ignores the folder on purpose), or keep them local?
-- **App icon:** the new icon in `docs/reference-images/icon/` has opaque black corners. A transparent 1024×1024 PNG is needed before `npm run tauri icon`. One more reference image may still be coming: a peer said three references and one icon, and two references and one icon arrived.
+- **Approve the session 4 proposal** (C-1, C-2, K1-15 and the order)?
+- **Reference items outside K1** ("VR space", "Enable 2D pet", "Enter 3D Space"): the default is to leave them out until their phases (D2, K4, K5).
+- **D-058:** unpriced models (DeepSeek) blocked while a cap is on: keep, or allow with a warning?
+- **D-055:** relax the persona's "no markdown" rule?
+- **D-057:** move the websocket token check earlier?
+- **Premade packs:** commit `assets/premade/` (large VRM/WAV) or keep them local?
+- **Page file:** setting it to system-managed is the user's call (a Windows setting).
 
 ## 7. Traps and gotchas
+
+- **The Bash tool mangles backslashes, even inside quoted heredocs:** a double backslash arrived as a single one, which broke a Rust string literal (`\S` in a path). For text with backslashes use the Edit tool, and grep the added lines for backslashes afterwards.
+- **Chain commits carefully:** a failed `git add` before one commit let the next commit take everything staged. Check `git show --stat HEAD` after committing.
+- **`git push` can be refused by auto mode**; ask the user to push.
+- **Tests that read `config.CONFIG` see the developer's `config.yaml`**, which now enables the GPT-SoVITS launch and an Ollama default. Test code defaults (`config.TTSConfig()`) or the example (`config.load_config(paths.config_example_path())`) instead.
 
 - **Stage explicit paths.** Untracked peer files (`vram.py`, effort-slider files, `assets/premade/` with VRM/WAV) sit in the tree; `git add -A` would commit them.
 - **Bash heredocs mangle escapes:** `\\n` becomes a real newline and `'''` can break the heredoc. For edit scripts, write the file with the Write tool and run it with `.venv/Scripts/python.exe`. Use raw strings for Windows paths.
