@@ -17,6 +17,8 @@ from senses import ocr_watch, task_guide
 
 connections: set[Any] = set()
 driver: Any = None
+# Windows that have left but are still closing (their memory pass): /shutdown waits for them.
+closing: set[Any] = set()
 
 # Set by /shutdown. Every window's receive loop watches it and closes gracefully,
 # so its memory pass runs before the process exits.
@@ -33,15 +35,22 @@ def join(websocket: Any) -> bool:
 
 
 async def leave(websocket: Any) -> None:
-    """Forgets a window. If it drove, another open one takes over and is told so;
-    it keeps its own history (a promoted window does not inherit the conversation)."""
+    """A window is going. If it drove, another open one takes over and is told so;
+    it keeps its own history (a promoted window does not inherit the conversation).
+    The window counts as closing until `closed`."""
     global driver
     connections.discard(websocket)
+    closing.add(websocket)
     if driver is websocket:
         driver = next(iter(connections), None)
         if driver is not None:
             with contextlib.suppress(Exception):
                 await driver.send_json(protocol.frame("surface_status", {"role": "driver"}))
+
+
+def closed(websocket: Any) -> None:
+    """The window's close is done, memory pass included."""
+    closing.discard(websocket)
 
 
 def drives(websocket: Any) -> bool:

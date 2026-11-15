@@ -16,10 +16,11 @@ import hub
 import llm
 import model_loader
 import router
+import session
 import tools
 from config import CONFIG, ChatConfig
 from kernel_fixtures import set_config
-from memory import embeddings
+from memory import embeddings, writer
 from router.decision import LOCAL_PROVIDER, model_for
 from router.types import ModelChunk
 
@@ -178,3 +179,37 @@ async def test_tray_quit_stops_the_model_server_before_exiting(monkeypatch):
     assert stopped == [True]                      # before os._exit, which skips the lifespan teardown
     await asyncio.sleep(0.2)
     assert exits == [0]
+
+
+@pytest.mark.asyncio
+async def test_tray_quit_waits_for_a_closing_windows_memory_pass(monkeypatch):
+    # The window has left (it no longer drives or hears news) but its memory pass is
+    # still running: quitting must not cut it off.
+    order = []
+
+    class Rt:
+        async def shutdown(self):
+            order.append("router stopped")
+
+    class SlowWriter:
+        async def run_pass(self, reason):
+            await asyncio.sleep(0.3)
+            order.append("memory pass done")
+
+    class Ws:
+        async def close(self):
+            pass
+
+    monkeypatch.setattr(router, "get_router", lambda: Rt())
+    monkeypatch.setattr(writer, "WRITER", SlowWriter())
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
+    monkeypatch.setattr(hub, "connections", set())
+    monkeypatch.setattr(hub, "closing", set())
+    monkeypatch.setattr(hub, "driver", None)
+    monkeypatch.setattr(os, "_exit", lambda code: order.append("exit"))
+    closing = asyncio.create_task(session.Session(Ws())._close())
+    await asyncio.sleep(0)   # the window has left; its memory pass is running
+    await app.shutdown_endpoint()
+    await closing
+    await asyncio.sleep(0.2)
+    assert order == ["memory pass done", "router stopped", "exit"]

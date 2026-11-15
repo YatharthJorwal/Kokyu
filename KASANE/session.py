@@ -149,6 +149,12 @@ class Session:
         for unsubscribe in self._unsubscribe:
             unsubscribe()
         await hub.leave(self.ws)
+        try:
+            await self._wind_down()
+        finally:
+            hub.closed(self.ws)   # /shutdown waits for this, so the memory pass is not cut off
+
+    async def _wind_down(self) -> None:
         # A turn still running when the window goes: cancel it, so the memory pass
         # below sees a settled transcript.
         if self.busy:

@@ -140,7 +140,7 @@ async def shutdown_endpoint() -> dict:
     # 50 x 100 ms = 5 s, the grace period the shell waits before its hard kill.
     # Too short for a slow memory pass is a mismatch to fix on both sides together.
     for _ in range(50):
-        if not hub.connections:
+        if not hub.connections and not hub.closing:
             break
         await asyncio.sleep(0.1)
 
