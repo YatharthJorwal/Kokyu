@@ -4,7 +4,9 @@
    --effort-glow, so the chip can reuse it while a reply is generating. */
 
 .effort-slider {
-  --effort-spring: cubic-bezier(0.34, 1.56, 0.64, 1); /* a short overshoot, then settle */
+  /* a quick glide that eases in and never overshoots: with two stops the travel is the
+     whole track, and a spring flung the thumb 50 px past its end */
+  --effort-spring: cubic-bezier(0.22, 1, 0.36, 1);
   position: relative;
   padding: 10px 12px 4px;
   border-radius: 10px;
