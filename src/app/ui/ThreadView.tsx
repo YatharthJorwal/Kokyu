@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { canRegenerate, lastExchange, visibleStream, type ChatMessage } from "../chat-state";
+import { canPickModel, canRegenerate, lastExchange, turnFailure, visibleStream, type ChatMessage } from "../chat-state";
 import { shortRef } from "../models";
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
@@ -42,6 +42,41 @@ function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
           ) : null}
         </div>
       ) : null}
+    </div>
+  );
+}
+
+/** FR-R-5 (K1-12): a failed turn says why on the turn itself, with Retry and
+ * Switch model. Never a quiet answer from another model. */
+function TurnFailure() {
+  const failure = useChat(turnFailure);
+  const canPick = useChat(canPickModel);
+  const canRetry = useChat(canRegenerate);
+  if (!failure) return null;
+  return (
+    <div className="turn-failure" role="alert">
+      <p className="turn-failure-text">{failure.text}</p>
+      {failure.detail ? (
+        <details className="turn-failure-detail">
+          <summary>Details</summary>
+          <code>{failure.detail}</code>
+        </details>
+      ) : null}
+      <div className="turn-failure-actions">
+        {failure.actions.includes("retry") && canRetry ? (
+          <button type="button" onClick={() => actions.regenerate()}>
+            Retry
+          </button>
+        ) : null}
+        {failure.actions.includes("switch_model") && canPick ? (
+          <button type="button" onClick={() => actions.openPicker()}>
+            Switch model
+          </button>
+        ) : null}
+        <button type="button" className="ghost" aria-label="Dismiss" onClick={() => actions.dismissNotice()}>
+          ✕
+        </button>
+      </div>
     </div>
   );
 }
@@ -89,6 +124,7 @@ export function ThreadView() {
       {messages.map((m) => (
         <Message key={m.key} m={m} lastReply={m.key === lastReplyKey} />
       ))}
+      <TurnFailure />
       <WakingCard />
       {turn !== "idle" && streaming ? (
         // While she thinks, the line above the input box says so (ThinkingRow).

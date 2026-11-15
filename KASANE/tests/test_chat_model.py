@@ -528,6 +528,23 @@ async def test_a_reply_with_no_words_is_an_error_not_silence(tmp_path, monkeypat
     assert history == [{"role": "system", "content": "sys"}]   # no one-sided exchange left behind
 
 
+def test_api_failures_say_which_kind_in_plain_words():
+    # FR-R-5: quota, auth, rate limit, timeout and provider error, each with Retry / Switch model
+    cases = [
+        (ProviderError("401 from https://api.example/v1: 'bad key'", status=401), "AUTH", "The API key was refused."),
+        (ProviderError("402 from https://api.example/v1", status=402), "QUOTA", "The API account is out of credit."),
+        (ProviderError("429 from https://api.example/v1", status=429), "RATE_LIMIT", "The provider is limiting requests"),
+        (ProviderError("timed out waiting", timeout=True), "TIMEOUT", "The provider did not answer in time."),
+        (ProviderError("503 from https://api.example/v1", status=503), "PROVIDER_ERROR", "a problem on its side"),
+        (ProviderError("the reply stream was cut off"), "PROVIDER_ERROR", "The chosen model failed."),
+    ]
+    for exc, reason, words in cases:
+        failure = protocol.model_failure(exc)
+        assert failure["reason"] == reason and words in failure["message"], reason
+        assert failure["message"].endswith("Retry, or switch model.") and failure["actions"] == ["retry", "switch_model"]
+        assert failure["detail"] == str(exc)   # the provider's own words stay available
+
+
 def test_model_failure_frames_cover_blocked_and_provider_errors_only():
     assert protocol.model_failure(RouteBlockedError("OFFLINE", "x", API))["code"] == "model_blocked"
     assert protocol.model_failure(ProviderError("500"))["code"] == "model_failed"

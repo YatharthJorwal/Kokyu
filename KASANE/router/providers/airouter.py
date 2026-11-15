@@ -146,14 +146,16 @@ class AirouterProvider:
                                 payload.pop("response_format", None)
                                 continue
                             # Redact the whole text, then cut: a key across the cut would slip past.
-                            raise ProviderError(self._safe(f"{response.status_code} from {url}: {body!r}")[:400])
+                            raise ProviderError(
+                                self._safe(f"{response.status_code} from {url}: {body!r}")[:400], status=response.status_code
+                            )
                         accepted = True
                         async for chunk in self._frames(response, cap=request.max_tokens):
                             yield chunk
                         return
             except httpx.TimeoutException as exc:
                 failure = StreamFailed if accepted else ProviderError
-                raise failure(self._safe(f"timed out waiting for {url}: {exc}")[:400]) from exc
+                raise failure(self._safe(f"timed out waiting for {url}: {exc}")[:400], timeout=True) from exc
             except httpx.RequestError as exc:
                 failure = StreamFailed if accepted else ProviderError
                 raise failure(self._safe(f"couldn't reach {url}: {exc}")[:400]) from exc

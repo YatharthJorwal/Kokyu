@@ -41,6 +41,7 @@ export interface Notice {
   code: ErrorCode | "client";
   text: string;
   actions: ("retry" | "switch_model")[];
+  detail?: string | null;
 }
 
 export interface Companion {
@@ -138,6 +139,17 @@ export function visibleStream(state: ChatState): string {
 /** Composer rules: one turn at a time, only the window that drives the kernel may talk. */
 export function canSend(state: ChatState): boolean {
   return state.connection === "online" && state.role === "driver" && state.turn === "idle";
+}
+
+/** A turn that failed: shown inline on the turn, not in the bar (FR-R-5). */
+export function turnFailure(state: ChatState): Notice | null {
+  const n = state.notice;
+  return n && (n.code === "model_failed" || n.code === "model_blocked") ? n : null;
+}
+
+/** Everything else the user must see (a refused send, a lost connection): the bar. */
+export function barNotice(state: ChatState): Notice | null {
+  return turnFailure(state) ? null : state.notice;
 }
 
 /** Regenerate and Retry need a saved thread with a line in it (the kernel replaces its last exchange). */
@@ -341,8 +353,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, role: role === "observer" ? "observer" : "driver" };
     }
     case "error": {
-      const data = frame.data as { code: ErrorCode; message: string; actions?: ("retry" | "switch_model")[] };
-      const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [] };
+      const data = frame.data as ServerData["error"];
+      const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };
       const failedTurn = data.code === "model_blocked" || data.code === "model_failed";
       // A failed turn still ends with turn_done; turn_running and a screen-companion
       // refusal are not about the turn at all. Anything else refused the send itself.

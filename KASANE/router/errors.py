@@ -17,7 +17,13 @@ class RouterError(llm.LLMUnreachableError):
 
 
 class ProviderError(RouterError):
-    """A provider was reached but failed (HTTP error, malformed stream, 429)."""
+    """A provider was reached but failed (HTTP error, malformed stream, 429).
+    `status` (the HTTP status) and `timeout` let the chat say which (FR-R-5)."""
+
+    def __init__(self, message: str = "", *, status: int | None = None, timeout: bool = False) -> None:
+        super().__init__(message)
+        self.status = status
+        self.timeout = timeout
 
 
 class StreamFailed(ProviderError):

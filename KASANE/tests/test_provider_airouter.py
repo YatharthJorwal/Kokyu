@@ -87,7 +87,17 @@ async def test_rate_limit_raises_provider_error():
     p = provider(lambda request: httpx.Response(429, json={"error": "slow down"}))
     with pytest.raises(ProviderError) as err:
         await collect(p)
-    assert "429" in str(err.value)
+    assert "429" in str(err.value) and err.value.status == 429 and not err.value.timeout   # FR-R-5
+
+
+@pytest.mark.asyncio
+async def test_a_timeout_says_so():
+    def slow(request):
+        raise httpx.ReadTimeout("no answer")
+
+    with pytest.raises(ProviderError) as err:
+        await collect(provider(slow))
+    assert err.value.timeout and err.value.status is None
 
 
 @pytest.mark.asyncio

@@ -567,6 +567,55 @@ div.companion,
   background: #2a1b20;
 }
 
+.turn-failure {
+  align-self: flex-start;
+  max-width: min(560px, 90%);
+  margin: 4px 0 12px;
+  padding: 10px 14px;
+  border: 1px solid var(--danger);
+  border-radius: var(--radius);
+  background: color-mix(in srgb, var(--danger) 8%, var(--panel));
+}
+
+.turn-failure-text {
+  margin: 0;
+}
+
+.turn-failure-detail {
+  margin-top: 6px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.turn-failure-detail code {
+  display: block;
+  margin-top: 4px;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+.turn-failure-actions {
+  display: flex;
+  gap: 6px;
+  margin-top: 8px;
+}
+
+.turn-failure-actions button {
+  padding: 5px 10px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  cursor: pointer;
+}
+
+.turn-failure-actions button.ghost {
+  margin-left: auto;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
 .notice-actions {
   display: flex;
   gap: 6px;

@@ -192,6 +192,8 @@ export interface ServerData {
     message: string;
     reply_to: string | null;
     reason?: string;
+    /** What the provider itself said (FR-R-5), for a "Details" disclosure. */
+    detail?: string | null;
     model_ref?: string | null;
     actions?: ("retry" | "switch_model")[];
   };

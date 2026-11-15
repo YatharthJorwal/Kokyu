@@ -220,16 +220,38 @@ def model_failure(exc: BaseException) -> dict[str, Any] | None:
             "reply_to": None,
         }
     if isinstance(exc, ProviderError):
-        detail = str(exc).strip().splitlines()[0][:160] if str(exc).strip() else "no details"
+        reason, plain = _provider_failure(exc)
         return {
             "code": "model_failed",
-            "reason": "PROVIDER_ERROR",
-            "message": f"The chosen model failed ({detail}). Retry, or switch model.",
+            "reason": reason,
+            "message": f"{plain} Retry, or switch model.",
+            # what the provider said, for the curious and for bug reports (redacted upstream)
+            "detail": str(exc).strip().splitlines()[0][:300] if str(exc).strip() else None,
             "model_ref": None,
             "actions": ["retry", "switch_model"],
             "reply_to": None,
         }
     return None
+
+
+# FR-R-5 names these failures; each gets a sentence a person can act on.
+_BY_STATUS = {
+    401: ("AUTH", "The API key was refused."),
+    403: ("AUTH", "The API key is not allowed to use this model."),
+    402: ("QUOTA", "The API account is out of credit."),
+    429: ("RATE_LIMIT", "The provider is limiting requests right now."),
+}
+
+
+def _provider_failure(exc: Any) -> tuple[str, str]:
+    status = getattr(exc, "status", None)
+    if getattr(exc, "timeout", False):
+        return "TIMEOUT", "The provider did not answer in time."
+    if status in _BY_STATUS:
+        return _BY_STATUS[status]
+    if isinstance(status, int) and status >= 500:
+        return "PROVIDER_ERROR", "The provider had a problem on its side."
+    return "PROVIDER_ERROR", "The chosen model failed."
 
 
 def is_versioned(raw: Any) -> bool:

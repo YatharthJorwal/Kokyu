@@ -1,7 +1,16 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { canRegenerate, canSend, initialState, lastExchange, reduce, visibleStream } from "../src/app/chat-state.ts";
+import {
+  barNotice,
+  canRegenerate,
+  canSend,
+  initialState,
+  lastExchange,
+  reduce,
+  turnFailure,
+  visibleStream,
+} from "../src/app/chat-state.ts";
 import { backoffMs, dispatchRaw } from "../src/net/kernel.ts";
 
 // K1-02: the chat window's behaviour, driven by kernel frames as they arrive.
@@ -101,6 +110,9 @@ test("a failed model is shown with Retry and Switch model, never silently swappe
   );
   s = reduce(s, frame("turn_done", { text: "", stopped: false }));
   assert.deepEqual(s.notice.actions, ["retry", "switch_model"]);
+  // K1-12, FR-R-5: inline on the turn, not in the bar
+  assert.equal(turnFailure(s), s.notice);
+  assert.equal(barNotice(s), null);
   assert.equal(s.messages.at(-1).failed, true);
   assert.equal(s.messages.filter((m) => m.role === "assistant").length, 0); // no fake reply
 
@@ -118,6 +130,27 @@ test("a failed model is shown with Retry and Switch model, never silently swappe
   s = reduce(s, frame("turn_start", { user_text: "hi" }));
   s = reduce(s, frame("turn_done", { text: "hello again", stopped: false }));
   assert.deepEqual(s.messages.map((m) => [m.role, m.text]), [["user", "hi"], ["assistant", "hello again"]]);
+});
+
+test("an API failure keeps the provider's words for Details; a refused send stays in the bar", () => {
+  // K1-12, FR-R-5
+  let s = run(online, { kind: "sent", text: "hi" }, frame("turn_start", { user_text: "hi" }));
+  s = reduce(
+    s,
+    frame("error", {
+      code: "model_failed",
+      reason: "RATE_LIMIT",
+      message: "The provider is limiting requests right now. Retry, or switch model.",
+      detail: "429 from https://api.example/v1/chat/completions: 'slow down'",
+      reply_to: null,
+      actions: ["retry", "switch_model"],
+    }),
+  );
+  assert.equal(turnFailure(s).detail, "429 from https://api.example/v1/chat/completions: 'slow down'");
+  s = reduce(s, frame("error", { code: "turn_running", message: "Wait for the reply to finish.", reply_to: null }));
+  assert.equal(turnFailure(s), null);
+  assert.equal(barNotice(s).text, "Wait for the reply to finish.");
+  assert.equal(barNotice(reduce(s, { kind: "dismiss_notice" })), null);
 });
 
 test("Regenerate skips a trailing divider and puts the old reply back when nothing comes (review findings)", () => {

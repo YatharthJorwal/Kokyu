@@ -1,12 +1,12 @@
-// Errors the user must see (RULES: no silent fallback). A failed or refused
-// model shows its message with Retry and Switch model (D-025, D-050); Switch
-// model opens the model chip's picker (K1-10).
+// Errors the user must see (RULES: no silent fallback) that are not about a turn:
+// a refused send, a lost connection. A failed turn shows inline on the turn
+// instead (TurnFailure, FR-R-5, K1-12).
 
-import { canPickModel, canRegenerate } from "../chat-state";
+import { barNotice, canPickModel, canRegenerate } from "../chat-state";
 import { actions, useChat } from "../store";
 
 export function NoticeBar() {
-  const notice = useChat((s) => s.notice);
+  const notice = useChat(barNotice);
   const canPick = useChat(canPickModel);
   const canRetry = useChat(canRegenerate);
   if (!notice) return null;

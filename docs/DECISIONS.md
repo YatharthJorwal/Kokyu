@@ -525,3 +525,12 @@ Accepted · User asked to finish K1 ("push it and finish the rest") · Implement
 **Not in v1:** the TTS backend and the renderer are not named residents (they show as "other programs"); `vram.is_large` is unused because cross-backend exclusivity stays where D-052 and D-054 put it; no *Unload X* button (SPEC §5 table) yet. The 4B/9B swap is now reported instead of silently slowing a load; whether the 4B classifier should stay beside an Ollama 9B chat model is the user's config (`models.local.classifier`; the shipped default is null, one model).
 **Consequences:** Tests never read the real GPU: `conftest.py` stubs `vram.gpu_memory` and gives each test a fresh measured cache.
 
+## D-066 A failed turn says why on the turn; API failures in plain words, the provider's own in Details
+Accepted · User asked to finish K1 ("push it and finish the rest") · Implements K1-12 (FR-R-5, SPEC §5 "API quota or error") · 2026-11-15
+**Context:** Failed turns already carried Retry and Switch model (D-025, D-050), but in a bar above the input box, and an API failure read "The chosen model failed (401 from https://…: '{…}')".
+**Decision:**
+- **Inline.** A `model_failed` or `model_blocked` error shows as a card right under the turn it failed, with Retry, Switch model and dismiss; the line stays marked "Not answered". The bar above the input keeps only notices that are not about a turn (a refused send, a lost connection). One `notice` in the store; `turnFailure` and `barNotice` decide where it shows.
+- **Plain words per kind (FR-R-5):** `ProviderError` carries the HTTP `status` and a `timeout` flag. 401: "The API key was refused." 403: "…not allowed to use this model." 402: "The API account is out of credit." 429: "The provider is limiting requests right now." Timeout: "The provider did not answer in time." 5xx: "The provider had a problem on its side." Anything else: "The chosen model failed." Each ends "Retry, or switch model." `reason` says which (AUTH, QUOTA, RATE_LIMIT, TIMEOUT, PROVIDER_ERROR).
+- **Details:** the error frame gains an optional `detail`, the provider's own first line (already redacted, at most 300 characters), under a "Details" disclosure on the card.
+**Consequences:** Protocol v1 grows one optional field; old windows ignore it.
+
