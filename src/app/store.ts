@@ -230,6 +230,11 @@ export const actions = {
   },
 
   /** Try again after a failed load. */
+  /** K1-09b: *Unload X* on the graphics-memory card; the kernel then tries the load again. */
+  unloadModel(ref: string): void {
+    socket.send("model_unload", { ref });
+  },
+
   retryLoad(): void {
     socket.send("model_load", {});
   },

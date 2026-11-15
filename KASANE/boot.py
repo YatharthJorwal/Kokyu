@@ -101,7 +101,7 @@ async def load_chat_model(ref_text: str) -> None:
     if ref.is_local:
         check = await model_listing.load_check(str(ref), rt)
         if check.fits is False:
-            raise vram.VramFullError(check.message or "not enough graphics memory")
+            raise vram.VramFullError(check.message or "not enough graphics memory", can_unload(check.blockers))
     if ref.provider == "local_ollama":
         if await rt.stop_llamacpp():
             log.info("stopped llama-server: an Ollama chat model was picked")
@@ -116,6 +116,17 @@ async def load_chat_model(ref_text: str) -> None:
     messages = [{"role": "system", "content": companions.system_message(waifu)}, {"role": "user", "content": "(warm-up)"}]
     await rt.warm(str(ref), messages, tools.offered_schemas(already_looked=False))
     await warm_helpers()
+
+
+def can_unload(blockers: tuple[vram.Resident, ...]) -> tuple[vram.Resident, ...]:
+    """K1-09b (SPEC §5, D-071): the blockers *Unload X* may offer. Ollama models
+    only, and not the classifier or the embedding model: `warm_helpers` loads those
+    again right after the chat model, so unloading them would make room for a moment."""
+    from router.decision import LOCAL_PROVIDER, model_for
+
+    again = {model_for(LOCAL_PROVIDER, "classifier", CONFIG.models), CONFIG.memory.embedding.model}
+    again_refs = {vram.ollama_ref(name) for name in again if name}
+    return tuple(b for b in blockers if b.ref and b.ref.startswith("local:ollama/") and b.ref not in again_refs)
 
 
 model_loader.LOADER.configure(

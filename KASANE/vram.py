@@ -307,6 +307,7 @@ class Resident:
 
     label: str
     mb: int
+    ref: str | None = None      # a model's ref; None for "other programs" (K1-09b)
 
 
 @dataclass(frozen=True)
@@ -362,7 +363,12 @@ MEASURED = MeasuredCache()
 
 
 class VramFullError(RuntimeError):
-    """A load refused before it started: the message names what holds the memory."""
+    """A load refused before it started: the message names what holds the memory;
+    `unload` lists the models the card may offer to unload (K1-09b, D-071)."""
+
+    def __init__(self, message: str, unload: Iterable[Resident] = ()) -> None:
+        super().__init__(message)
+        self.unload = tuple(unload)
 
 
 @dataclass(frozen=True)
@@ -373,7 +379,7 @@ class Snapshot:
     held: Mapping[str, int | None] = field(default_factory=dict)
 
 
-def _ollama_ref(name: str) -> str:
+def ollama_ref(name: str) -> str:
     return f"local:ollama/{name.removesuffix(':latest')}"
 
 
@@ -385,9 +391,9 @@ async def snapshot(ollama_ps: Callable[[], Awaitable[Any]], llamacpp_preset: str
     if gpu is None:
         return Snapshot(None)
     payload = await ollama_ps()
-    held: dict[str, int | None] = {_ollama_ref(n): mb for n, mb in parse_ollama_ps(payload).items()}
+    held: dict[str, int | None] = {ollama_ref(n): mb for n, mb in parse_ollama_ps(payload).items()}
     for name, mb in parse_ollama_ps(payload, whole_only=True).items():
-        await asyncio.to_thread(MEASURED.record, _ollama_ref(name), mb)
+        await asyncio.to_thread(MEASURED.record, ollama_ref(name), mb)
     if llamacpp_preset:
         ref = f"local:llamacpp/{llamacpp_preset}"
         held[ref] = await asyncio.to_thread(MEASURED.get, ref)
@@ -429,7 +435,7 @@ def plan(
         label,
         need_mb,
         snap.gpu,
-        unloading=[Resident(label_of(r), mb or 0) for r, mb in leaving.items()],
-        residents=[Resident(label_of(r), mb or 0) for r, mb in snap.held.items() if r in keep],
+        unloading=[Resident(label_of(r), mb or 0, r) for r, mb in leaving.items()],
+        residents=[Resident(label_of(r), mb or 0, r) for r, mb in snap.held.items() if r in keep],
         headroom_mb=headroom_mb,
     )

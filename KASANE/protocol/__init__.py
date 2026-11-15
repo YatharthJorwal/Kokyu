@@ -110,6 +110,12 @@ class SetEffort(_Data):
     effort: Literal["off", "low", "medium", "high", "max"] | None = None   # FR-M-8
 
 
+class ModelUnload(_Data):
+    """K1-09b (SPEC §5, D-071): unload a model the failed-load card names, then try again."""
+
+    ref: str = Field(min_length=1, max_length=300)
+
+
 class ModelListRequest(_Data):
     refresh: bool = False             # re-fetch the API catalog (FR-M-4)
 
@@ -179,6 +185,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "set_effort": SetEffort,
     "model_list": ModelListRequest,   # K1-10: what the chip's popover lists
     "model_load": Empty,              # K1-10: Try again after a failed load
+    "model_unload": ModelUnload,      # K1-09b: Unload X on that card, then try again
     "regenerate": Empty,              # K1-04: run the last exchange again (FR-C-9, Retry)
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet

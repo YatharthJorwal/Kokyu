@@ -510,6 +510,21 @@ async def load_model(model: str | None = None) -> None:
     )
 
 
+async def unload_model(model: str) -> None:
+    """Drops one Ollama model from memory now (`keep_alive: 0`): *Unload X* on the
+    graphics-memory card (K1-09b, D-071). Raises LLMUnreachableError (or a
+    subclass) when Ollama does not answer or refuses."""
+    url = f"{CONFIG.llm.base_url.rstrip('/')}/api/generate"
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
+            response = await client.post(url, json={"model": model, "keep_alive": 0})
+    except httpx.RequestError as exc:
+        raise _request_error(url, exc) from exc
+    if response.status_code >= 400:
+        raise LLMServerError(f"Ollama answered {response.status_code} unloading '{model}': {response.text[:300]}")
+    log.info(f"unloaded '{model}' (Unload on the graphics-memory card)")
+
+
 async def warm_up_model(model: str | None = None) -> None:
     """Startup warm-up: `load_model`, but best-effort (the first real turn will
     surface a real problem) and off when `llm.warm_up_on_start` is false.

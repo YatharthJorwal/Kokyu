@@ -63,6 +63,7 @@ class ModelLoader:
         self._ref: str | None = None        # the model the published state is about
         self._state = IDLE
         self._message: str | None = None
+        self._unload: tuple[Any, ...] = ()    # vram.Resident: what a failed card may unload
         self._started: float | None = None
         self._finished: float | None = None
 
@@ -83,6 +84,7 @@ class ModelLoader:
         """Forget everything (tests). Does not touch a running task's loop."""
         self._task = None
         self._wanted = self._ref = self._message = None
+        self._unload = ()
         self._state = IDLE
         self._started = self._finished = None
 
@@ -115,6 +117,8 @@ class ModelLoader:
             "state": self._state,
             "message": self._message,
             "elapsed_s": elapsed,
+            # K1-09b (D-071): the models the failed card may offer to unload
+            "unload": [{"ref": r.ref, "label": r.label} for r in self._unload],
         }
 
     def subscribe(self, listener: Listener) -> Callable[[], None]:
@@ -133,8 +137,8 @@ class ModelLoader:
             # A closed window must not stop the others from hearing about it.
             await asyncio.gather(*(fn(status) for fn in listeners), return_exceptions=True)
 
-    async def _set(self, ref: str, state: str, message: str | None = None) -> None:
-        self._ref, self._state, self._message = ref, state, message
+    async def _set(self, ref: str, state: str, message: str | None = None, unload: tuple[Any, ...] = ()) -> None:
+        self._ref, self._state, self._message, self._unload = ref, state, message, unload
         if state == LOADING:
             self._started, self._finished = self._clock(), None
         elif self._started is not None and self._finished is None:
@@ -185,7 +189,7 @@ class ModelLoader:
         except Exception as exc:  # noqa: BLE001 -- shown to the user, with Try again
             # stderr like the rest of the kernel's log lines (logging is not configured).
             log.warning(f"loading {ref} failed: {type(exc).__name__}: {exc}")
-            await self._set(ref, FAILED, failure_text(exc))
+            await self._set(ref, FAILED, failure_text(exc), tuple(getattr(exc, "unload", ())))
             return
         log.info(f"model ready: {ref} after {self.status()['elapsed_s']} s")
         await self._set(ref, READY)

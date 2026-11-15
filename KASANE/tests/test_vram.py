@@ -345,3 +345,55 @@ async def test_a_load_that_will_not_fit_is_refused_before_anything_is_unloaded(m
     with pytest.raises(vram.VramFullError, match="Gemma 12B needs about 8.1 GB"):
         await boot.load_chat_model("local:ollama/gemma3:12b")
     assert done == []
+
+
+# -- Unload X (K1-09b, SPEC §5, D-071) ----------------------------------------------
+
+
+def test_a_refusal_knows_which_blocker_is_which_model():
+    snap = vram.Snapshot(RTX, {NINE: 5590, FOUR: 3207, EMBED: 320})
+    refused = vram.plan("local:ollama/gemma:12b", "Gemma 12B", 8200, snap, helpers=HELPERS, label_of=lambda r: r)
+    assert [(b.label, b.ref) for b in refused.blockers] == [
+        (FOUR, FOUR), ("other programs", None), (EMBED, EMBED),
+    ]
+
+
+def test_unload_is_offered_only_for_a_model_that_stays_unloaded(monkeypatch):
+    import dataclasses
+
+    import boot
+    from config import CONFIG
+
+    cfg = dataclasses.replace(
+        CONFIG,
+        models=dataclasses.replace(CONFIG.models, local={**CONFIG.models.local, "reflex": "qwen3.5:9b", "classifier": "qwen3.5:4b"}),
+        memory=dataclasses.replace(CONFIG.memory, embedding=dataclasses.replace(CONFIG.memory.embedding, model="nomic-embed-text")),
+    )
+    monkeypatch.setattr(boot, "CONFIG", cfg)
+    blockers = (
+        vram.Resident("qwen3.5:9b", 5590, NINE),          # the memory writer: loaded again only at a memory pass
+        vram.Resident("qwen3.5:4b", 3207, FOUR),          # the classifier: warmed again right after the load
+        vram.Resident("other programs", 2700),
+        vram.Resident("nomic-embed-text", 320, EMBED),    # embeddings: warmed again too
+        vram.Resident("big", 9000, "local:llamacpp/big"),
+    )
+    assert [b.ref for b in boot.can_unload(blockers)] == [NINE]
+
+
+@pytest.mark.asyncio
+async def test_the_refusal_carries_what_may_be_unloaded(monkeypatch):
+    import boot
+    import router
+    from router import listing
+
+    held = vram.Resident("qwen3.5:9b", 5590, NINE)
+
+    async def refuse(ref, rt):
+        return vram.LoadCheck(False, 8200, 5472, (held, vram.Resident("other programs", 2700)), "It needs about 8.1 GB.")
+
+    monkeypatch.setattr(router, "get_router", lambda: object())
+    monkeypatch.setattr(listing, "load_check", refuse)
+    monkeypatch.setattr(boot, "can_unload", lambda blockers: tuple(b for b in blockers if b.ref))
+    with pytest.raises(vram.VramFullError) as refused:
+        await boot.load_chat_model("local:ollama/gemma3:12b")
+    assert refused.value.unload == (held,)

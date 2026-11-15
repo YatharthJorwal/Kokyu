@@ -597,6 +597,27 @@ class Session:
             model_listing.effective_ref(self.thread.model_ref if self.thread else None, CONFIG), force=True
         )
 
+    async def on_model_unload(self, msg: Any) -> None:
+        """K1-09b (SPEC §5, D-071): *Unload X* on the card of a load refused for
+        graphics memory. Unloads that model, then tries the load again. Only a model
+        the card offers; the driver only, never mid-reply."""
+        if not hub.drives(self.ws):
+            return
+        if self.busy:
+            await self.refuse("turn_running", BUSY)
+            return
+        status = model_loader.LOADER.status()
+        if status["state"] != model_loader.FAILED or msg.data.ref not in {u["ref"] for u in status["unload"]}:
+            await self.refuse("bad_message", "That model is not one the card offers to unload.")
+            return
+        try:
+            await llm.unload_model(msg.data.ref.split("/", 1)[1])
+        except Exception as exc:  # noqa: BLE001 -- the load below says what is still in the way
+            log.warning(f"unloading {msg.data.ref} failed: {exc}")
+        model_loader.LOADER.request(
+            model_listing.effective_ref(self.thread.model_ref if self.thread else None, CONFIG), force=True
+        )
+
     async def on_set_model(self, msg: Any) -> None:
         if self.thread is None:
             await self.refuse("threads_unavailable", NO_THREADS)

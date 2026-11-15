@@ -726,3 +726,33 @@ def test_a_turn_waits_for_its_model_and_warm_up_off_loads_on_the_first_message(l
         _status_until(ws, "ready", "local:llamacpp/big")                   # the message loaded it, at once
         _until(ws, "turn_done")
     assert seen == ["local:llamacpp/big"]
+
+
+def test_unload_x_unloads_only_what_the_card_offers_then_loads_again(loads, monkeypatch):
+    # K1-09b (SPEC §5, D-071): the refusal names the 4B; Unload drops it and tries again
+    import vram
+
+    client, seen = loads
+    unloaded = []
+    four = "local:ollama/qwen3.5:4b"
+
+    async def load(ref):
+        seen.append(ref)
+        if not unloaded:
+            raise vram.VramFullError("It needs about 8.1 GB.", (vram.Resident("qwen3.5:4b", 3207, four),))
+
+    async def unload(name):
+        unloaded.append(name)
+
+    monkeypatch.setattr(boot, "load_chat_model", load)
+    monkeypatch.setattr(llm, "unload_model", unload)
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        failed = _status_until(ws, "failed", DEFAULT)
+        assert failed["unload"] == [{"ref": four, "label": "qwen3.5:4b"}]
+        ws.send_json({"v": 1, "type": "model_unload", "data": {"ref": "local:ollama/llama3:8b"}})
+        err, _ = _until(ws, "error")
+        assert err["data"]["code"] == "bad_message" and unloaded == []      # only what the card offers
+        ws.send_json({"v": 1, "type": "model_unload", "data": {"ref": four}})
+        _status_until(ws, "ready", DEFAULT)
+    assert unloaded == ["qwen3.5:4b"] and seen == [DEFAULT, DEFAULT]

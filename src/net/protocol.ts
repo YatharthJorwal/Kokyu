@@ -26,6 +26,7 @@ export const CLIENT_TYPES = [
   "set_effort",
   "model_list",
   "model_load",
+  "model_unload",
   "regenerate",
   "screen_companion",
   "typing",
@@ -185,6 +186,8 @@ export interface ModelStatus {
   message: string | null;
   /** Seconds spent loading when the frame was sent. */
   elapsed_s: number | null;
+  /** K1-09b (SPEC §5): on a load refused for graphics memory, the models the card may unload. */
+  unload?: { ref: string; label: string }[];
 }
 
 export interface ServerData {
@@ -287,6 +290,7 @@ export interface ClientData {
   set_effort: { effort: Effort | null };
   model_list: { refresh?: boolean };
   model_load: Record<string, never>;
+  model_unload: { ref: string };
   regenerate: Record<string, never>;
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;

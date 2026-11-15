@@ -166,3 +166,19 @@ def test_failure_text_is_one_short_line():
     assert failure_text(RuntimeError("")) == "RuntimeError"
     assert failure_text(RuntimeError("a\nb")) == "a"
     assert len(failure_text(RuntimeError("x" * 1000))) == 240
+
+
+@pytest.mark.asyncio
+async def test_a_failed_load_lists_what_its_card_may_unload_until_the_next_try():
+    # K1-09b (D-071)
+    from vram import Resident, VramFullError
+
+    loader, gates, _, _, failures, _ = make()
+    failures["local:ollama/big"] = VramFullError("It needs about 8.1 GB.", (Resident("qwen3.5:9b", 5590, "local:ollama/qwen3.5:9b"),))
+    gates["local:ollama/big"] = asyncio.Event()
+    gates["local:ollama/big"].set()
+    await loader.request("local:ollama/big")
+    assert loader.status()["unload"] == [{"ref": "local:ollama/qwen3.5:9b", "label": "qwen3.5:9b"}]
+    del failures["local:ollama/big"]
+    await loader.request("local:ollama/big", force=True)
+    assert loader.status()["state"] == READY and loader.status()["unload"] == []
