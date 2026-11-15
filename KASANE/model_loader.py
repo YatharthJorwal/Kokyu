@@ -179,6 +179,12 @@ class ModelLoader:
         if self._instant(ref):
             self._started = None
             await self._set(ref, READY)
+            try:
+                await self._warm(ref)   # nothing to load; it frees what other models hold (D-072)
+            except asyncio.CancelledError:
+                raise
+            except Exception as exc:  # noqa: BLE001 -- the model is usable either way
+                log.warning(f"freeing memory for {ref} failed: {type(exc).__name__}: {exc}")
             return
         await self._set(ref, LOADING)
         assert self._warm is not None

@@ -28,7 +28,8 @@ providers:
     # ollama_native is required for num_ctx, think:false, inline images and
     # `format` JSON schemas. Use `openai` only for a llama.cpp server.
     api_style: 'ollama_native'
-    # Keeps the 6.6 GB model loaded between turns instead of paying a cold load.
+    # Keeps the picked chat model (and the embedding model) loaded between turns
+    # instead of paying a cold load. Any other model leaves after its call (D-072).
     keep_alive: '30m'
     # One value for every role: Ollama reloads the model when two requests
     # disagree on it.
@@ -68,9 +69,10 @@ models:
   local:
     reflex: 'qwen3.5:9b'          # Q4_K_M, 6.55 GB, vision + tools
     vision: null                  # null = use reflex (it reports vision)
-    # Helpers that run beside every reply. null = the reflex model, so a 9B-only
-    # setup keeps ONE model in VRAM (9B + 4B + embeddings fill 12 GB, D-052). With
-    # a llama.cpp chat model set them to a small model, e.g. 'qwen3.5:4b'.
+    # Helper roles. While an Ollama chat model is picked, the classifier, memory
+    # writer and vision run on THAT model, so only it and the embedding model stay
+    # in memory (D-072). These entries apply only while a llama.cpp or API model is
+    # picked; then the model loads for its call and leaves. null = the reflex model.
     classifier: null              # intent, task, JSON
     memory_writer: null           # summarization; local by policy (D-015)
     embed: 'nomic-embed-text'     # 768-dim; sqlite-vec width is fixed to this

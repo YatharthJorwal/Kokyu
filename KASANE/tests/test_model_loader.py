@@ -139,14 +139,19 @@ async def test_a_reply_clears_a_stale_failure():
 
 @pytest.mark.asyncio
 async def test_api_models_are_ready_at_once_and_a_closed_window_does_not_break_the_others():
-    loader, _, started, _, _, seen = make(instant=lambda ref: ref.startswith("api:"))
+    loader, gates, started, _, failures, seen = make(instant=lambda ref: ref.startswith("api:"))
 
     async def closed(status):
         raise RuntimeError("websocket closed")
 
     loader.subscribe(closed)
+    gates["api:airouter/x"] = asyncio.Event()
+    gates["api:airouter/x"].set()
+    failures["api:airouter/x"] = RuntimeError("Ollama is down")   # freeing memory failed: still ready
     await loader.request("api:airouter/x")
-    assert started == [] and seen == [(READY, "api:airouter/x")] and loader.status()["elapsed_s"] is None
+    # ready before anything runs; warm then frees what local models hold (D-072)
+    assert started == ["api:airouter/x"] and seen == [(READY, "api:airouter/x")]
+    assert loader.status()["elapsed_s"] is None and loader.status()["state"] == READY
 
 
 @pytest.mark.asyncio

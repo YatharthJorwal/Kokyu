@@ -18,6 +18,7 @@ from config import (
     RoleConfig,
     RoutingConfig,
 )
+import llm
 from router import model_ref as model_refs
 from router.types import ModelRequest, RouteDecision, RouterState, SECRET, UNTRUSTED
 
@@ -44,10 +45,17 @@ CHAT_ROLE = "chat"
 LOCAL_PROVIDER = "local_ollama"
 
 
+# D-072: with an Ollama model picked, these run on it, so no second model loads.
+# Their own `models.local` entries apply only while a llama.cpp or API model is picked.
+FOLLOW_PICKED = ("classifier", "memory_writer", "vision")
+
+
 def model_for(provider: str, role: str, models: ModelsConfig) -> str:
     """Which model a (provider, role) pair uses. A null local vision model means
     'the reflex model', not 'no model'."""
     if provider == LOCAL_PROVIDER:
+        if role in FOLLOW_PICKED and llm.ACTIVE_MODEL:
+            return llm.ACTIVE_MODEL   # D-072: one chat model in memory
         name = models.local.get(role)
         if name is None:
             name = models.local.get("reflex")

@@ -244,8 +244,11 @@ async def test_the_check_before_a_load_names_the_blocker(gpu_cfg):
     assert check.fits is False and "more than this GPU has (12.0 GB)" in check.message
     vram.MEASURED.record("local:ollama/gemma3:27b", 7000)   # measured once: smaller than the estimate
     check = await listing.load_check("local:ollama/gemma3:27b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
-    assert check.fits is False and check.message.startswith("It needs about 6.9 GB of graphics memory, but only 5.3 GB")
-    assert "In use: qwen3.5:4b (3.1 GB), other programs (2.7 GB), nomic-embed-text (0.3 GB)." in check.message
+    assert check.fits is True   # D-072: the 4B helper makes room too; only the embedding model stays
+    vram.MEASURED.record("local:ollama/gemma3:27b", 10000)
+    check = await listing.load_check("local:ollama/gemma3:27b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
+    assert check.fits is False and check.message.startswith("It needs about 9.8 GB of graphics memory, but only 8.4 GB")
+    assert "In use: other programs (2.7 GB), nomic-embed-text (0.3 GB)." in check.message
     ok = await listing.load_check("local:ollama/qwen3:1.7b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
     assert ok.fits is True
     for unknown in ("api:airouter/vendor/chat-1", "local:ollama/not-pulled:1b", "local:llamacpp/big"):

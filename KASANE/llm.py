@@ -45,6 +45,27 @@ import httpx
 import context_budget
 from config import CONFIG
 
+# D-072: one chat model in memory. The Ollama model the user picked; the helper roles
+# (classifier, memory writer, vision) run on it too. "" when a llama.cpp or API model
+# is picked; None before any load (tests, a kernel with the loader off): no change.
+ACTIVE_MODEL: str | None = None
+
+
+def _bare_name(name: str) -> str:
+    return name[: -len(":latest")] if name.endswith(":latest") else name
+
+
+def keep_alive_for(model: str) -> dict[str, Any]:
+    """D-072: the picked model and the embedding model stay loaded (the configured
+    `keep_alive`); any other model leaves memory as soon as its call is done."""
+    if ACTIVE_MODEL is None:
+        return {}
+    keep = {_bare_name(ACTIVE_MODEL), _bare_name(CONFIG.memory.embedding.model or "")} - {""}
+    if _bare_name(model) in keep:
+        local = CONFIG.providers.get("local_ollama")
+        return {"keep_alive": local.keep_alive} if local is not None and local.keep_alive else {}
+    return {"keep_alive": 0}
+
 log = logging.getLogger(__name__)
 
 
@@ -249,6 +270,7 @@ async def stream_reply_with_tools(
         "tools": tools,
         "stream": True,
         "options": _ollama_options(**_cap(num_predict)),
+        **keep_alive_for(use_model),
     }
     if think is not None:
         payload["think"] = think
@@ -420,7 +442,7 @@ def _vision_timing_summary(model: str, image_b64: str, elapsed_s: float, data: d
 def vision_model_name() -> str:
     """The model that reads images: llm.vision_model when set, else the chat
     model (the original single-model setup)."""
-    return CONFIG.llm.vision_model or CONFIG.llm.model
+    return CONFIG.llm.vision_model or ACTIVE_MODEL or CONFIG.llm.model   # D-072: the picked model
 
 
 def capability_warnings(
@@ -495,6 +517,7 @@ async def load_model(model: str | None = None) -> None:
         "prompt": "",
         "stream": False,
         "options": _ollama_options(),
+        **keep_alive_for(model),
     }
     started = time.monotonic()
     try:
@@ -640,6 +663,7 @@ async def describe_image(
             if json_schema is not None
             else _ollama_options(temperature=0.4, num_predict=400, presence_penalty=0.0)
         ),
+        **keep_alive_for(model),
     }
     if use_schema:
         payload["format"] = json_schema
@@ -734,6 +758,7 @@ async def _stream_ollama_native(
         "messages": messages,
         "stream": True,
         "options": _ollama_options(**_cap(num_predict)),
+        **keep_alive_for(model or CONFIG.llm.model),
     }
     if think is not None:
         payload["think"] = think

@@ -590,3 +590,14 @@ Accepted · The user ("yeah finish up") · Implements K1-09b (SPEC §5 "Model fa
 - One click unloads that model (`keep_alive: 0` to Ollama) and tries the load again; the new check says whether it fits now. Only a model the card offers (the kernel checks the request against the failed status), from the driver window, never mid-reply. A failed unload is logged; the load that follows says what is still in the way.
 - **Protocol v1:** client `model_unload {ref}`; `model_status` gains `unload: [{ref, label}]`, empty unless a load was refused for graphics memory.
 **Not in v1:** a classifier blocker gets no button; freeing it for good is `models.local.classifier: null` in config.yaml (one model; the open classifier question). The TTS backend is still part of "other programs" (D-065).
+
+## D-072 One chat model in memory: the helper roles follow the pick
+Accepted · The user ("only load the model that is selected. when selecting other one, unload rest"; helpers: "The selected model"; embeddings: "Keep it loaded") · Extends FR-M-6; supersedes D-052's helpers kept beside the chat model; refines D-065 and D-071 · 2026-11-15
+**Context:** D-052 kept the classifier (qwen3.5:4b on the user's PC), the memory writer and the embedding model loaded beside the chat model, so picking a 12B left a 4B taking 3 GB and the VRAM card refused loads that would fit alone. FR-M-6 unloaded only the other *backend*: a second Ollama model or llama-server under an API pick stayed.
+**Decision:**
+- **Picking a model unloads the rest.** An Ollama pick stops llama-server and unloads every other Ollama model but the embedding model; a llama.cpp pick keeps D-052's llama-server keep set, now only the embedding model; an API pick stops llama-server and unloads Ollama's models but the embedding model (still ready at once; the freeing runs after).
+- **The helper roles run on the picked model.** With an Ollama model picked, `classifier`, `memory_writer` and `vision` resolve to it (`model_for`), so nothing else loads. Their `models.local` entries apply only while a llama.cpp or API model is picked; then that model loads for its call and leaves (`keep_alive: 0`). Memory writing stays local (D-015).
+- **The embedding model stays loaded** (about 0.3 GB): recall embeds every message.
+- `providers.local_ollama.keep_alive` (30m), which no request sent, now goes with every call to the picked model and the embedding model; any other model gets `keep_alive: 0`.
+- *Unload X* (D-071) may now offer the classifier: it is no longer warmed after a load.
+**Cost:** Task Guide's classifier and memory passes use the bigger chat model (slower, better). With a llama.cpp or API model they pay a cold load per call.

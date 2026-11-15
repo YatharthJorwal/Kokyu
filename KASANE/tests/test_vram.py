@@ -372,12 +372,12 @@ def test_unload_is_offered_only_for_a_model_that_stays_unloaded(monkeypatch):
     monkeypatch.setattr(boot, "CONFIG", cfg)
     blockers = (
         vram.Resident("qwen3.5:9b", 5590, NINE),          # the memory writer: loaded again only at a memory pass
-        vram.Resident("qwen3.5:4b", 3207, FOUR),          # the classifier: warmed again right after the load
+        vram.Resident("qwen3.5:4b", 3207, FOUR),          # the classifier: no longer warmed (D-072)
         vram.Resident("other programs", 2700),
         vram.Resident("nomic-embed-text", 320, EMBED),    # embeddings: warmed again too
         vram.Resident("big", 9000, "local:llamacpp/big"),
     )
-    assert [b.ref for b in boot.can_unload(blockers)] == [NINE]
+    assert [b.ref for b in boot.can_unload(blockers)] == [NINE, FOUR]
 
 
 @pytest.mark.asyncio

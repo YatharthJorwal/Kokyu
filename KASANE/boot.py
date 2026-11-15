@@ -29,6 +29,7 @@ from config import CONFIG
 from memory import embeddings, writer
 from router import listing as model_listing
 from router import model_ref as model_refs
+from router.providers.llamacpp import helper_models, unload_ollama
 from senses import ocr_watch, task_guide
 
 log = logging.getLogger(__name__)
@@ -102,14 +103,23 @@ async def load_chat_model(ref_text: str) -> None:
         check = await model_listing.load_check(str(ref), rt)
         if check.fits is False:
             raise vram.VramFullError(check.message or "not enough graphics memory", can_unload(check.blockers))
+    # D-072: only the picked model (and the embedding model) stays in memory.
+    keep = helper_models()
     if ref.provider == "local_ollama":
         if await rt.stop_llamacpp():
             log.info("stopped llama-server: an Ollama chat model was picked")
+        llm.ACTIVE_MODEL = ref.model
+        await free_ollama(keep | {ref.model})
         await llm.load_model(ref.model)
         await warm_helpers()
         await vram.snapshot(lambda: llm.loaded_models())   # remembers what each model took
         return
+    llm.ACTIVE_MODEL = ""
     if ref.provider != "llamacpp":
+        # an API model: nothing to load, and the local models make room
+        if await rt.stop_llamacpp():
+            log.info("stopped llama-server: an API model was picked")
+        await free_ollama(keep)
         return
     registry = waifus.get_registry()
     waifu = registry.get(companions.load_active_id()) or registry.get(registry.default_id() or "")
@@ -120,12 +130,10 @@ async def load_chat_model(ref_text: str) -> None:
 
 def can_unload(blockers: tuple[vram.Resident, ...]) -> tuple[vram.Resident, ...]:
     """K1-09b (SPEC §5, D-071): the blockers *Unload X* may offer. Ollama models
-    only, and not the classifier or the embedding model: `warm_helpers` loads those
-    again right after the chat model, so unloading them would make room for a moment."""
-    from router.decision import LOCAL_PROVIDER, model_for
-
-    again = {model_for(LOCAL_PROVIDER, "classifier", CONFIG.models), CONFIG.memory.embedding.model}
-    again_refs = {vram.ollama_ref(name) for name in again if name}
+    only, and not the embedding model: `warm_helpers` loads it again right after the
+    chat model, so unloading it would make room for a moment. (The classifier was
+    excluded too until D-072 stopped keeping it loaded.)"""
+    again_refs = {vram.ollama_ref(CONFIG.memory.embedding.model)} if CONFIG.memory.embedding.model else set()
     return tuple(b for b in blockers if b.ref and b.ref.startswith("local:ollama/") and b.ref not in again_refs)
 
 
@@ -137,14 +145,17 @@ model_loader.LOADER.configure(
 )
 
 
-async def warm_helpers() -> None:
-    """The classifier runs before every reply and recall embeds every message, so
-    a cold load of either lands on the first message (about 48 s measured,
-    K1-01b). Loaded after the chat model, which unloads the rest of Ollama."""
-    from router.decision import LOCAL_PROVIDER, model_for
+async def free_ollama(keep: frozenset[str]) -> None:
+    """D-072: every Ollama model but `keep` leaves memory. Best effort."""
+    dropped = await unload_ollama(CONFIG.llm.base_url, keep=frozenset(n.removesuffix(":latest") for n in keep))
+    if dropped:
+        log.info(f"unloaded {', '.join(dropped)}: only the picked model stays loaded")
 
-    classifier = model_for(LOCAL_PROVIDER, "classifier", CONFIG.models)
-    await llm.warm_up_model(classifier)
+
+async def warm_helpers() -> None:
+    """Recall embeds every message, so a cold embedding model would land on the
+    first one (K1-01b). The classifier and memory writer run on the picked model
+    now (D-072), so nothing else is warmed."""
     try:
         await embeddings.embed("warm-up")
     except Exception as exc:  # noqa: BLE001 -- recall reports its own failures per turn

@@ -126,15 +126,13 @@ def _bare(name: str) -> str:
 
 
 def helper_models(cfg: Any = None) -> frozenset[str]:
-    """Ollama models the kernel itself uses beside the chat model (classifier,
-    memory writer, embeddings). They are small and stay loaded next to a MoE
-    whose experts live in system RAM (D-052)."""
-    from router.decision import LOCAL_PROVIDER, model_for
-
+    """Ollama models that stay loaded beside the picked chat model: only the
+    embedding model, which recall uses on every message (D-072, superseding D-052's
+    classifier and memory writer beside a MoE: they now run on the picked model, or
+    load only for their call)."""
     cfg = cfg or CONFIG
-    names = {model_for(LOCAL_PROVIDER, role, cfg.models) for role in ("classifier", "memory_writer", "embed")}
-    names.add(cfg.memory.embedding.model)
-    return frozenset(_bare(n) for n in names if n)
+    name = cfg.memory.embedding.model
+    return frozenset({_bare(name)}) if name else frozenset()
 
 
 async def unload_ollama(

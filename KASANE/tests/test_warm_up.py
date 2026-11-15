@@ -71,9 +71,6 @@ def use(monkeypatch, ref, *, warm=True):
     ))
 
 
-CLASSIFIER = model_for(LOCAL_PROVIDER, "classifier", CONFIG.models)
-
-
 @pytest.mark.asyncio
 async def test_boot_never_starts_a_llamacpp_model(monkeypatch, calls):
     # D-060: a 21 GB file and every CPU core; it starts when the user picks it
@@ -89,8 +86,9 @@ async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_the
     use(monkeypatch, "local:llamacpp/big")
     monkeypatch.setattr(companions, "system_message", lambda waifu: "PERSONA")
     await model_loader.LOADER.request("local:llamacpp/big")   # what a pick in the chip does
-    # not the 9B: only the small helpers that run before every reply (classifier, embeddings)
-    assert calls["helpers"] == [CLASSIFIER] and calls["embed"] == ["warm-up"]
+    # only the embedding model, which recall uses on every message (D-072: no classifier warm)
+    assert calls["helpers"] == [] and calls["embed"] == ["warm-up"]
+    assert llm.ACTIVE_MODEL == ""   # helper roles use their own config while llama-server serves
     assert calls["load"] == [] and calls["stopped"] == []
     [(ref, messages, offered)] = calls["warm"]
     assert ref == "local:llamacpp/big"
@@ -105,8 +103,8 @@ async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_the
     (None, [model_for(LOCAL_PROVIDER, "chat", CONFIG.models)], [True], ["loading", "ready"]),
     # an Ollama pick stops llama-server first: one large local model at a time (FR-M-6)
     ("local:ollama/qwen3.5:4b", ["qwen3.5:4b"], [True], ["loading", "ready"]),
-    # nothing to load for an API model: ready at once, no "waking up"
-    ("api:airouter/some-model", [], [], ["ready"]),
+    # nothing to load for an API model: ready at once, no "waking up"; llama-server makes room (D-072)
+    ("api:airouter/some-model", [], [True], ["ready"]),
 ])
 @pytest.mark.asyncio
 async def test_other_defaults(monkeypatch, calls, ref, loaded, stopped, states):
@@ -213,3 +211,24 @@ async def test_tray_quit_waits_for_a_closing_windows_memory_pass(monkeypatch):
     await closing
     await asyncio.sleep(0.2)
     assert order == ["memory pass done", "router stopped", "exit"]
+
+
+# -- one chat model in memory (D-072) ------------------------------------------------
+
+
+@pytest.mark.asyncio
+async def test_an_ollama_pick_unloads_every_other_model_but_embeddings(monkeypatch, calls):
+    kept = []
+
+    async def unload(base_url, keep=frozenset(), transport=None):
+        kept.append(keep)
+        return ["qwen3.5:9b"]
+
+    monkeypatch.setattr(boot, "unload_ollama", unload)
+    embed = CONFIG.memory.embedding.model.removesuffix(":latest")
+    await boot.load_chat_model("local:ollama/qwen3.5:4b")
+    assert kept == [frozenset({"qwen3.5:4b", embed})] and calls["load"] == ["qwen3.5:4b"]
+    assert llm.ACTIVE_MODEL == "qwen3.5:4b"
+    kept.clear()
+    await boot.load_chat_model("api:airouter/x")             # an API pick frees the local ones too
+    assert kept == [frozenset({embed})] and llm.ACTIVE_MODEL == ""

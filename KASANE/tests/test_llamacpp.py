@@ -290,14 +290,14 @@ def test_two_turns_share_the_same_prefix_so_the_server_cache_is_reused():
     assert two[-1]["content"].startswith("[Context for this message]\nrecall two")
 
 
-def test_the_helpers_kept_beside_llama_server_come_from_the_config(monkeypatch):
+def test_only_the_embedding_model_is_kept_beside_the_chat_model(monkeypatch):
+    # D-072: the classifier and memory writer no longer stay loaded (they run on the picked model)
     models = dataclasses.replace(
-        config.CONFIG.models, local={**config.CONFIG.models.local, "classifier": "small:2b", "memory_writer": None, "reflex": "big:9b"},
+        config.CONFIG.models, local={**config.CONFIG.models.local, "classifier": "small:2b", "reflex": "big:9b"},
     )
-    monkeypatch.setattr(lc, "CONFIG", dataclasses.replace(config.CONFIG, models=models))
-    keep = lc.helper_models()
-    assert {"small:2b", "big:9b"} <= keep                  # a null helper means "the reflex model", so that one stays
-    assert config.CONFIG.memory.embedding.model in keep
+    memory = dataclasses.replace(config.CONFIG.memory, embedding=dataclasses.replace(config.CONFIG.memory.embedding, model="nomic-embed-text:latest"))
+    monkeypatch.setattr(lc, "CONFIG", dataclasses.replace(config.CONFIG, models=models, memory=memory))
+    assert lc.helper_models() == frozenset({"nomic-embed-text"})
 
 
 def test_a_null_helper_model_means_the_reflex_model(tmp_path):
