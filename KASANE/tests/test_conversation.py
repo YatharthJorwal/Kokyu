@@ -57,6 +57,20 @@ async def test_exchanges_are_recorded_with_speaker_model_effort_and_stop(manager
 
 
 @pytest.mark.asyncio
+async def test_a_screen_remark_is_shown_but_never_given_to_a_model(manager):
+    # FR-SC-2 shows it in the chat; FR-SC-3/FR-R-7 keep a screen-derived line away from models.
+    luna = Speaker("luna", "Luna")
+    t = await manager.new_thread(waifu_id="luna")
+    await manager.record_exchange(t.id, "hi", "hey", speaker=luna)
+    remark = await manager.record_remark(t.id, "That code looks tangled.", speaker=luna)
+    assert remark.meta == {"ambient": True} and remark.speaker_name == "Luna"
+    assert [m.content for m in await manager.messages(t.id)][-1] == "That code looks tangled."
+    history = await manager.history(await manager.open(t.id), "sys")
+    assert [m["content"] for m in history[1:]] == ["hi", "hey"]
+    assert (await manager.last_exchange(t.id))[0] == "hi"                     # Regenerate skips it
+
+
+@pytest.mark.asyncio
 async def test_the_last_exchange_is_found_to_run_again(manager):
     # K1-04 (FR-C-9): Regenerate replaces the line and its reply; Retry after a
     # failure replaces the lone line. Finding it deletes nothing.
@@ -94,7 +108,7 @@ def test_history_skips_dividers_keeps_the_window_and_starts_with_the_user():
 
     class M:
         def __init__(self, role, content):
-            self.role, self.content = role, content
+            self.role, self.content, self.meta = role, content, {}
 
     msgs = [M(r, c) for r, c in store_msgs]
     hist = history_from(msgs, "SYSTEM", max_messages=3)
@@ -164,9 +178,17 @@ def _until(ws, kind):
             return msg, seen
 
 
+def _temp_on(ws):
+    """Temp Chat on (keeps memory out of the test); the kernel confirms it."""
+    ws.send_json({"v": 1, "type": "set_temp", "data": {"on": True}})
+    updated, _ = _until(ws, "thread_updated")
+    assert updated["data"]["thread"]["temp"] is True
+    return updated, _
+
+
 def _chat(ws, text):
-    ws.send_json({"type": "user_text", "text": text})
-    _until(ws, "turn_end")
+    ws.send_json({"v": 1, "type": "send", "data": {"text": text}})
+    _until(ws, "turn_done")
 
 
 def test_connect_opens_a_thread_and_a_reply_is_saved_to_it(kernel):
@@ -174,7 +196,7 @@ def test_connect_opens_a_thread_and_a_reply_is_saved_to_it(kernel):
         opened, _ = _until(ws, "thread_opened")
         thread_id = opened["data"]["thread"]["id"]
         assert opened["data"]["messages"] == []
-        ws.send_json({"type": "set_temp_mode", "enabled": True})   # keeps memory out of the test
+        _temp_on(ws)   # keeps memory out of the test
         _chat(ws, "hello there")
     with kernel.websocket_connect("/ws") as ws:                   # a reload comes back to it
         opened, _ = _until(ws, "thread_opened")
@@ -187,14 +209,14 @@ def test_connect_opens_a_thread_and_a_reply_is_saved_to_it(kernel):
 def test_new_thread_starts_empty_and_the_old_one_keeps_its_history(kernel):
     with kernel.websocket_connect("/ws") as ws:
         first, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         _chat(ws, "first thread message")
-        ws.send_json({"type": "thread_new"})
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
         second, _ = _until(ws, "thread_opened")
         assert second["data"]["thread"]["id"] != first["data"]["thread"]["id"] and second["data"]["messages"] == []
         listing, _ = _until(ws, "thread_list")
         assert [t["id"] for t in listing["data"]["threads"]][1] == first["data"]["thread"]["id"]
-        ws.send_json({"type": "thread_open", "id": first["data"]["thread"]["id"]})
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": first["data"]["thread"]["id"]}})
         back, _ = _until(ws, "thread_opened")
         assert [m["content"] for m in back["data"]["messages"]][0] == "first thread message"
 
@@ -209,11 +231,11 @@ def test_the_model_sees_only_the_open_threads_history(kernel, monkeypatch):
     monkeypatch.setattr(app.router, "stream_with_tools", recording_stream)
     with kernel.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         _chat(ws, "about cats")
-        ws.send_json({"type": "thread_new"})
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         _chat(ws, "about dogs")
     assert seen[-1] == ["about dogs"]
 
@@ -222,16 +244,16 @@ def test_switching_companion_adds_a_divider_and_reopening_restores_her(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
         tid = opened["data"]["thread"]["id"]
-        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
         divider, _ = _until(ws, "thread_message")
         assert divider["data"]["message"]["role"] == "divider" and divider["data"]["message"]["content"] == "Switched to Beta"
-        ws.send_json({"type": "thread_new"})
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
         _until(ws, "thread_opened")
-        ws.send_json({"type": "switch_waifu", "id": "alpha"})
+        ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "alpha"}})
         _until(ws, "thread_message")
-        ws.send_json({"type": "thread_open", "id": tid})
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": tid}})
         state, _ = _until(ws, "waifu_state")
-        assert state["active"] == "beta"
+        assert state["data"]["active"] == "beta"
 
 
 def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
@@ -244,13 +266,13 @@ def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
     monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
-        ws.send_json({"type": "user_text", "text": "first"})
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "first"}})
         _until(ws, "turn_start")
-        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
         state, _ = _until(ws, "waifu_state")
-        assert state["active"] == "alpha" and state["pending"] == "beta"
-        _until(ws, "turn_end")
+        assert state["data"]["active"] == "alpha" and state["data"]["pending"] == "beta"
+        _until(ws, "turn_done")
         divider, _ = _until(ws, "thread_message")             # as the reply ends, not at the next message
         assert divider["data"]["message"]["content"] == "Switched to Beta"
         _chat(ws, "second")
@@ -280,12 +302,12 @@ def test_closing_mid_reply_with_a_switch_pending_still_ends_the_session(kernel, 
     monkeypatch.setattr(app.writer, "WRITER", Writer())
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
-        ws.send_json({"type": "user_text", "text": "first"})
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "first"}})
         _until(ws, "turn_start")
-        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
         state, _ = _until(ws, "waifu_state")
-        assert state["pending"] == "beta"
+        assert state["data"]["pending"] == "beta"
         ws.close()                         # the window goes; TestClient cancels the endpoint on exit, so wait here
         for _ in range(200):
             if passes:
@@ -300,19 +322,19 @@ def test_rename_search_and_delete(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
         tid = opened["data"]["thread"]["id"]
-        ws.send_json({"type": "thread_rename", "id": tid, "title": "Garden plans"})
+        ws.send_json({"v": 1, "type": "thread_rename", "data": {"id": tid, "title": "Garden plans"}})
         listing, _ = _until(ws, "thread_list")
         while listing["data"]["threads"][0]["title"] != "Garden plans":
             listing, _ = _until(ws, "thread_list")
-        ws.send_json({"type": "thread_search", "query": "garden"})
+        ws.send_json({"v": 1, "type": "thread_search", "data": {"query": "garden"}})
         found, _ = _until(ws, "thread_list")
         while found["data"]["query"] != "garden":
             found, _ = _until(ws, "thread_list")
         assert [t["id"] for t in found["data"]["threads"]] == [tid]
-        ws.send_json({"type": "thread_delete", "id": tid})
+        ws.send_json({"v": 1, "type": "thread_delete", "data": {"id": tid}})
         replacement, _ = _until(ws, "thread_opened")
         assert replacement["data"]["thread"]["id"] != tid
-        ws.send_json({"type": "thread_open", "id": tid})
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": tid}})
         err, _ = _until(ws, "error")
         assert err["data"]["code"] == "unknown_thread"
 
@@ -340,14 +362,13 @@ def test_regenerate_replaces_the_last_reply_without_repeating_the_line(kernel, m
     monkeypatch.setattr(app.router, "stream_with_tools", recording_stream)
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         _chat(ws, "tell me something")
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         start, _ = _until(ws, "turn_start")
         assert start["data"]["user_text"] == "tell me something"
         done, _ = _until(ws, "turn_done")
         assert done["data"]["text"] == "second try"
-        _until(ws, "turn_end")
     # the model saw the line once and not the replaced reply; the thread keeps one copy
     assert seen[1] == ["tell me something"]
     stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
@@ -358,13 +379,12 @@ def test_regenerate_after_a_companion_switch_still_replaces_the_reply(kernel):
     # review finding: a divider after the reply must not make Regenerate refuse
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         _chat(ws, "hello")
-        ws.send_json({"type": "switch_waifu", "id": "beta"})
+        ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
         _until(ws, "thread_message")
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         done, _ = _until(ws, "turn_done")
-        _until(ws, "turn_end")
     stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
     assert [m.role for m in stored] == ["divider", "user", "assistant"]
     assert stored[-1].speaker_name == "Beta" and done["data"]["text"] == stored[-1].content
@@ -374,7 +394,7 @@ def test_a_failed_regenerate_keeps_the_old_reply(kernel, monkeypatch):
     # review finding: the old exchange goes only once a new reply exists
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         _chat(ws, "hello")
 
         async def silent(role, messages, tools, **kwargs):
@@ -383,7 +403,7 @@ def test_a_failed_regenerate_keeps_the_old_reply(kernel, monkeypatch):
 
         monkeypatch.setattr(app.router, "stream_with_tools", silent)
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
-        _until(ws, "turn_end")
+        _until(ws, "turn_done")
 
         seen = []
 

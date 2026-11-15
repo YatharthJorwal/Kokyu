@@ -11,7 +11,7 @@
 // `expression.weight` directly, and `update()` reads whatever that
 // current weight is and applies it -- so a plain independent
 // requestAnimationFrame loop calling setValue() each frame, right before
-// vrm.update(delta), works correctly here. That loop lives in main.ts
+// vrm.update(delta), works correctly here. That loop lives in the stage
 // (there's one shared scene-wide rAF loop, not one per audio clip), which
 // is why this file doesn't drive anything itself -- it only tracks
 // *which* mouth-openness value that shared loop should read this frame.
@@ -85,7 +85,7 @@ let currentMouthDriver: (() => number) | null = null;
 let shownMouth = 0;
 let lastMouthReadAt = performance.now();
 
-/** Called from main.ts's single shared animation loop, once per frame,
+/** Called from the stage's single shared animation loop, once per frame,
  * before vrm.update(delta). Returns 0 (mouth closed) whenever nothing is
  * currently speaking -- not an error case, just the resting state. Call it
  * exactly once per frame: it advances the smoothing by the time since the
@@ -104,7 +104,7 @@ export function getMouthOpenValue(): number {
 // only ever one Audio element actually playing), tracked separately
 // rather than reusing that driver's closure because captions need the
 // raw elapsed/duration numbers, not a derived mouth-openness value.
-// This is what lets main.ts approximate per-word caption timing against
+// This is what lets the stage approximate per-word caption timing against
 // GPT-SoVITS's *actual* clip length instead of guessing a fixed
 // words-per-second rate -- GPT-SoVITS's API returns finished WAV bytes
 // with no per-word timestamps (confirmed against KASANE/tts.py),
@@ -164,7 +164,7 @@ function getAudioContext(): AudioContext {
  * Plays `audioUrl` through the browser's audio output and, for as long as
  * it's playing, makes getMouthOpenValue() return a live mouth-openness
  * reading (0..MOUTH_MAX_OPEN: gated, curved and eased RMS of the waveform --
- * see the math block at the top of this file) instead of the resting 0. main.ts's shared render loop is what
+ * see the math block at the top of this file) instead of the resting 0. The stage's shared render loop is what
  * actually applies that value to the VRM's "aa" expression each frame --
  * this function only owns the audio element and the analyser reading it,
  * not anything about the 3D scene.

@@ -1,24 +1,21 @@
 // The chat window's connection to KASANE (K1-02): one WebSocket, reconnecting
-// with backoff, that splits incoming messages into v1 frames and Yuri's legacy
-// flat messages (D-049) and sends both kinds. No state lives here; the store
-// does that.
+// with backoff, that speaks protocol v1 both ways (D-062). No state lives here;
+// the store does that.
 
 import { clientFrame, parseFrame, type ClientData, type ClientType, type Frame } from "./protocol";
 
 export const KERNEL_WS_URL = "ws://127.0.0.1:8780/ws";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
-export type LegacyMessage = { type: string; [key: string]: unknown };
 
 export interface KernelHandlers {
   onFrame: (frame: Frame) => void;
-  onLegacy: (msg: LegacyMessage) => void;
   onStatus: (status: ConnectionStatus) => void;
   /** A message this window could not understand (wrong protocol version, unknown type). */
   onProblem: (reason: string) => void;
 }
 
-/** 250 ms, 500, 1000, then 2000 ms between attempts (the widget's schedule). */
+/** 250 ms, 500, 1000, then 2000 ms between attempts. */
 export function backoffMs(attempt: number): number {
   return Math.min(250 * 2 ** attempt, 2000);
 }
@@ -34,9 +31,7 @@ export function dispatchRaw(raw: string, handlers: KernelHandlers): void {
   }
   const result = parseFrame(parsed);
   if (result.kind === "frame") handlers.onFrame(result.frame);
-  else if (result.kind === "legacy") {
-    if (typeof (parsed as { type?: unknown }).type === "string") handlers.onLegacy(parsed as LegacyMessage);
-  } else handlers.onProblem(result.reason);
+  else handlers.onProblem(result.reason);
 }
 
 export class KernelSocket {
@@ -77,17 +72,8 @@ export class KernelSocket {
 
   /** A v1 frame. Returns false when the socket is not open (nothing is queued). */
   send<T extends ClientType>(type: T, data: ClientData[T], thread: string | null = null): boolean {
-    return this.sendRaw(clientFrame(type, data, thread));
-  }
-
-  /** One of Yuri's flat messages (`user_text`, `stop`, ...) until they get v1 equivalents. */
-  sendLegacy(msg: LegacyMessage): boolean {
-    return this.sendRaw(msg);
-  }
-
-  private sendRaw(payload: unknown): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
-    this.socket.send(JSON.stringify(payload));
+    this.socket.send(JSON.stringify(clientFrame(type, data, thread)));
     return true;
   }
 }

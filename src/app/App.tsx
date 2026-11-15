@@ -1,5 +1,5 @@
 // The Kōkyū window (K1-02): sidebar and the open thread. The Stage view with
-// the avatar arrives in K2; until then Yuri's widget stays at /widget.html.
+// the avatar arrives in K2 (its engine waits in src/engine/).
 
 import { Composer } from "./ui/Composer";
 import { NoticeBar } from "./ui/NoticeBar";

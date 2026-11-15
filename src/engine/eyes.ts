@@ -1,7 +1,7 @@
 // Eyes for the shell body (Phase 13, step 2): a gaze with micro-saccades and
 // occasional glances, and a blink with variety. Pure logic -- no three.js, no
 // DOM, randomness injected -- so timing and bounds are tested under
-// `npm run test:fe`. main.ts reads one frame from each controller per
+// `npm run test:fe`. The stage reads one frame from each controller per
 // animate() tick and writes it to vrm.lookAt (yaw/pitch) and the "blink"
 // expression; the head follows glances (not saccades) through addHeadFollow().
 //

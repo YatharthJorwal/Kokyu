@@ -7,7 +7,7 @@ import {
   RAMP_SECONDS,
   applyIdleOffsets,
   idleOffsets,
-} from "../src/idle-motion.ts";
+} from "../src/engine/idle-motion.ts";
 
 const AXES = ["x", "y", "z"];
 

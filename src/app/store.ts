@@ -6,8 +6,9 @@
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
+import type { ServerData } from "../net/protocol";
 import { canPickModel, canRegenerate, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
-import { VoicePlayer, type SpeakClip } from "./voice";
+import { VoicePlayer } from "./voice";
 
 /** A file ready to send: an image as base64 JPEG, or a text file's content (src/file-upload.ts). */
 export interface Attachment {
@@ -34,11 +35,9 @@ function researchThreads(): void {
 }
 
 const socket = new KernelSocket({
-  onFrame: (frame) => dispatch({ kind: "frame", frame }),
-  onLegacy: (msg) => {
-    if (msg.type === "speak") voice.enqueue(msg as unknown as SpeakClip);
-    else if (msg.type === "barge_in") voice.stop();
-    dispatch({ kind: "legacy", msg });
+  onFrame: (frame) => {
+    if (frame.type === "speak") voice.enqueue(frame.data as ServerData["speak"]);
+    dispatch({ kind: "frame", frame });
   },
   onStatus: (status) => {
     if (status !== "online") voice.stop();
@@ -56,7 +55,7 @@ export const actions = {
   send(text: string): boolean {
     const line = text.trim();
     if (!line || !canSend(useChat.getState())) return false;
-    if (!socket.sendLegacy({ type: "user_text", text: line })) return false;
+    if (!socket.send("send", { text: line })) return false;
     voice.stop();
     dispatch({ kind: "sent", text: line });
     return true;
@@ -66,7 +65,7 @@ export const actions = {
    * caption. The kernel describes an image (or reads a text file) and runs the turn. */
   sendFile(file: Attachment, caption: string): boolean {
     if (!canSend(useChat.getState())) return false;
-    if (!socket.sendLegacy({ type: "user_file", ...file, caption: caption.trim() })) return false;
+    if (!socket.send("send_file", { ...file, caption: caption.trim() })) return false;
     voice.stop();
     dispatch({ kind: "sent", text: null });
     return true;
@@ -75,7 +74,7 @@ export const actions = {
   /** Stop: halts generation and the voice; the partial reply is kept (FR-C-2). */
   stop(): void {
     voice.stop();
-    socket.sendLegacy({ type: "stop" });
+    socket.send("stop", {});
   },
 
   /** Regenerate the last reply, or Retry a failed turn (FR-C-9): the kernel replaces
@@ -126,7 +125,7 @@ export const actions = {
     const state = useChat.getState();
     // Mid-reply a click back to her undoes a switch still waiting for the reply.
     if (state.companion?.id === id && state.turn === "idle") return;
-    socket.sendLegacy({ type: "switch_waifu", id });
+    socket.send("switch_waifu", { id });
   },
 
   /** FR-SC-5: tells the kernel the user is typing (OCR watch keeps quiet); at most every few seconds. */

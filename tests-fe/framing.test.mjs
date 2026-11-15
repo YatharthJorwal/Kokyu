@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { lookAtHeight } from "../src/framing.ts";
+import { lookAtHeight } from "../src/engine/framing.ts";
 
 // The shell's real framing: 32 degree FOV from 1.2 m, so +/-0.344 m is visible around the target.
 const F = { distance: 1.2, fovDegrees: 32, headroom: 0.05, maxRise: 0.2 };

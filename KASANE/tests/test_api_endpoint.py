@@ -405,5 +405,5 @@ async def test_a_key_change_reaches_every_window(monkeypatch):
     await app._apply_shell_key("openrouter", "sk-or-1234567890")
     assert rt.changes == [("openrouter", "sk-or-1234567890")]
     for ws in windows:
-        assert [f["type"] for f in ws.sent] == ["model_list", "settings"]
+        assert [f["type"] for f in ws.sent] == ["model_list"]
         assert "sk-or" not in json.dumps(ws.sent)

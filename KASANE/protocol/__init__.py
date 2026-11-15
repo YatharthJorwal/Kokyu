@@ -5,10 +5,8 @@ Every message added from K1 on travels in one envelope:
     {"v": 1, "type": "...", "id": "...", "thread": "..." | null, "data": {...}}
 
 Client messages are validated here before the endpoint acts on them; a bad
-message is answered with a typed `error` frame, never a crash. Yuri's older
-flat messages (`user_text`, `speak`, `turn_end`, ...) keep working unchanged
-until the K1 shell replaces the widget (D-049); `parse_client` returns None
-for them so the endpoint's existing branches handle them.
+message is answered with a typed `error` frame, never a crash. There is no
+other protocol: the seed's flat messages are gone (D-049, D-062).
 
 The TypeScript mirror is `src/net/protocol.ts`; a test compares the two lists
 of message types so they cannot drift apart silently.
@@ -67,6 +65,33 @@ class VoiceModeData(_Data):
     on: bool
 
 
+class TempChat(_Data):
+    on: bool
+
+
+TEXT_MAX = 20_000
+FILE_MAX = 12_000_000   # a resized image as base64, or a text file (capped again in the kernel)
+
+
+class SendText(_Data):
+    text: str = Field(min_length=1, max_length=TEXT_MAX)
+
+
+class SendFile(_Data):
+    filename: str = Field(default="uploaded file", max_length=260)
+    kind: Literal["image", "text"]
+    content: str = Field(min_length=1, max_length=FILE_MAX)
+    caption: str = Field(default="", max_length=TEXT_MAX)
+
+
+class SwitchWaifu(_Data):
+    id: str = Field(min_length=1, max_length=64)
+
+
+class CameraFrame(_Data):
+    image_b64: str | None = Field(default=None, max_length=FILE_MAX)   # None: the camera could not answer
+
+
 class SetModel(_Data):
     model_ref: str | None = None      # null = the local default model
 
@@ -92,6 +117,12 @@ class ModelListRequest(_Data):
 # Client -> kernel, versioned. The data model for each type.
 CLIENT_TYPES: dict[str, type[_Data]] = {
     "hello": Hello,
+    "send": SendText,                 # a typed line starts a turn (FR-C-1)
+    "send_file": SendFile,            # an attached file or image starts a turn (FR-C-4)
+    "stop": Empty,                    # Stop the reply in flight (FR-C-2)
+    "switch_waifu": SwitchWaifu,      # FR-S-1: changes only persona and voice
+    "set_temp": TempChat,             # FR-MEM-5: Temp Chat on or off for the open thread
+    "camera_frame": CameraFrame,      # the answer to camera_request (K2-07)
     "thread_list": Empty,
     "thread_search": ThreadSearch,
     "thread_new": Empty,
@@ -123,6 +154,10 @@ SERVER_TYPES: tuple[str, ...] = (
     "model_status",   # K1-10 (FR-M-6): loading / ready / failed
     "screen_companions",  # K1-05b (FR-SC-2): what is watching the screen
     "voice_status",   # D-061: voice on or off, and how its start is going
+    "waifu_state",    # FR-S-1: the roster, the active companion, a pending switch
+    "surface_status", # this window drives turns, or watches
+    "speak",          # one spoken clause: caption text and a WAV (FR-V-2)
+    "camera_request", # the kernel wants one camera frame (K2-07)
 )
 
 ERROR_CODES: tuple[str, ...] = (
@@ -135,6 +170,7 @@ ERROR_CODES: tuple[str, ...] = (
     "model_blocked",
     "model_failed",
     "vision_unavailable",   # K1-05b (FR-SC-3): no local model can see the screen
+    "observer",             # another window drives the conversation
 )
 
 
@@ -170,7 +206,7 @@ def error_frame(code: str, message: str, *, thread: str | None = None, reply_to:
 def model_failure(exc: BaseException) -> dict[str, Any] | None:
     """The `error` frame data for a failed chat model (FR-R-5), or None for an
     error that is not about the user's model choice (e.g. the local server is
-    down and no model was chosen: the existing spoken line covers that).
+    down: the kernel then sends a plain model_failed of its own).
     `actions` tells the chat view which buttons to show."""
     from router.errors import ProviderError, RouteBlockedError
 
@@ -200,11 +236,10 @@ def is_versioned(raw: Any) -> bool:
     return isinstance(raw, dict) and "v" in raw
 
 
-def parse_client(raw: Any) -> ClientMessage | None:
-    """Validates a versioned client frame. Returns None for a legacy flat message
-    (no `v`), which the endpoint handles as before. Raises ProtocolError otherwise."""
+def parse_client(raw: Any) -> ClientMessage:
+    """Validates a client frame. Raises ProtocolError for anything else."""
     if not is_versioned(raw):
-        return None
+        raise ProtocolError("bad_message", "Not a protocol v1 frame.")
     if raw.get("v") != PROTOCOL_VERSION:
         raise ProtocolError(
             "protocol_version",

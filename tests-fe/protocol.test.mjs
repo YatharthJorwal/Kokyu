@@ -18,9 +18,9 @@ test("a client frame carries the version, a unique id and the data", () => {
   assert.notEqual(a.id, b.id);
 });
 
-test("flat messages are legacy; v1 frames parse; anything else is a stated problem", () => {
-  assert.equal(parseFrame({ type: "speak", text: "hi" }).kind, "legacy");
-  assert.equal(parseFrame("nope").kind, "legacy");
+test("v1 frames parse; anything else, a flat message included, is a stated problem (D-062)", () => {
+  assert.equal(parseFrame({ type: "speak", text: "hi" }).kind, "error");
+  assert.equal(parseFrame("nope").kind, "error");
   const ok = parseFrame({ v: 1, type: "token", id: "x", thread: "t", data: { text: "a" } });
   assert.equal(ok.kind, "frame");
   assert.equal(ok.frame.data.text, "a");

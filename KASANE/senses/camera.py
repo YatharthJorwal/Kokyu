@@ -28,6 +28,7 @@ import asyncio
 from fastapi import WebSocket
 
 import llm
+import protocol
 import router
 from tools.vision import ToolUnavailableError
 
@@ -61,13 +62,17 @@ async def request_frame(websocket: WebSocket) -> str:
     round, not something an existing working path already exercises.
     """
     global _pending_frame
+    # Set by a window that turned its camera on (K2-07); until then the answer is
+    # immediate instead of a 10 s wait for a frame nothing will send.
+    if not getattr(getattr(websocket, "state", None), "camera_on", False):
+        raise ToolUnavailableError("the camera is off")
     if _pending_frame is not None and not _pending_frame.done():
         raise ToolUnavailableError("a camera capture is already in progress")
 
     loop = asyncio.get_running_loop()
     _pending_frame = loop.create_future()
     try:
-        await websocket.send_json({"type": "request_camera_frame"})
+        await websocket.send_json(protocol.frame("camera_request"))
         try:
             result = await asyncio.wait_for(_pending_frame, timeout=_FRAME_TIMEOUT_SECONDS)
         except asyncio.TimeoutError as exc:

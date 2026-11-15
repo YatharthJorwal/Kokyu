@@ -125,13 +125,6 @@ class Router:
         # before they finish, so calls started together cannot all pass it (FR-R-2).
         self._reserved_usd = 0.0
         self._cloud_cfg: ProviderConfig | None = cloud_cfg
-        # None = follow routing.mode/enforce_roles. True/False = the user's live
-        # choice from the tray/quick-action toggle, which outranks the config
-        # until they change it again (see settings.py).
-        self.use_api_model_override: bool | None = None
-
-    def set_use_api_model(self, enabled: bool | None) -> None:
-        self.use_api_model_override = enabled
 
     @staticmethod
     def _catalog_for(cfg: ProviderConfig | None) -> ModelCatalog:
@@ -194,11 +187,7 @@ class Router:
             return False
         if role == decide_mod.CHAT_ROLE:
             # D-025 rule 6: the user's model selection is always enforced; the
-            # shadow/enforce rollout and the old API toggle do not apply to chat.
-            return True
-        if self.use_api_model_override is False:
-            return False
-        if self.use_api_model_override is True:
+            # shadow/enforce rollout does not apply to chat.
             return True
         return (
             self.config.routing.mode == "enforce"

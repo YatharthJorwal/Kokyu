@@ -1,4 +1,4 @@
-// "Yuri is waking up…" (K1-10, FR-M-6, D-054): shown in the chat while the
+// "<companion> is waking up…" (K1-10, FR-M-6, D-054): shown in the chat while the
 // kernel loads the chat model, so a two-minute load of a big model reads as the
 // companion getting ready instead of a frozen app. The line changes every few
 // seconds; the model and the time so far sit underneath. A failed load says so

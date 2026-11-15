@@ -1,6 +1,6 @@
 // Phase 5 -- webcam capture for the capture_camera tool (see
-// KASANE/camera.py and tools/__init__.py). Same "plain Web APIs, no
-// Tauri-specific plugin" spirit as mic.ts -- WebView2 supports
+// KASANE/senses/camera.py and tools/__init__.py). Same "plain Web APIs, no
+// Tauri-specific plugin" spirit as mic-stream.ts -- WebView2 supports
 // getUserMedia() for video the same as it does for audio.
 //
 // Deliberately NOT continuous/streaming to the backend --
@@ -8,7 +8,7 @@
 // camera stream stays open locally once armed (so a capture can be
 // grabbed instantly when asked, no per-request permission friction), but
 // nothing is sent anywhere until the backend actually asks for a frame
-// (request_camera_frame, see ws-client.ts). No live preview is ever shown
+// (a camera_request frame, answered with camera_frame; src/net/protocol.ts). No live preview is ever shown
 // to the user either, per that same spec ("even though nothing is
 // displayed back to the user") -- the only visible sign the camera is
 // armed is the tray icon (src-tauri/src/lib.rs's set_camera_indicator),

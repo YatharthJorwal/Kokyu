@@ -1,5 +1,5 @@
-// The chat window's state as a pure reducer (K1-02, D-013): every kernel frame,
-// legacy message and local event goes through `reduce`, so the behaviour is
+// The chat window's state as a pure reducer (K1-02, D-013): every kernel frame
+// and local event goes through `reduce`, so the behaviour is
 // testable in Node without a DOM. The Zustand store (store.ts) only wraps it.
 // Clients hold no business logic (RULES): this decides what to *show*, never
 // what the kernel does.
@@ -11,6 +11,7 @@ import {
   type ModelListData,
   type ModelStatus,
   type ScreenCompanions,
+  type ServerData,
   type VoiceStatus,
   type ThreadInfo,
   type ThreadMessage,
@@ -80,11 +81,8 @@ export interface ChatState {
   voice: VoiceStatus | null;
 }
 
-export type LegacyMessage = { type: string; [key: string]: unknown };
-
 export type ChatEvent =
   | { kind: "frame"; frame: Frame }
-  | { kind: "legacy"; msg: LegacyMessage }
   | { kind: "status"; status: ConnectionStatus }
   | { kind: "problem"; reason: string }
   /** `text` null: a file went out; its line arrives with turn_start (the kernel words it). */
@@ -298,6 +296,17 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, screen: frame.data as ScreenCompanions };
     case "voice_status":
       return { ...state, voice: frame.data as VoiceStatus };
+    case "waifu_state": {
+      const data = frame.data as ServerData["waifu_state"];
+      const roster = (data.waifus ?? []).map((w) => ({ id: w.id, name: w.name }));
+      const found = roster.find((w) => w.id === data.active);
+      const pending = data.pending !== data.active ? roster.find((w) => w.id === data.pending) : undefined;
+      return { ...state, roster, companion: found ?? null, pendingCompanion: pending ?? null };
+    }
+    case "surface_status": {
+      const { role } = frame.data as ServerData["surface_status"];
+      return { ...state, role: role === "observer" ? "observer" : "driver" };
+    }
     case "error": {
       const data = frame.data as { code: ErrorCode; message: string; actions?: ("retry" | "switch_model")[] };
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [] };
@@ -320,39 +329,10 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
   }
 }
 
-function reduceLegacy(state: ChatState, msg: LegacyMessage): ChatState {
-  switch (msg.type) {
-    case "waifu_state": {
-      const active = msg.active as string | null;
-      const roster = ((msg.waifus as Companion[] | undefined) ?? []).map((w) => ({ id: w.id, name: w.name }));
-      const found = roster.find((w) => w.id === active);
-      const pending = msg.pending !== active ? roster.find((w) => w.id === msg.pending) : undefined;
-      return { ...state, roster, companion: found ?? null, pendingCompanion: pending ?? null };
-    }
-    case "surface_status":
-      return { ...state, role: msg.role === "observer" ? "observer" : "driver" };
-    case "turn_end":
-      // Yuri's end-of-turn message. turn_done normally arrived first; this only
-      // closes a turn the kernel ended without one (an old kernel, or a Stop race).
-      if (state.turn === "idle") return state;
-      return reduceFrame(state, {
-        v: 1,
-        type: "turn_done",
-        id: "legacy",
-        thread: null,
-        data: { text: "", stopped: true },
-      });
-    default:
-      return state;
-  }
-}
-
 export function reduce(state: ChatState, event: ChatEvent): ChatState {
   switch (event.kind) {
     case "frame":
       return reduceFrame(state, event.frame);
-    case "legacy":
-      return reduceLegacy(state, event.msg);
     case "status": {
       const next = { ...state, connection: event.status };
       // A dropped connection ends whatever was streaming; the kernel restarts clean

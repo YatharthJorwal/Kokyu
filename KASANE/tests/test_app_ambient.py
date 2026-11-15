@@ -155,6 +155,19 @@ def test_each_llm_failure_gets_its_own_line():
 def test_only_a_real_connection_failure_blames_the_server_not_running():
     # The original bug: a server that was up (and had the model loaded) still
     # got "is the model server even running?".
-    assert "even running" in app.LLM_UNREACHABLE_LINE
-    assert "even running" not in app.LLM_SERVER_ERROR_LINE
-    assert "even running" not in app.LLM_TIMEOUT_LINE
+    assert "Is Ollama running" in app.LLM_UNREACHABLE_LINE
+    assert "running" not in app.LLM_SERVER_ERROR_LINE
+    assert "running" not in app.LLM_TIMEOUT_LINE
+
+
+@pytest.mark.asyncio
+async def test_a_spoken_remark_is_handed_to_the_chat(monkeypatch, _isolate):
+    # Voice off used to mean the remark was lost; now the session stores and shows it.
+    _vlm(monkeypatch, ["player mining wood in Minecraft"])
+    saved: list[str] = []
+
+    async def on_remark(text):
+        saved.append(text)
+
+    await app._run_ocr_watch_check(FakeWebSocket(), [{"role": "system", "content": "p"}], False, [], [], on_remark=on_remark)
+    assert saved == _isolate and saved

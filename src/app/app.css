@@ -817,7 +817,7 @@ div.companion,
   .voice-chip.waking { animation: none; }
 }
 
-/* ── the status heart, ported from Yuri (K1-05, FR-C-5) ──── */
+/* ── the status heart (K1-05, FR-C-5) ──── */
 
 .heart {
   flex: none;

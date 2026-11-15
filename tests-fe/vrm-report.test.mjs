@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { buildVrmReport } from "../src/vrm-report.ts";
+import { buildVrmReport } from "../src/engine/vrm-report.ts";
 
 const expr = (expressionName, extra = {}) => ({
   expressionName,

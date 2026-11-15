@@ -1,10 +1,10 @@
 // Procedural idle motion for the shell body (Phase 13, step 1): breathing,
 // a slow weight shift, and a drifting head, so she stops looking like a
 // mannequin between replies. Pure math -- no three.js, no DOM -- so the
-// shape of the motion is tested under `npm run test:fe`; main.ts only reads
+// shape of the motion is tested under `npm run test:fe`; the stage only reads
 // the offsets once a frame and writes them onto the VRM's normalized bones.
 //
-// Every bone driven here is one applyIdlePose() (main.ts) never touches, so
+// Every bone driven here is one the stage's base pose never touches, so
 // offsets are absolute Euler rotations on a rest-pose (identity) bone, not
 // deltas stacked on a pose. If a later step drives these bones from a VRMA
 // clip, switch to additive quaternions at that point.

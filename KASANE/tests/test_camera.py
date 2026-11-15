@@ -9,6 +9,7 @@ as everything else vision-related in this project.
 from __future__ import annotations
 
 import asyncio
+from types import SimpleNamespace
 
 import pytest
 
@@ -19,8 +20,9 @@ class _FakeWebSocket:
     """Records every send_json call; nothing else. Real enough for
     request_frame(), which only ever calls this one method."""
 
-    def __init__(self) -> None:
+    def __init__(self, camera_on: bool = True) -> None:
         self.sent: list[dict] = []
+        self.state = SimpleNamespace(camera_on=camera_on)
 
     async def send_json(self, data: dict) -> None:
         self.sent.append(data)
@@ -53,7 +55,15 @@ async def test_request_frame_sends_request_message():
     result = await camera.request_frame(ws)
 
     assert result == "fake_base64_jpeg"
-    assert ws.sent == [{"type": "request_camera_frame"}]
+    assert [f["type"] for f in ws.sent] == ["camera_request"]
+
+
+@pytest.mark.asyncio
+async def test_request_frame_fails_at_once_when_the_camera_is_off():
+    ws = _FakeWebSocket(camera_on=False)
+    with pytest.raises(camera.ToolUnavailableError, match="camera is off"):
+        await camera.request_frame(ws)
+    assert ws.sent == []
 
 
 @pytest.mark.asyncio

@@ -25,9 +25,13 @@ def test_a_frame_has_the_envelope():
         protocol.error_frame("made_up_code", "x")
 
 
-def test_legacy_flat_messages_pass_through_untouched():
-    assert protocol.parse_client({"type": "user_text", "text": "hi"}) is None
-    assert protocol.parse_client("not even a dict") is None
+def test_only_v1_frames_are_accepted():
+    # The window speaks v1 only (D-062): a flat message or a non-object is a typed error.
+    for raw in ({"type": "send", "text": "hi"}, "not even a dict"):
+        with pytest.raises(protocol.ProtocolError) as info:
+            protocol.parse_client(raw)
+        assert info.value.code == "bad_message"
+    assert protocol.parse_client({"v": 1, "type": "send", "data": {"text": "hi"}}).data.text == "hi"
 
 
 def test_a_valid_frame_is_parsed_and_trimmed():
@@ -131,6 +135,12 @@ def _until(ws, kind):
             return msg, seen
 
 
+def _temp_on(ws):
+    """Temp Chat on (keeps memory out of the test); the kernel confirms it."""
+    ws.send_json({"v": 1, "type": "set_temp", "data": {"on": True}})
+    return _until(ws, "thread_updated")
+
+
 def test_hello_and_errors_come_back_as_frames(kernel):
     with kernel.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
@@ -146,17 +156,18 @@ def test_a_reply_streams_token_by_token_then_finishes(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
         tid = opened["thread"]
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
-        ws.send_json({"v": 1, "type": "thread_list", "data": {}})          # versioned and legacy mix freely
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "thread_list", "data": {}})
         _until(ws, "thread_list")
-        ws.send_json({"type": "user_text", "text": "hi"})
-        _, seen = _until(ws, "turn_end")
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
+        _, seen = _until(ws, "turn_done")
     kinds = [m["type"] for m in seen]
     start = kinds.index("turn_start")
     tokens = [m for m in seen if m["type"] == "token"]
     done = next(m for m in seen if m["type"] == "turn_done")
-    assert start < kinds.index("token") < kinds.index("turn_done") < kinds.index("turn_end")
+    assert start < kinds.index("token") < kinds.index("turn_done")
+    assert "turn_end" not in kinds
     assert all(m["v"] == 1 and m["thread"] == tid for m in (seen[start], *tokens, done))
     assert "".join(t["data"]["text"] for t in tokens) == "Hello there. [happy]"
     assert protocol.strip_trailing_tag("".join(t["data"]["text"] for t in tokens)) == "Hello there."
-    assert done["data"] == {"text": "Hello there.", "stopped": False}
+    assert done["data"] == {"text": "Hello there.", "stopped": False, "emotion": "happy"}

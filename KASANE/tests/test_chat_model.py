@@ -269,19 +269,25 @@ def _until(ws, kind):
             return msg, seen
 
 
+def _temp_on(ws):
+    """Temp Chat on (keeps memory out of the test); the kernel confirms it."""
+    ws.send_json({"v": 1, "type": "set_temp", "data": {"on": True}})
+    return _until(ws, "thread_updated")
+
+
 def test_model_and_effort_are_saved_on_the_thread_and_used_by_the_next_turn(kernel):
     client, calls = kernel
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         updated, _ = _until(ws, "thread_updated")
         assert updated["data"]["thread"]["model_ref"] == LOCAL
         ws.send_json({"v": 1, "type": "set_effort", "data": {"effort": "low"}})
         updated, _ = _until(ws, "thread_updated")
         assert updated["data"]["thread"]["effort"] == "low"
-        ws.send_json({"type": "user_text", "text": "hi"})
-        _until(ws, "turn_end")
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
+        _until(ws, "turn_done")
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": "gpt-whatever"}})
         err, _ = _until(ws, "error")
         assert err["data"]["code"] == "bad_message"
@@ -298,12 +304,12 @@ def test_a_blocked_api_model_shows_retry_and_switch_and_nothing_answers_instead(
     client, calls = kernel
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": API}})
         _until(ws, "thread_updated")
-        ws.send_json({"type": "user_text", "text": "hi"})
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
         err, seen = _until(ws, "error")
-        _, rest = _until(ws, "turn_end")
+        _, rest = _until(ws, "turn_done")
     data = err["data"]
     assert data["code"] == "model_blocked" and data["reason"] == d.CLOUD_DISABLED
     assert data["actions"] == ["retry", "switch_model"] and data["model_ref"] == API
@@ -325,12 +331,12 @@ def test_an_api_model_is_never_offered_the_screen_or_camera_tools(kernel, monkey
     monkeypatch.setattr(app.router, "stream_with_tools", recording)
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         for ref in (LOCAL, API):
             ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": ref}})
             _until(ws, "thread_updated")
-            ws.send_json({"type": "user_text", "text": "hi"})
-            _until(ws, "turn_end")
+            ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
+            _until(ws, "turn_done")
     local_only = {"capture_screen", "capture_camera", "read_clipboard"}
     assert local_only <= offered[0] and not local_only & offered[1]
 
@@ -345,31 +351,49 @@ def test_an_attachment_sent_to_an_api_model_is_badged_and_an_empty_one_refused(k
         yield {"type": "content", "text": "nice [happy]"}
 
     monkeypatch.setattr(app.router, "stream_with_tools", answering)
-    upload = {"type": "user_file", "filename": "notes.txt", "kind": "text", "content": "milk, eggs"}
+    upload = {"filename": "notes.txt", "kind": "text", "content": "milk, eggs"}
     with client.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
-        ws.send_json({**upload, "content": ""})
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send_file", "data": {**upload, "content": ""}})
         refused, _ = _until(ws, "error")
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         _until(ws, "thread_updated")
-        ws.send_json(upload)
+        ws.send_json({"v": 1, "type": "send_file", "data": upload})
         local, _ = _until(ws, "turn_start")
-        _until(ws, "turn_end")
+        _until(ws, "turn_done")
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": API}})
         _until(ws, "thread_updated")
-        ws.send_json(upload)
+        ws.send_json({"v": 1, "type": "send_file", "data": upload})
         sent, _ = _until(ws, "turn_start")
-        _until(ws, "turn_end")
+        _until(ws, "turn_done")
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         again, _ = _until(ws, "turn_start")
-        _until(ws, "turn_end")
-        ws.send_json({"type": "thread_open", "id": opened["data"]["thread"]["id"]})
+        _until(ws, "turn_done")
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": opened["data"]["thread"]["id"]}})
         reopened, _ = _until(ws, "thread_opened")
     assert refused["data"]["code"] == "bad_message"
     assert local["data"]["sent_to"] is None and sent["data"]["sent_to"] == API and again["data"]["sent_to"] == API
     metas = [m["meta"] for m in reopened["data"]["messages"] if m["role"] == "user"]
     assert metas == [{"attachment": "text"}, {"attachment": "text", "sent_to": API}]
+
+
+def test_an_image_the_vision_model_cannot_see_ends_the_turn_without_a_line(kernel, monkeypatch):
+    # The window shows a turn from the moment it sends the file; the refusal has to close it.
+    client, _ = kernel
+
+    async def blind(*_a, **_k):
+        raise app.llm.LLMUnreachableError("vision server down")
+
+    monkeypatch.setattr(app.router, "describe_image", blind)
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send_file", "data": {"filename": "cat.jpg", "kind": "image", "content": "abc"}})
+        err, _ = _until(ws, "error")
+        done, seen = _until(ws, "turn_done")
+    assert err["data"]["code"] == "vision_unavailable"
+    assert done["data"]["text"] == "" and "turn_start" not in [m["type"] for m in seen]
 
 
 @pytest.mark.asyncio
@@ -525,13 +549,13 @@ def test_switching_models_waits_for_the_reply(kernel, monkeypatch):
     monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
-        ws.send_json({"type": "user_text", "text": "hi"})
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
         _until(ws, "turn_start")
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         err, _ = _until(ws, "error")
         assert err["data"]["code"] == "turn_running"
-        _until(ws, "turn_end")
+        _until(ws, "turn_done")
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         updated, _ = _until(ws, "thread_updated")
         assert updated["data"]["thread"]["model_ref"] == LOCAL
@@ -581,11 +605,11 @@ def test_a_turn_waits_for_its_model_and_warm_up_off_loads_on_the_first_message(l
     ))
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        ws.send_json({"type": "set_temp_mode", "enabled": True})
+        _temp_on(ws)
         ws.send_json({"v": 1, "type": "thread_list", "data": {}})
         _until(ws, "thread_list")
         assert seen == []                                                   # opening did not load
-        ws.send_json({"type": "user_text", "text": "hi"})
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
         _status_until(ws, "ready", "local:llamacpp/big")                   # the message loaded it, at once
         _until(ws, "turn_done")
     assert seen == ["local:llamacpp/big"]

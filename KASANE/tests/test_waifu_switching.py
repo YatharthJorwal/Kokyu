@@ -64,8 +64,8 @@ async def test_switch_replaces_only_the_system_prompt_and_the_voice(registry, mo
     assert history[0]["content"] == prompting.build_system_prompt(registry.get("beta").prompt)
     assert history[1:] == before_tail                       # the conversation itself is untouched
     state = ws.payloads[-1]
-    assert state["type"] == "waifu_state" and state["active"] == "beta"
-    assert {w["id"] for w in state["waifus"]} == {"alpha", "beta"}
+    assert state["type"] == "waifu_state" and state["data"]["active"] == "beta"
+    assert {w["id"] for w in state["data"]["waifus"]} == {"alpha", "beta"}
     assert app._load_active_id() == "beta"                  # remembered for the next launch
     import asyncio
     await asyncio.sleep(0)                                  # let the pre-warm task run
@@ -106,7 +106,7 @@ async def test_speech_uses_the_active_waifus_clip_and_transcript(registry, monke
 
 
 @pytest.mark.asyncio
-async def test_no_waifu_means_the_legacy_voice_call(monkeypatch):
+async def test_no_waifu_means_the_config_voice_call(monkeypatch):
     voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
     calls = []
 
@@ -129,10 +129,10 @@ async def test_dead_voice_backend_leaves_a_text_only_reply(registry, monkeypatch
     ws.state.waifu = registry.get("alpha")
     await app._send_speak(ws, "Still here.")
     payload = ws.payloads[0]
-    assert payload["type"] == "speak" and payload["text"] == "Still here." and payload["audio_b64"] == ""
+    assert payload["type"] == "speak" and payload["data"]["text"] == "Still here." and payload["data"]["audio_b64"] == ""
 
 
-def test_system_message_is_the_legacy_prompt_without_a_waifu():
+def test_system_message_is_the_fallback_persona_without_a_waifu():
     assert app._system_message(None) == prompting.build_system_prompt(persona.FALLBACK_PERSONA)
 
 

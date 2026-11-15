@@ -367,7 +367,6 @@ vision:
 session:
   max_history_turns: 20
   max_unprompted_in_history: 3
-  user_name: 'Yatharth'
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Conversation model (K1, D-051). Threads with no model chosen use this.

@@ -9,7 +9,7 @@ import {
   HEAD_FOLLOW_YAW,
   addHeadFollow,
   mulberry32,
-} from "../src/eyes.ts";
+} from "../src/engine/eyes.ts";
 
 const DT = 1 / 60;
 

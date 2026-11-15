@@ -8,7 +8,7 @@ import {
   getMouthOpenValue,
   mouthTargetFromRms,
   rmsOfTimeDomain,
-} from "../src/lipsync.ts";
+} from "../src/engine/lipsync.ts";
 
 // The real session: mouth snapped to full "aa" (fangs + tongue visible).
 // The old driver was min(1, rms * 4) over a ~3 ms window with no smoothing.

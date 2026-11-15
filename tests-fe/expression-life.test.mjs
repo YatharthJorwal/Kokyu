@@ -1,6 +1,6 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
-import { mulberry32 } from "../src/eyes.ts";
+import { mulberry32 } from "../src/engine/eyes.ts";
 import {
   DRIFT_DEPTH,
   EMOTION_PROFILES,
@@ -8,7 +8,7 @@ import {
   INTENSITY_MIN,
   ExpressionLife,
   blendTarget,
-} from "../src/expression-life.ts";
+} from "../src/engine/expression-life.ts";
 
 const DT = 1 / 60;
 

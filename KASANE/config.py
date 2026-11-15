@@ -364,7 +364,6 @@ class STTConfig:
 @dataclass(frozen=True)
 class SessionConfig:
     max_history_turns: int = 20
-    user_name: str = "Yatharth"
     max_unprompted_in_history: int = 3
 
 

@@ -34,7 +34,7 @@ def boot(monkeypatch):
     monkeypatch.setattr(app, "_check_chat_model", step("chat"))
     monkeypatch.setattr(app, "_startup_memory_pass", step("memory"))
     monkeypatch.setattr(app.tts, "ensure_server", no_voice)
-    monkeypatch.setattr(app.stt, "preload", no_voice)
+    monkeypatch.setattr(stt, "preload", no_voice)
     return seen
 
 

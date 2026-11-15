@@ -81,13 +81,11 @@ test("Stop keeps the partial reply, marked as stopped", () => {
   assert.equal(s.messages.at(-1).stopped, true);
 });
 
-test("a legacy turn_end closes a turn that never got turn_done, keeping the partial text", () => {
+test("an empty turn_done keeps the streamed text as the reply", () => {
   let s = run(online, frame("turn_start", { user_text: "x" }), frame("token", { text: "par" }));
-  s = reduce(s, { kind: "legacy", msg: { type: "turn_end" } });
+  s = reduce(s, frame("turn_done", { text: "", stopped: true }));
   assert.equal(s.turn, "idle");
   assert.equal(s.messages.at(-1).text, "par");
-  // and after a normal turn_done it changes nothing
-  assert.deepEqual(reduce(s, { kind: "legacy", msg: { type: "turn_end" } }), s);
 });
 
 test("a failed model is shown with Retry and Switch model, never silently swapped", () => {
@@ -195,23 +193,22 @@ test("search hits older than the history list stay; Regenerate needs a saved thr
 test("companion name, observer role and a lost connection", () => {
   let s = run(
     online,
-    { kind: "legacy", msg: { type: "waifu_state", active: "yuri", waifus: [{ id: "yuri", name: "Yuri" }], problems: [] } },
+    frame("waifu_state", { active: "yuri", waifus: [{ id: "yuri", name: "Yuri" }], problems: [], pending: null }, null),
   );
   assert.deepEqual(s.companion, { id: "yuri", name: "Yuri" });
-  s = reduce(s, { kind: "legacy", msg: { type: "surface_status", role: "observer" } });
+  s = reduce(s, frame("surface_status", { role: "observer" }, null));
   assert.equal(canSend(s), false);
-  s = reduce(s, { kind: "legacy", msg: { type: "surface_status", role: "driver" } });
+  s = reduce(s, frame("surface_status", { role: "driver" }, null));
   s = reduce(s, frame("turn_start", { user_text: "x" }));
   s = reduce(s, { kind: "status", status: "offline" });
   assert.equal(s.turn, "idle");
   assert.equal(canSend(s), false);
 });
 
-test("the socket splits v1 frames from legacy messages and reports what it cannot read", () => {
+test("the socket passes v1 frames on and reports anything else as a problem (D-062)", () => {
   const seen = [];
   const h = {
     onFrame: (f) => seen.push(["frame", f.type]),
-    onLegacy: (m) => seen.push(["legacy", m.type]),
     onStatus: () => {},
     onProblem: (r) => seen.push(["problem", r]),
   };
@@ -219,7 +216,7 @@ test("the socket splits v1 frames from legacy messages and reports what it canno
   dispatchRaw(JSON.stringify({ type: "speak", text: "x", audio_b64: "", mime: "audio/wav" }), h);
   dispatchRaw(JSON.stringify({ v: 2, type: "token", id: "a", thread: "t", data: {} }), h);
   dispatchRaw("not json", h);
-  assert.deepEqual(seen.map((x) => x[0]), ["frame", "legacy", "problem", "problem"]);
+  assert.deepEqual(seen.map((x) => x[0]), ["frame", "problem", "problem", "problem"]);
   assert.deepEqual([0, 1, 2, 3, 9].map(backoffMs), [250, 500, 1000, 2000, 2000]);
 });
 
@@ -236,10 +233,12 @@ test("a file send waits for the kernel's wording of the line (K1-05, FR-C-3)", (
   assert.equal(s.messages[0].sentTo, api);
   s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [stored(1, "user", "(shared a file)", { sent_to: api })] }));
   assert.equal(s.messages[0].sentTo, api);
-  // the vision step failed: the kernel's notice, then turn_end, close the turn without a line
+  // the vision step failed: the kernel's notice, then an empty turn_done, close the turn without a line
   s = run(online, { kind: "sent", text: null }, frame("error", { code: "vision_unavailable", message: "Couldn't look", reply_to: null }, null));
-  s = reduce(s, { kind: "legacy", msg: { type: "turn_end" } });
+  assert.equal(s.turn, "thinking");
+  s = reduce(s, frame("turn_done", { text: "", stopped: false }, null));
   assert.equal(s.turn, "idle");
+  assert.equal(s.messages.length, 0);
   assert.equal(s.notice.text, "Couldn't look");
 });
 

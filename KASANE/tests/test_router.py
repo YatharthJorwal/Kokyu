@@ -269,68 +269,6 @@ async def test_stream_text_matches_the_old_shape(tmp_path):
     assert pieces == ["hello"]
 
 
-# -- the runtime toggle (tray / quick-action "Use API model") -----------------
-
-
-@pytest.mark.asyncio
-async def test_toggle_on_overrides_a_shadow_config(tmp_path):
-    router, local, cloud = make_router(tmp_path, mode="shadow")
-    router.set_use_api_model(True)
-    await router.startup()
-    await drain(router, MIND)
-
-    assert len(cloud.calls) == 1
-    assert local.calls == []
-    assert audit_rows(tmp_path)[0]["shadow"] is False
-
-
-@pytest.mark.asyncio
-async def test_toggle_off_overrides_an_enforce_config(tmp_path):
-    router, local, cloud = make_router(tmp_path, mode="enforce")
-    router.set_use_api_model(False)
-    await router.startup()
-    await drain(router, MIND)
-
-    assert cloud.calls == []
-    assert len(local.calls) == 1
-    assert audit_rows(tmp_path)[0]["shadow"] is True
-
-
-@pytest.mark.asyncio
-async def test_toggle_on_still_refuses_untrusted_context(tmp_path):
-    router, _, cloud = make_router(tmp_path, mode="shadow")
-    router.set_use_api_model(True)
-    await router.startup()
-    await drain(router, dataclasses.replace(MIND, trust=UNTRUSTED))
-
-    assert cloud.calls == []
-
-
-@pytest.mark.asyncio
-async def test_toggle_on_still_refuses_when_budget_is_zero(tmp_path):
-    router, _, cloud = make_router(tmp_path, mode="shadow")
-    router.config = dataclasses.replace(
-        router.config, budget=dataclasses.replace(router.config.budget, hourly_usd=0)
-    )
-    router.set_use_api_model(True)
-    await router.startup()
-    await drain(router, MIND)
-
-    assert cloud.calls == []
-    assert audit_rows(tmp_path)[0]["reason"] == "BUDGET_EXHAUSTED"
-
-
-@pytest.mark.asyncio
-async def test_toggle_off_keeps_local_only_roles_local(tmp_path):
-    router, local, cloud = make_router(tmp_path, mode="enforce")
-    router.set_use_api_model(True)
-    await router.startup()
-    await drain(router, ModelRequest(role="reflex", messages=({"role": "user", "content": "hi"},)))
-
-    assert cloud.calls == []
-    assert len(local.calls) == 1
-
-
 @pytest.mark.asyncio
 async def test_ensure_cloud_picks_up_a_key_pasted_after_launch(tmp_path, monkeypatch):
     # Isolated from the real secrets.local.yaml/.env on this machine: the point

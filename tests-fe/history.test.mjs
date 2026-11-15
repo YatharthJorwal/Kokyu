@@ -47,10 +47,10 @@ import { initialState, reduce } from "../src/app/chat-state.ts";
 const frame = (type, data) => ({ kind: "frame", frame: { v: 1, type, id: "s", thread: null, data } });
 
 test("the roster and the active companion come from waifu_state", () => {
-  const s = reduce(initialState, {
-    kind: "legacy",
-    msg: { type: "waifu_state", active: "luna", waifus: [{ id: "yuri", name: "Yuri", premade: true, traits: [] }, { id: "luna", name: "Luna" }] },
-  });
+  const s = reduce(
+    initialState,
+    frame("waifu_state", { active: "luna", waifus: [{ id: "yuri", name: "Yuri", premade: true, traits: [] }, { id: "luna", name: "Luna" }], problems: [], pending: null }),
+  );
   assert.deepEqual(s.roster, [{ id: "yuri", name: "Yuri" }, { id: "luna", name: "Luna" }]); // no extra fields kept
   assert.deepEqual(s.companion, { id: "luna", name: "Luna" });
   assert.equal(s.pendingCompanion, null);
@@ -58,7 +58,7 @@ test("the roster and the active companion come from waifu_state", () => {
 
 test("a switch mid-reply shows who comes next until it applies (K1-06, FR-S-2)", () => {
   const roster = [{ id: "yuri", name: "Yuri" }, { id: "luna", name: "Luna" }];
-  const state = (active, pending) => ({ kind: "legacy", msg: { type: "waifu_state", active, waifus: roster, pending } });
+  const state = (active, pending = null) => frame("waifu_state", { active, waifus: roster, problems: [], pending });
   let s = reduce(initialState, state("yuri", "luna"));
   assert.deepEqual([s.companion.name, s.pendingCompanion.name], ["Yuri", "Luna"]);
   s = reduce(s, state("yuri", "yuri")); // clicked back to her: nothing waits

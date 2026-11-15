@@ -42,11 +42,13 @@ def divider_text(name: str | None) -> str:
 
 def history_from(messages: list[Message], system_message: str, max_messages: int) -> list[dict[str, str]]:
     """The turn loop's `history` list: the system prompt, then the latest user and
-    assistant lines. Dividers are UI markers, not something anyone said, so they stay out."""
+    assistant lines. Dividers are UI markers, not something anyone said, so they stay out.
+    So do screen companion remarks: they came from a screen capture, and a reloaded
+    thread may run on an API model (FR-SC-3, FR-R-7)."""
     turns = [
         {"role": m.role, "content": m.content}
         for m in messages
-        if m.role in ("user", "assistant") and m.content
+        if m.role in ("user", "assistant") and m.content and not m.meta.get("ambient")
     ]
     if max_messages >= 0 and len(turns) > max_messages:
         turns = turns[-max_messages:] if max_messages else []
@@ -186,7 +188,7 @@ class ConversationManager:
         switch does not end the exchange. None when the thread does not end in one."""
         # A few dozen messages cover any run of dividers a user could click together.
         recent = await self._run(self.store.messages, thread_id, limit=50)
-        tail = [m for m in recent if m.role != "divider"][-2:]
+        tail = [m for m in recent if m.role != "divider" and not m.meta.get("ambient")][-2:]
         if tail and tail[-1].role == "user":
             drop = tail[-1:]
         elif len(tail) == 2 and tail[0].role == "user" and tail[1].role == "assistant":
@@ -194,6 +196,18 @@ class ConversationManager:
         else:
             return None
         return drop[0].content, [m.id for m in drop], dict(drop[0].meta)
+
+    async def record_remark(self, thread_id: str, text: str, *, speaker: Speaker) -> Message:
+        """A screen companion's unprompted remark (FR-SC-2), flagged `ambient`."""
+        return await self._run(
+            self.store.add_message,
+            thread_id,
+            "assistant",
+            text,
+            speaker_waifu_id=speaker.waifu_id,
+            speaker_name=speaker.name,
+            meta={"ambient": True},
+        )
 
     async def delete_messages(self, ids: list[int]) -> None:
         await self._run(self.store.delete_messages, ids)

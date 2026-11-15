@@ -1,4 +1,4 @@
-// The status heart, ported from Yuri's widget (K1-05, FR-C-5): calm when idle,
+// The status heart (K1-05, FR-C-5): calm when idle,
 // a fast arc chasing round it while she thinks, a heartbeat while she replies,
 // and a slow arc while the kernel is not reachable. CSS in app.css; it stops
 // moving under prefers-reduced-motion.

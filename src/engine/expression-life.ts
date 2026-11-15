@@ -1,19 +1,19 @@
 // Expression life for the shell face (Phase 13, step 3). Before this, the
 // emotion tag set a target, the face eased to it, and the moment her audio
-// went idle main.ts snapped the target back to "neutral" -- so a mood
+// went idle the stage snapped the target back to "neutral" -- so a mood
 // vanished the instant she stopped talking. A person's face keeps the mood
 // for a beat after the line and then relaxes. Pure logic (no three.js, no
 // DOM, randomness injected) so the timing is tested under `npm run test:fe`.
 //
 // How it works: set(emotion) starts a mood at a random intensity (so the
 // tenth "happy" is not identical to the first). While she is busy (a turn is
-// generating or her audio is playing -- main.ts passes that in) the mood
+// generating or her audio is playing -- the stage passes that in) the mood
 // holds at full strength. Once she is quiet it holds for the emotion's own
 // time, then fades to the neutral baseline over its own decay time. While it
 // holds, it breathes by a few percent so the face is never perfectly static.
 //
 // Output is an {emotion, strength} frame; blendTarget() turns that into the
-// preset weights main.ts's existing per-frame easing chases: strength of the
+// preset weights the stage's per-frame easing chases: strength of the
 // emotion's blend, plus the rest from the neutral blend, so a fade is a smooth
 // crossfade and the hand-off to plain neutral is continuous.
 //
@@ -109,7 +109,7 @@ export class ExpressionLife {
 /**
  * Preset weights for this frame: the emotion's blend scaled by its strength,
  * plus the baseline's blend for the rest. Every preset in `presets` gets a
- * value, so main.ts can ease all of them.
+ * value, so the stage can ease all of them.
  */
 export function blendTarget<P extends string>(
   blends: Record<string, Partial<Record<P, number>>>,

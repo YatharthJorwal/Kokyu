@@ -1,40 +1,12 @@
-"""
-Yuri's orchestrator.
+"""KASANE, the Kōkyū kernel: one FastAPI process on 127.0.0.1:8780 (D-027).
 
-Real LLM conversation now: user text is appended to a per-connection
-session history (system prompt from persona.py + prior turns), sent to the
-configured OpenAI-compatible chat endpoint (config.yaml / llm.py), and the
-reply streams back token-by-token. Tokens are chunked into sentence-ish
-pieces (chunking.py) so TTS/lipsync can start on the first sentence
-instead of waiting for the whole reply -- each chunk goes to the shell as
-its own `speak` message (src/main.ts queues and plays them back to back,
-not overlapping).
+A window connects over /ws and speaks protocol v1 (`protocol/`). Each window works
+in a thread from threads.db; one window drives turns at a time, the others watch.
+A turn streams the reply token by token and, with voice mode on (D-061), speaks it
+clause by clause in the active companion's voice. `/shutdown` lets the shell quit
+gracefully, so the session's memory pass runs before the process ends.
 
-`history` itself is still session-only: a plain Python list tied to the
-websocket connection, gone when it disconnects. Phase 3 adds durable
-memory *alongside* that, not instead of it: each turn gets a fresh recall
-block (facts + semantically relevant past-episode summaries, see
-memory/recall.py) injected into that turn's LLM call only, and once the
-connection actually ends, the memory writer pass distills the whole
-session into new facts + one episode summary for next time. No tool-calling
-yet either way -- that's Phase 4.
-
-Phase 2.5 adds voice input: a `user_audio` message (base64 WAV/WebM bytes
-from the frontend's MediaRecorder) is transcribed via faster-whisper
-(stt.py) and fed into the exact same turn-handling path as `user_text` --
-see `_run_turn()` below, shared by both message types.
-
-Binds to 127.0.0.1 only, on purpose -- never expose this beyond localhost,
-per the project's local-only, non-negotiable constraint (see CLAUDE.md).
-
-Graceful shutdown: `/shutdown` (see its own docstring below) exists
-because the Tauri side's tray-Quit handler used to just hard-kill this
-process (`TerminateProcess` on Windows, via Rust's `Child::kill()`) --
-which meant `ws_endpoint`'s `finally` block, and therefore Phase 3's
-the session-end writer pass, never ran on ANY quit path (tray Quit, Ctrl+C,
-Task Manager). Every session's memory was silently lost. Found while
-answering the user's own "what's the right way to close this" question,
-not anticipated up front -- see docs/DECISIONS.md.
+Loopback only: nothing here is reachable from another machine (CLAUDE.md §3).
 """
 
 import asyncio
@@ -69,19 +41,15 @@ import prompting
 import router
 from router import listing as model_listing
 from router import model_ref as model_refs
-import settings as runtime_settings
 import shell_keys
 from senses import look_intent
 from senses import ocr_watch
 from audio import speech
 from audio import speech_stream
-from audio import stt
 from senses import task_guide
 import tools
 import waifus
 from audio import tts
-from audio import vad
-from audio import voice
 from audio import voice_mode
 from audio.chunking import extract_ready_chunks, flush
 from config import CONFIG
@@ -200,13 +168,10 @@ async def _check_router() -> None:
     try:
         rt = router.get_router()
         cloud = await rt.startup()
-        saved = runtime_settings.initial(CONFIG)
-        rt.set_use_api_model(saved.use_api_model)
         log.info(
             f"router: mode={rt.config.routing.mode} "
             f"cloud={'available' if cloud else 'local-only'} "
-            f"catalog={len(rt.catalog.model_ids())} models "
-            f"api-model={'on' if saved.use_api_model else 'off'}",
+            f"catalog={len(rt.catalog.model_ids())} models",
         )
     except Exception as exc:  # noqa: BLE001 -- diagnostics must never stop startup
         log.warning(f"router startup skipped: {type(exc).__name__}: {exc}")
@@ -337,8 +302,8 @@ def _speaker_of(websocket: Any) -> str | None:
 
 
 def _system_message(waifu: "waifus.Waifu | None") -> str:
-    """Persona prompt plus the shared app addendum. With no waifu installed the legacy
-    built-in persona is used unchanged, so a fresh checkout still talks."""
+    """Persona prompt plus the shared app addendum. With no companion installed a
+    neutral fallback persona answers, so a fresh checkout still talks."""
     return prompting.build_system_prompt(FALLBACK_PERSONA if waifu is None else waifu.prompt)
 
 
@@ -364,15 +329,17 @@ def _save_active_id(waifu_id: str) -> None:
 
 async def _send_waifu_state(websocket: Any, registry: "waifus.WaifuRegistry", pending: str | None = None) -> None:
     active = _waifu_of(websocket)
-    payload: dict[str, Any] = {
-        "type": "waifu_state",
-        "active": active.id if active else None,
-        "waifus": registry.describe(),
-        "problems": [p.message for p in registry.problems],
-    }
-    if pending:
-        payload["pending"] = pending
-    await websocket.send_json(payload)
+    await websocket.send_json(
+        protocol.frame(
+            "waifu_state",
+            {
+                "active": active.id if active else None,
+                "waifus": registry.describe(),
+                "problems": [p.message for p in registry.problems],
+                "pending": pending,
+            },
+        )
+    )
 
 
 async def _apply_waifu_switch(
@@ -450,15 +417,10 @@ async def _apply_shell_key(provider_id: str, key: str | None) -> None:
         f"keys: {provider_id} key {'saved' if key else 'removed'} in the app; "
         f"API models {'usable' if usable else 'not usable yet'} ({rt.api_status()['label']})",
     )
-    listed = await model_listing.model_list(rt, cfg=CONFIG)
-    frames = (
-        protocol.frame("model_list", listed),
-        {"type": "settings", **runtime_settings.describe(rt, CONFIG)},
-    )
+    frame = protocol.frame("model_list", await model_listing.model_list(rt, cfg=CONFIG))
     for ws in list(_active_connections):
-        for frame in frames:
-            with contextlib.suppress(Exception):
-                await ws.send_json(frame)
+        with contextlib.suppress(Exception):
+            await ws.send_json(frame)
 
 
 async def _broadcast_screen_status() -> None:
@@ -522,104 +484,43 @@ _shutdown_event = asyncio.Event()
 # already run consolidation), there's nothing left to wait for.
 _active_connections: set[WebSocket] = set()
 
-# Full-body sandbox round: two different windows (the Tauri shell,
-# src/main.ts, and the browser-tab sandbox, src/sandbox.ts) can now both
-# hold an open connection to this same orchestrator at once. Only one of
-# them should ever actually be allowed to start a turn -- otherwise both
-# could end up generating a reply and playing TTS audio at the same time,
-# which would be audibly broken, not just untidy. Whichever connects
-# first becomes the "driver"; anything else connecting while the driver
-# is still open is an "observer" (see ws_endpoint's connect/disconnect
-# handling below and ws-client.ts's protocol comment for the client side
-# of this). `_driver` is `None` whenever nobody's connected at all.
+# Several windows can hold a connection at once (the app window, a browser tab
+# from `npm run dev`). Only one may start turns, or two replies would play at
+# once. The first to connect is the "driver"; any other is an "observer" that
+# gets surface_status {"role": "observer"} and an `observer` error if it tries
+# to send. `_driver` is None when nobody is connected.
 _driver: WebSocket | None = None
 _connection_surface: dict[WebSocket, str] = {}
 
-# Latest ambient description of where Yuri is in the apartment, pushed by
-# the sandbox's scene-state channel (see sandbox.ts's pushSceneState and
-# ws-client.ts's sendSceneState). Held as a single latest-wins string rather
-# than a queue: this is standing context, not events, so an older one is
-# never worth replaying. Deliberately module-level and *not* part of
-# `history` -- same reasoning as the memory blocks in _run_turn below: it
-# would otherwise go stale, repeat every turn, and get fed to
-# the memory writer as though someone had said it out loud.
-_scene_state: str | None = None
-
-# Sent (in character, same as LLM_UNREACHABLE_LINE/STT_UNREACHABLE_LINE
-# below) if an observer connection tries to start a turn anyway -- a
-# stray click on a UI that should already have disabled itself (see
-# main.ts's/sandbox.ts's own onSurfaceStatus handling), or a second
-# window opened after all. Declining audibly, not just silently dropping
-# the message, so it's obvious what happened rather than looking like a
-# hang.
-SURFACE_BUSY_LINE = "I'm already talking to you somewhere else right now -- finish up there first, hm?"
-EMOTION_SURFACE_BUSY = "teasing"
-
-# Said if the configured LLM server can't be reached at all -- most likely
-# it just isn't running yet. In character on purpose so a first-run miss
-# (forgot to start Ollama) feels like her, not a crash.
-LLM_UNREACHABLE_LINE = (
-    "H-hey -- I can't reach my own brain right now. Is the model server "
-    "even running? Check the orchestrator terminal and try again."
-)
-
-# The server answered, but with an HTTP error (out of memory, an unsupported
-# parameter, a crashed runner...). The status and body are in the log.
-LLM_SERVER_ERROR_LINE = (
-    "H-hey -- my brain answered, but with an error instead of words. The "
-    "details are in the orchestrator terminal. Try again, and if it keeps "
-    "happening, tell Yatharth."
-)
-
-# The server was reached but didn't answer in time -- usually the first
-# message after startup while a big model is still loading.
-LLM_TIMEOUT_LINE = (
-    "Ugh -- my brain took too long to wake up. Give it a few seconds and say "
-    "that again."
-)
-
-# Said if STT itself throws -- most likely stt.device: "cuda" in
-# config.yaml but the CUDA cuBLAS/cuDNN DLLs aren't on PATH (see README's
-# troubleshooting section), or a corrupted first-time model download.
-# Without this, a failure here used to kill the websocket connection
-# outright with nothing visible on the user's side at all -- see
-# stt.STTError's docstring.
-STT_UNREACHABLE_LINE = (
-    "I-I can't hear anything right now, something's wrong with my ears. "
-    "Check the orchestrator terminal?"
-)
-
-# Phase 5.1 -- same reasoning as STT_UNREACHABLE_LINE above: canned,
-# in-character text for when describing an uploaded image fails (Ollama
-# unreachable, same failure class llm.LLMUnreachableError already covers
-# elsewhere) -- sent instead of ever reaching _run_turn, since there's no
-# description to build a synthetic user_text out of.
-UPLOAD_VISION_UNREACHABLE_LINE = (
-    "I-I can't actually look at that right now, something's wrong on my "
-    "end. Check the orchestrator terminal?"
-)
-
-# Phase 8 -- hardcoded emotion for the two error-fallback lines above,
-# rather than trying to get the LLM to tag them: both LLM_UNREACHABLE_LINE
-# and STT_UNREACHABLE_LINE are canned text sent *instead of* a real LLM
-# call (the LLM is either unreachable, or was never consulted for the STT
-# failure path), so there's no model-generated [tag] to extract either
-# way -- this is app-level knowledge, not something to fake a tag for.
-EMOTION_LLM_UNREACHABLE = "sad"
+# What the chat shows when a model call fails and the router has nothing more
+# specific (FR-R-5). Plain words, the same for every companion.
+LLM_UNREACHABLE_LINE = "Could not reach the model server. Is Ollama running?"
+LLM_SERVER_ERROR_LINE = "The model server answered with an error. The details are in logs/kernel.log."
+LLM_TIMEOUT_LINE = "The model took too long to answer; it may still be loading. Try again in a moment."
 
 
 def llm_failure_line(exc: Exception) -> str:
-    """The in-character line for an LLM failure, by what actually went wrong.
-    Previously every failure -- including a server that was up and had the
-    model loaded -- said "is the model server even running?", which sent the
-    user to check the wrong thing."""
+    """The message for an LLM failure, by what actually went wrong."""
     if isinstance(exc, llm.LLMTimeoutError):
         return LLM_TIMEOUT_LINE
     if isinstance(exc, llm.LLMServerError):
         return LLM_SERVER_ERROR_LINE
     return LLM_UNREACHABLE_LINE
-EMOTION_STT_UNREACHABLE = "sad"
-EMOTION_UPLOAD_VISION_UNREACHABLE = "sad"
+
+
+def _failure_frame(exc: Exception, thread_id: str | None) -> dict[str, Any]:
+    """The `error` frame for a failed turn: the router's typed failure when there is
+    one, else a plain one. Either way the chat offers Retry and Switch model."""
+    failure = protocol.model_failure(exc) or {
+        "code": "model_failed",
+        "reason": type(exc).__name__,
+        "message": llm_failure_line(exc),
+        "model_ref": None,
+        "actions": ["retry", "switch_model"],
+        "reply_to": None,
+    }
+    return protocol.frame("error", failure, thread=thread_id)
+
 
 # Phase 4 -- how many rounds of "model calls a tool, gets a result, tries
 # again" one turn allows before giving up. 3 is generous for the two
@@ -633,7 +534,7 @@ EMOTION_UPLOAD_VISION_UNREACHABLE = "sad"
 # project's own Ollama instance hasn't been tested yet (see
 # docs/DECISIONS.md).
 MAX_TOOL_ROUNDS = 3
-TOOL_STUCK_LINE = "...tch, I got stuck trying to do that. Ask me again?"
+TOOL_STUCK_LINE = "The model kept calling tools and never answered. Try again."
 
 # Phase 4 Round 2 -- how often ws_endpoint's task-guide background loop
 # wakes up to check whether a screen check or an idle-clear is actually
@@ -658,12 +559,10 @@ async def _send_audio(websocket: WebSocket, display: str, audio_bytes: bytes) ->
     """One already-synthesized clause. `display` is what the caption shows;
     the audio may be a normalized version of it (see _send_speak)."""
     await websocket.send_json(
-        {
-            "type": "speak",
-            "text": display,
-            "audio_b64": base64.b64encode(audio_bytes).decode("ascii"),
-            "mime": "audio/wav",
-        }
+        protocol.frame(
+            "speak",
+            {"text": display, "audio_b64": base64.b64encode(audio_bytes).decode("ascii"), "mime": "audio/wav"},
+        )
     )
 
 
@@ -680,7 +579,7 @@ async def _send_speak(websocket: WebSocket, text: str) -> None:
 
 async def _log_transcript_turn_safely(user_text: str, assistant_text: str, temp: bool = False, speaker: str | None = None) -> int | None:
     """Best-effort -- a DB hiccup here shouldn't take down the turn itself
-    (turn_end still needs to reach the frontend either way), same
+    (turn_done still needs to reach the frontend either way), same
     degrade-gracefully pattern recall.py/forget.py already use for the
     same underlying DB."""
     try:
@@ -704,21 +603,6 @@ async def _drop_transcript_turn_safely(row_id: int) -> None:
         await asyncio.to_thread(store.drop_transcript_turn, row_id)
     except MemoryUnavailableError as exc:
         log.warning(f"transcript log: could not drop the replaced turn: {exc}")
-
-
-async def _get_transcript_log_safely() -> list[dict[str, str]]:
-    try:
-        return await asyncio.to_thread(store.get_transcript_log)
-    except MemoryUnavailableError as exc:
-        log.warning(f"transcript log: read failed, returning empty: {exc}")
-        return []
-
-
-async def _clear_transcript_log_safely() -> None:
-    try:
-        await asyncio.to_thread(store.clear_transcript_log)
-    except MemoryUnavailableError as exc:
-        log.warning(f"transcript log: clear failed: {exc}")
 
 
 def _fit_for_llm(
@@ -896,18 +780,6 @@ async def _run_turn(
     look_hint = await look_intent.maybe_look(user_text, websocket)
     memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block) if part]
 
-    # Phase 10: where she physically is, if the sandbox has told us. Same
-    # ephemeral-system-message treatment as the memory blocks above, and
-    # placed alongside them so there's only ever one spliced system turn.
-    # This is what lets her say "I'm in the kitchen" because it's true,
-    # rather than because the model picked a room at random.
-    if _scene_state:
-        memory_parts.append(
-            f"Context about your surroundings right now: {_scene_state} "
-            "Mention it only if it is relevant to what is being said -- "
-            "do not narrate your location unprompted."
-        )
-
     if memory_parts:
         combined = " ".join(memory_parts)
         messages_for_llm = history[:-1] + [{"role": "system", "content": combined}] + history[-1:]
@@ -1020,37 +892,32 @@ async def _run_turn(
             # Distinct from LLMUnreachableError below: the server itself
             # is fine, she just never got to a real answer.
             await stream.close()
-            await _send_speak(websocket, TOOL_STUCK_LINE)
-            spoken_parts.append(TOOL_STUCK_LINE)
+            with contextlib.suppress(Exception):
+                failure = {"code": "model_failed", "reason": "TOOL_LOOP", "message": TOOL_STUCK_LINE,
+                           "model_ref": None, "actions": ["retry"], "reply_to": None}
+                await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
     except llm.LLMUnreachableError as exc:
         # Logged: this branch used to swallow the exception completely, so a
         # 400/500 or a timeout from a server that was running looked exactly
         # like "server not running" and left nothing to diagnose from.
         log.warning(f"LLM call failed ({type(exc).__name__}): {exc}")
-        line = llm_failure_line(exc)
         # FR-R-5: the chosen model failed or may not run. Say so plainly with a
         # typed error the chat view turns into Retry / Switch model; never
         # quietly answer from another model.
-        failure = protocol.model_failure(exc)
-        if failure is not None:
-            line = failure["message"]
-            with contextlib.suppress(Exception):
-                await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
-        # Flush whatever was already generated before the failure -- she may
-        # have said half the reply, and dropping it would look like a cut.
+        with contextlib.suppress(Exception):
+            await websocket.send_json(_failure_frame(exc, thread_id))
+        # Flush whatever was already generated before the failure: half a reply
+        # is still what she said.
         await stream.close()
-        await _send_speak(websocket, line)
-        spoken_parts.append(line)
-        detected_emotion = EMOTION_LLM_UNREACHABLE
     except Exception:  # noqa: BLE001 -- deliberate catch-all, see below
         # Anything else (a TTS failure, a socket error, a plain bug) used to
         # kill this task silently: the finally block below still recorded
         # whatever had been spoken so far -- which reads exactly like a
         # reply that cut itself off -- and then the exception escaped
-        # without turn_end ever being sent, leaving the frontend's stop
+        # without turn_done ever being sent, leaving the frontend's stop
         # button stuck on. The traceback goes to the log so the cause is
         # finally visible, and the flow falls through to the normal
-        # turn_end. CancelledError (the stop button) is a BaseException and
+        # turn_done. CancelledError (the stop button) is a BaseException and
         # deliberately NOT caught here -- stop must still cancel the turn.
         log.exception("turn failed with an unexpected error (reply cut off)")
         # Something in the voice path may have died; make sure a worker task
@@ -1117,26 +984,12 @@ async def _run_turn(
                     {
                         "text": " ".join(reply_parts),
                         "stopped": isinstance(sys.exc_info()[1], asyncio.CancelledError),
+                        "emotion": detected_emotion,   # the avatar's expression (K2)
                     },
                     thread=thread_id,
                 )
             )
 
-    # Tells the frontend nothing more is coming for this turn (so it can
-    # hide the stop button, re-enable input, etc.) -- only reached on a
-    # *normal* completion (finished generating, or hit the LLM-unreachable
-    # fallback). A stop-button cancellation skips this entirely (the
-    # CancelledError above propagates straight out of the function instead
-    # of reaching this line) -- ws_endpoint's "stop" handler sends its own
-    # turn_end right after successfully cancelling, once it's actually
-    # safe to send anything further over the socket. That stopped-turn
-    # case is also why detected_emotion can genuinely be None here even
-    # on a real reply -- either the tag-extraction step was never reached
-    # (LLM unreachable), or the model just didn't produce a recognized
-    # tag this time (see extract_emotion_tag()'s own docstring) -- the
-    # frontend leaves the current expression alone rather than guessing
-    # when this is omitted/None.
-    await websocket.send_json({"type": "turn_end", "emotion": detected_emotion})
 
 
 # Phase 4 Round 2 -- how the drift observation from task_guide.check_task_
@@ -1168,6 +1021,7 @@ async def _run_task_guide_check(
     temp_mode: bool = False,
     temp_turn_flags: list[bool] | None = None,
     unprompted: list[dict[str, str]] | None = None,
+    on_remark: "Callable[[str], Awaitable[None]] | None" = None,
 ) -> None:
     """The scheduled half of Task Guide Mode actually doing its job: grab
     a screenshot, ask the VLM whether it still matches the tracked step
@@ -1233,7 +1087,7 @@ async def _run_task_guide_check(
         log.warning(f"task guide: LLM unreachable for chide, skipping: {exc}")
         return
 
-    buffer, detected_emotion = extract_emotion_tag(buffer)
+    buffer, _emotion = extract_emotion_tag(buffer)
     reply_parts = flush(buffer)
     if not reply_parts:
         return
@@ -1252,7 +1106,8 @@ async def _run_task_guide_check(
     # is a legitimate shape for an unprompted comment, not a bug.
     _record_unprompted(history, " ".join(reply_parts), temp_mode, temp_turn_flags, unprompted)
     await _log_transcript_turn_safely("", " ".join(apply_persona_pass(p) for p in reply_parts), temp_mode, speaker=_speaker_of(websocket))
-    await websocket.send_json({"type": "turn_end", "emotion": detected_emotion})
+    if on_remark is not None:
+        await on_remark(" ".join(reply_parts))
 
 
 def _ambient_comment_prompt(observation: str) -> str:
@@ -1274,6 +1129,7 @@ async def _run_ocr_watch_check(
     temp_mode: bool = False,
     temp_turn_flags: list[bool] | None = None,
     unprompted: list[dict[str, str]] | None = None,
+    on_remark: "Callable[[str], Awaitable[None]] | None" = None,
 ) -> None:
     """Continuous OCR's own scheduled check -- structurally the same
     shape as _run_task_guide_check above (grab a screenshot, ask the VLM
@@ -1345,7 +1201,7 @@ async def _run_ocr_watch_check(
         log.warning(f"ocr watch: LLM unreachable for comment, skipping: {exc}")
         return
 
-    buffer, detected_emotion = extract_emotion_tag(buffer)
+    buffer, _emotion = extract_emotion_tag(buffer)
     reply_parts = flush(buffer)
     if not reply_parts:
         return
@@ -1365,7 +1221,8 @@ async def _run_ocr_watch_check(
     ocr_watch.mark_commented()
     _record_unprompted(history, " ".join(reply_parts), temp_mode, temp_turn_flags, unprompted)
     await _log_transcript_turn_safely("", " ".join(apply_persona_pass(p) for p in reply_parts), temp_mode, speaker=_speaker_of(websocket))
-    await websocket.send_json({"type": "turn_end", "emotion": detected_emotion})
+    if on_remark is not None:
+        await on_remark(" ".join(reply_parts))
 
 
 @app.post("/shutdown")
@@ -1446,17 +1303,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     is_driver = _driver is None
     if is_driver:
         _driver = websocket
-    await websocket.send_json({"type": "surface_status", "role": "driver" if is_driver else "observer"})
+    await websocket.send_json(protocol.frame("surface_status", {"role": "driver" if is_driver else "observer"}))
     _first_window_event().set()   # D-060: the boot sequence may start loading now
-    # The tray/quick-action "Use API model" switch is server state, not a
-    # frontend preference: a second window (or a reconnect) must see the same
-    # value, and the router is the thing that actually obeys it.
-    await websocket.send_json({"type": "settings", **runtime_settings.describe(router.get_router(), CONFIG)})
     await websocket.send_json(protocol.frame("screen_companions", _screen_status()))
     await websocket.send_json(protocol.frame("voice_status", voice_mode.VOICE.status()))
 
-    # The active waifu (persona + voice) lives on the connection; it starts as the one the
-    # user last used. With no packs installed this stays None and the legacy persona runs.
+    # The active companion (persona + voice) lives on the connection; it starts as the one
+    # the user last used. With no packs installed this stays None and the fallback answers.
     waifu_registry = waifus.get_registry()
     websocket.state.waifu = waifu_registry.get(_load_active_id()) or waifu_registry.get(
         waifu_registry.default_id() or ""
@@ -1464,28 +1317,16 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     history: list[dict[str, str]] = [{"role": "system", "content": _system_message(_waifu_of(websocket))}]
     pending_waifu_id: str | None = None   # a switch asked for mid-turn; applied after the turn
     await _send_waifu_state(websocket, waifu_registry)
-    # Quick-action menu's Temp Chat toggle -- per-connection, unlike
-    # task_guide's module-level state, since it's about this window's own
-    # conversation rather than anything shared. temp_turn_flags is kept
-    # in lockstep with history[1:], one bool per history.append() (see
-    # _run_turn's own docstring for the exact bookkeeping) -- read at
-    # session end (this function's own `finally` below) to exclude
-    # anything said while temp_mode was on from consolidation, without
-    # having to throw away memorable content from the rest of a session
-    # that only briefly touched temp mode.
+    # Temp Chat (FR-MEM-5) is a per-thread flag; temp_turn_flags runs in lockstep with
+    # history[1:], one bool per message, so the session-end memory pass can leave
+    # out what was said while it was on.
     temp_mode = False
     temp_turn_flags: list[bool] = []
     # The unprompted comments (Task Guide chides, OCR remarks) currently in
     # `history`, by identity, so context_budget.cap_unprompted can keep only
     # the newest few. Per connection, like history itself.
     unprompted_msgs: list[dict[str, str]] = []
-    # The in-flight turn, if any -- run as its own task (not just awaited
-    # inline) specifically so the main loop below can keep concurrently
-    # watching for a "stop" message (or /shutdown) while generation is
-    # still happening. Awaiting _run_turn() directly, the way earlier
-    # phases did, meant the loop couldn't read anything else off the
-    # socket until a turn finished -- a "stop" message would just sit
-    # unread in the transport buffer until it was too late to matter.
+    # The turn in flight runs as its own task, so the loop below still reads Stop.
     current_turn_task: asyncio.Task | None = None
 
     # K1-00: every connection works inside a thread from threads.db. If the store
@@ -1634,60 +1475,19 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         log.warning(f"threads store unavailable, this session is not saved: {exc}")
         current_thread = None
 
-    # Streaming voice: 20 ms PCM frames from this connection's open mic. The
-    # VAD decides start/end; the WAV goes straight to faster-whisper. Per
-    # connection, like history, because two windows have two microphones.
-    voice_input = voice.VoiceInput(
-        vad.VADConfig(
-            end_silence_ms=int(CONFIG.voice.vad.get("end_silence_ms", 500)),
-            min_utterance_ms=int(CONFIG.voice.vad.get("min_utterance_ms", 250)),
-            max_utterance_ms=int(CONFIG.voice.vad.get("max_utterance_ms", 30000)),
-            pre_roll_ms=int(CONFIG.voice.vad.get("pre_roll_ms", 200)),
-        )
-    )
-
-    async def _on_voice_event(event: str | None) -> None:
-        """VAD said something happened. Barge-in is the important half: if she
-        is mid-reply and the user starts talking, playback stops and the turn
-        is cancelled before a single further clause is spoken."""
-        nonlocal current_turn_task
-        if not CONFIG.voice.enabled:
-            return
-        if event == vad.SPEECH_STARTED:
-            ARBITER.on_speech_started()
-            await websocket.send_json({"type": "speech_state", "state": ARBITER.state})
-            if current_turn_task is not None and not current_turn_task.done():
-                ARBITER.on_barge_in()
-                await websocket.send_json({"type": "barge_in"})
-                current_turn_task.cancel()
-            return
-        if event != vad.SPEECH_ENDED:
-            return
-
-        ARBITER.on_speech_ended()
-        wav = voice_input.take_wav()
-        if wav is None:
-            await websocket.send_json({"type": "speech_state", "state": ARBITER.state})
+    async def _save_remark(text: str) -> None:
+        """A screen companion's remark shows in the chat like a reply (FR-SC-2). It
+        is stored flagged `ambient`, so a reloaded thread never hands it to a model:
+        it came from a screen capture (FR-SC-3, FR-R-7)."""
+        if current_thread is None:
             return
         try:
-            user_text = (await stt.transcribe(wav)).strip()
-        except stt.STTError as exc:
-            log.warning(f"voice: STT failed: {exc}")
-            await websocket.send_json({"type": "transcript", "text": ""})
+            remark = await manager.record_remark(current_thread.id, text, speaker=_speaker_record(websocket))
             await websocket.send_json(
-                {"type": "turn_end", "emotion": EMOTION_STT_UNREACHABLE}
+                protocol.frame("thread_message", {"message": remark.to_dict()}, thread=current_thread.id)
             )
-            ARBITER.on_turn_finished()
-            return
-        await websocket.send_json({"type": "transcript", "text": user_text})
-        if not user_text:
-            ARBITER.on_turn_finished()
-            return
-        if current_turn_task is not None and not current_turn_task.done():
-            current_turn_task.cancel()
-        current_turn_task = _start_turn(
-            _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
-        )
+        except Exception as exc:  # noqa: BLE001 -- the remark was already spoken
+            log.warning(f"could not save a screen companion remark: {exc}")
 
     # Phase 4 Round 2 -- Task Guide Mode's scheduled-capture loop, one
     # per *driver* connection only (an observer window never starts
@@ -1743,7 +1543,8 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 continue
             async with ambient_speak_lock:
                 await _run_task_guide_check(
-                    websocket, history, state.description, temp_mode, temp_turn_flags, unprompted_msgs
+                    websocket, history, state.description, temp_mode, temp_turn_flags, unprompted_msgs,
+                    on_remark=_save_remark,
                 )
 
     async def _ocr_watch_loop() -> None:
@@ -1785,7 +1586,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 continue
             async with ambient_speak_lock:
                 await _run_ocr_watch_check(
-                    websocket, history, temp_mode, temp_turn_flags, unprompted_msgs
+                    websocket, history, temp_mode, temp_turn_flags, unprompted_msgs, on_remark=_save_remark
                 )
 
     # Every connection has the loops and only the driver's act, so a window promoted
@@ -1817,32 +1618,30 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             with contextlib.suppress(asyncio.CancelledError):
                 await shutdown_task
             data = receive_task.result()
-            # K1-00b: versioned frames are validated first; legacy flat messages
-            # (no "v") fall through to the branches below unchanged (D-049).
+            # Every message is a v1 frame (D-049); anything else gets a typed error.
             try:
                 parsed = protocol.parse_client(data)
             except protocol.ProtocolError as exc:
                 reply_to = data.get("id") if isinstance(data, dict) else None
                 await websocket.send_json(protocol.error_frame(exc.code, exc.message, reply_to=reply_to))
                 continue
-            if parsed is not None:
-                if parsed.type == "hello":
-                    await websocket.send_json(
-                        protocol.frame(
-                            "hello",
-                            {
-                                "protocol": protocol.PROTOCOL_VERSION,
-                                "kernel": "KASANE",
-                                # what a thread with no model or effort of its own runs with (the chip shows it)
-                                "default_model_ref": model_listing.default_ref(CONFIG),
-                                "default_effort": CONFIG.chat.default_effort,
-                            },
-                            id=parsed.id,
-                        )
+            if parsed.type == "hello":
+                await websocket.send_json(
+                    protocol.frame(
+                        "hello",
+                        {
+                            "protocol": protocol.PROTOCOL_VERSION,
+                            "kernel": "KASANE",
+                            # what a thread with no model or effort of its own runs with (the chip shows it)
+                            "default_model_ref": model_listing.default_ref(CONFIG),
+                            "default_effort": CONFIG.chat.default_effort,
+                        },
+                        id=parsed.id,
                     )
-                    continue
-                data = {"type": parsed.type, **parsed.data.model_dump()}
-            msg_type = data.get("type") if isinstance(data, dict) else None
+                )
+                continue
+            data = parsed.data.model_dump()
+            msg_type = parsed.type
 
             # A switch requested while a turn was running takes effect now, between turns
             # (FR-S-2: the turn in flight finishes with the old waifu).
@@ -1854,7 +1653,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 target_id = str(data.get("id") or "")
                 if waifu_registry.get(target_id) is None:
                     await websocket.send_json(
-                        {"type": "error", "code": "unknown_waifu", "message": f"There is no companion called {target_id!r}."}
+                        protocol.error_frame("unknown_waifu", f"There is no companion called {target_id!r}.")
                     )
                 elif current_turn_task is not None and not current_turn_task.done():
                     pending_waifu_id = target_id
@@ -1871,41 +1670,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 if current_turn_task is not None and not current_turn_task.done():
                     current_turn_task.cancel()
                     with contextlib.suppress(asyncio.CancelledError):
-                        await current_turn_task
-                    # _run_turn's own turn_end send is skipped on a
-                    # cancellation (see its own comment) -- send it here
-                    # instead, now that the task has actually finished
-                    # unwinding and it's safe to use the socket again.
-                    await websocket.send_json({"type": "turn_end"})
-                continue
-
-            # get_log/clear_log deliberately come before the driver/observer
-            # gate below -- the transcript log is one shared, persistent
-            # record (memory/store.py's transcript_log table), not part of
-            # either connection's own in-memory `history`, so there's no
-            # reason an observer window shouldn't be able to read or clear
-            # it same as the driver can.
-            if msg_type == "get_log":
-                turns = await _get_transcript_log_safely()
-                await websocket.send_json(
-                    {"type": "log", "turns": turns, "user_name": CONFIG.session.user_name}
-                )
-                continue
-
-            if msg_type == "clear_log":
-                await _clear_transcript_log_safely()
-                await websocket.send_json(
-                    {"type": "log", "turns": [], "user_name": CONFIG.session.user_name}
-                )
-                continue
-
-            if msg_type == "scene_state":
-                # Ambient context only: never starts a turn, never replies,
-                # and accepted from any connection (observer or driver) since
-                # it describes the world rather than requesting anything.
-                global _scene_state
-                text = (data.get("text") or "").strip()
-                _scene_state = text[:400] or None
+                        await current_turn_task   # its turn_done says stopped
                 continue
 
             # K1-00 thread messages (FR-C-1). Listing, searching and renaming are
@@ -2015,27 +1780,17 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     )
                 continue
 
-            if msg_type == "set_temp_mode":
-                # Quick-action menu's Temp Chat toggle -- per-connection
-                # (see temp_mode's own declaration above), so no driver
-                # gate needed: an observer toggling it only affects a
-                # variable that observer's own connection never actually
-                # reads (observers can't start turns at all, see the
-                # driver-only check right below). No reply sent -- the
-                # frontend already reflects its own toggle state
-                # optimistically the moment it's clicked.
-                temp_mode = bool(data.get("enabled"))
-                # K1: Temp Chat is a per-thread flag (FR-MEM-5), so it is saved
-                # with the thread and comes back when the thread is reopened.
+            if msg_type == "set_temp":
+                # Temp Chat (FR-MEM-5): saved with the thread, so it comes back when
+                # the thread is reopened. Only this window's conversation changes.
+                temp_mode = bool(data.get("on"))
                 if current_thread is not None:
                     with contextlib.suppress(Exception):
                         current_thread = await manager.set_temp(current_thread.id, temp_mode) or current_thread
+                        await websocket.send_json(
+                            protocol.frame("thread_updated", {"thread": current_thread.to_dict()}, thread=current_thread.id)
+                        )
                 continue
-
-            if msg_type == "set_ocr_watch":
-                # Yuri's widget toggle: the + tray's message in old clothes, so it gets the
-                # same driver gate and local-vision check (FR-SC-3).
-                msg_type, data = "screen_companion", {"mode": "ocr_watch", "on": data.get("enabled")}
 
             if msg_type == "typing":
                 global _last_typed_at
@@ -2070,76 +1825,16 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 await _broadcast_screen_status()
                 continue
 
-            if msg_type == "set_api_model":
-                # Quick-action menu / tray toggle: may the router execute cloud
-                # decisions? Persisted in data/settings.json so it survives a
-                # restart. Turning it on without a key is allowed and harmless --
-                # the router still reports cloud unavailable, and the reply says
-                # so instead of pretending.
-                enabled = bool(data.get("enabled"))
-                rt = router.get_router()
-                # Picking up a key pasted after launch is the whole point of a
-                # live switch, so try before answering: no restart needed once
-                # AIROUTER_API_KEY appears in .env.
-                if enabled:
-                    await rt.ensure_cloud()
-                runtime_settings.apply(enabled, rt)
-                await websocket.send_json({"type": "settings", **runtime_settings.describe(rt, CONFIG)})
-                state = runtime_settings.describe(rt, CONFIG)
-                if enabled and not state["cloud_available"]:
-                    log.warning(
-                        "api model: ON requested but cloud is unavailable "
-                        "(no API key, or the catalog could not load) -- "
-                        "Mind stays local.",
-                    )
-                else:
-                    log.info(
-                        f"api model: {'on' if enabled else 'off'} "
-                        f"(mode={CONFIG.routing.mode})",
-                    )
-                continue
-
             if msg_type == "camera_frame":
-                # Phase 5 -- the frontend's answer to a camera.py
-                # request_camera_frame it sent earlier this turn (see
-                # camera.py's own docstring for the full round trip).
-                # image_b64 missing/None means the frontend is reporting
-                # a failure (camera not armed, getUserMedia permission
-                # denied, capture threw) -- resolve_pending_frame treats
-                # that the same as a real frame, just with None instead
-                # of a string; camera.request_frame turns a None result
-                # into the ToolUnavailableError the model actually sees.
-                # No driver gate -- same reasoning as set_temp_mode
-                # above, and in practice only the driver's own camera
-                # module would ever be holding a pending request to
-                # answer.
+                # The window's answer to camera.request_frame (K2-07 turns the camera on).
                 camera.resolve_pending_frame(data.get("image_b64"))
                 continue
 
-            if msg_type in ("user_text", "user_audio", "user_file", "regenerate") and websocket is not _driver:
-                # Observer window trying to start a turn -- the frontend
-                # should already have disabled its own input for this
-                # (see onSurfaceStatus in main.ts/sandbox.ts), so this is
-                # defense in depth, not the primary guard. Declined
-                # audibly rather than silently dropped, and still sends
-                # turn_end so that window's own turnActive-style flag
-                # (set optimistically the moment it sent something)
-                # doesn't get stuck waiting forever for a reply that's
-                # never coming.
-                await _send_speak(websocket, apply_persona_pass(SURFACE_BUSY_LINE))
-                await websocket.send_json({"type": "turn_end", "emotion": EMOTION_SURFACE_BUSY})
-                continue
-
-            if msg_type == "audio_frame":
-                try:
-                    pcm = base64.b64decode(data.get("pcm_b64") or "")
-                except ValueError:
-                    continue
-                await _on_voice_event(voice_input.push(pcm))
-                continue
-
-            if msg_type == "audio_end":
-                await _on_voice_event(voice_input.flush())
+            if msg_type in ("send", "send_file", "regenerate") and websocket is not _driver:
+                # Another window drives this conversation; this one only watches.
+                await websocket.send_json(
+                    protocol.error_frame("observer", "Another Kōkyū window is in charge of this conversation right now.")
+                )
                 continue
 
             if msg_type == "regenerate":
@@ -2171,7 +1866,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 )
                 continue
 
-            if msg_type == "user_text":
+            if msg_type == "send":
                 user_text = (data.get("text") or "").strip()
                 if not user_text:
                     continue
@@ -2185,69 +1880,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                     _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
                 )
 
-            elif msg_type == "user_audio":
-                audio_b64 = data.get("audio_b64") or ""
-                if not audio_b64:
-                    continue
-                try:
-                    audio_bytes = base64.b64decode(audio_b64)
-                except ValueError:
-                    # Malformed base64 -- nothing recoverable, drop it.
-                    continue
-
-                log.info(f"received {len(audio_bytes)} bytes of audio")
-
-                if current_turn_task is not None and not current_turn_task.done():
-                    # Already mid-reply -- drop this clip without even
-                    # transcribing it, same "ignore, don't overlap turns"
-                    # policy as user_text above, just applied before
-                    # spending STT compute on something we're going to
-                    # ignore anyway.
-                    continue
-
-                try:
-                    user_text = (await stt.transcribe(audio_bytes)).strip()
-                except stt.STTError as exc:
-                    log.warning(f"STT failed: {exc}")
-                    await websocket.send_json({"type": "transcript", "text": ""})
-                    await _send_speak(websocket, apply_persona_pass(STT_UNREACHABLE_LINE))
-                    # This path never reaches _run_turn (there's no
-                    # transcript to reply to), so it's the one other place
-                    # besides _run_turn/the stop handler that has to send
-                    # turn_end itself -- without it, the frontend's
-                    # turnActive flag (set optimistically the moment audio
-                    # was sent, before knowing whether STT would even
-                    # succeed) would stay stuck true forever: input
-                    # disabled, stop button stuck visible, no further
-                    # turn_end ever coming to clear it. Found while adding
-                    # Phase 8's emotion tagging, not something anticipated
-                    # up front -- see docs/DECISIONS.md.
-                    await websocket.send_json({"type": "turn_end", "emotion": EMOTION_STT_UNREACHABLE})
-                    continue
-
-                # Always echo the transcript back, even empty, so the
-                # frontend can clear its "listening" indicator either way.
-                await websocket.send_json({"type": "transcript", "text": user_text})
-                if not user_text:
-                    # Silence, noise, or nothing intelligible -- nothing to
-                    # reply to, and nothing worth adding to history.
-                    continue
-                current_turn_task = _start_turn(
-                    _run_turn(websocket, history, user_text, temp_mode, temp_turn_flags, on_finished=_saver(), thread_id=_thread_id(), unprompted=unprompted_msgs, **_thread_model())
-                )
-            elif msg_type == "user_file":
-                # Quick-action menu's Upload Image/File item
-                # (src/file-upload.ts classifies + reads/resizes
-                # client-side; this just turns the result into a
-                # synthetic user_text and runs it through the exact same
-                # _run_turn every other kind of turn already uses --
-                # recall/forget/task-detection, temp_mode, history,
-                # logging, all of it for free, no special-casing needed
-                # anywhere else in this file). caption is whatever the
-                # user typed in the normal input box alongside the
-                # attachment (attach-then-send flow, see main.ts's
-                # submitTurn) -- optional; a bare upload with no comment
-                # is a real, common case, not a degraded one.
+            elif msg_type == "send_file":
+                # The tray's Upload file (src/app/file-upload.ts reads and resizes it):
+                # turned into a user line and run through the same _run_turn.
                 filename = (data.get("filename") or "uploaded file").strip()
                 kind = data.get("kind")
                 content = data.get("content") or ""
@@ -2278,11 +1913,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                         description = await router.describe_image("vision", prompt, content)
                     except llm.LLMUnreachableError as exc:
                         log.warning(f"describe_image failed for upload: {exc}")
-                        await _send_speak(websocket, apply_persona_pass(UPLOAD_VISION_UNREACHABLE_LINE))
                         await websocket.send_json(protocol.error_frame("vision_unavailable", "Couldn't look at that image: the vision model isn't reachable."))
-                        await websocket.send_json(
-                            {"type": "turn_end", "emotion": EMOTION_UPLOAD_VISION_UNREACHABLE}
-                        )
+                        # The window shows a turn since it sent the file; this ends it with no line.
+                        await websocket.send_json(protocol.frame("turn_done", {"text": "", "stopped": False}, thread=_thread_id()))
                         continue
                     shared_line = f'(shared an image, "{filename}") {description}'
 
@@ -2321,7 +1954,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
             _driver = next(iter(_active_connections), None)
             if _driver is not None:
                 with contextlib.suppress(Exception):
-                    await _driver.send_json({"type": "surface_status", "role": "driver"})
+                    await _driver.send_json(protocol.frame("surface_status", {"role": "driver"}))
         # A turn still running when the connection itself goes away (not
         # just a "stop" click) -- cancel it too, same reasoning as
         # above, so the session-end pass below sees a finished transcript
@@ -2373,7 +2006,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
 def _pid_is_alive(pid: int) -> bool:
     """Cross-platform "is this PID still running" check -- the only thing
-    _take_over_stale_orchestrator() below actually needs from the OS."""
+    _take_over_stale_kernel() below actually needs from the OS."""
     if sys.platform == "win32":
         import ctypes
 
@@ -2390,7 +2023,7 @@ def _pid_is_alive(pid: int) -> bool:
     return True
 
 
-def _take_over_stale_orchestrator(pid_file: Path) -> None:
+def _take_over_stale_kernel(pid_file: Path) -> None:
     """Makes sure this process ends up as the *only* orchestrator running,
     no matter what launched it or how the previous one died.
 
@@ -2427,7 +2060,7 @@ def _take_over_stale_orchestrator(pid_file: Path) -> None:
         except (ValueError, OSError):
             old_pid = None
         if old_pid is not None and old_pid != our_pid and _pid_is_alive(old_pid):
-            log.warning(f"found a stale orchestrator still running (pid {old_pid}) -- taking over")
+            log.warning(f"found a stale kernel still running (pid {old_pid}) -- taking over")
             if sys.platform == "win32":
                 subprocess.run(["taskkill", "/PID", str(old_pid), "/F"], capture_output=True)
             else:
@@ -2452,7 +2085,7 @@ if __name__ == "__main__":
     # KASANE/ via current_dir("../orchestrator"); a manually-run
     # `python app.py` from inside KASANE/ lands at the same cwd;
     # __file__-relative means this doesn't depend on either being true).
-    _take_over_stale_orchestrator(paths.logs_dir() / "orchestrator.pid")
+    _take_over_stale_kernel(paths.logs_dir() / "kernel.pid")
 
     # Cheap check, once per process start -- see
     # check_embedding_dimension_matches()'s docstring for why this is

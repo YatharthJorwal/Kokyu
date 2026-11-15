@@ -2,16 +2,20 @@
 // KASANE/protocol/__init__.py (K1-00b; ARCHITECTURE §5.3). A kernel test reads
 // the three lists below and fails if they drift from the Python ones.
 //
-// Every message added from K1 on travels in one envelope:
+// Every message, both ways, travels in one envelope (D-062):
 //   { v: 1, type, id, thread, data }
-// Yuri's older flat messages (speak, turn_end, ...) still arrive without `v`
-// until the K1 shell replaces the widget (D-049); `parseFrame` returns null
-// for those so existing handlers keep working.
+// Anything else is a problem the window reports, never a message it acts on.
 
 export const PROTOCOL_VERSION = 1;
 
 export const CLIENT_TYPES = [
   "hello",
+  "send",
+  "send_file",
+  "stop",
+  "switch_waifu",
+  "set_temp",
+  "camera_frame",
   "thread_list",
   "thread_search",
   "thread_new",
@@ -42,6 +46,10 @@ export const SERVER_TYPES = [
   "model_status",
   "screen_companions",
   "voice_status",
+  "waifu_state",
+  "surface_status",
+  "speak",
+  "camera_request",
 ] as const;
 
 export const ERROR_CODES = [
@@ -54,6 +62,7 @@ export const ERROR_CODES = [
   "model_blocked",
   "model_failed",
   "vision_unavailable",
+  "observer",
 ] as const;
 
 /** D-061: voice mode (replies spoken; the mic in K2). It starts only when turned on. */
@@ -68,6 +77,12 @@ export interface VoiceStatus {
 export interface ScreenCompanions {
   task_guide: { on: boolean; task: string | null };
   ocr_watch: { on: boolean };
+}
+
+/** FR-S-1: an installed companion as the kernel lists her. */
+export interface CompanionInfo {
+  id: string;
+  name: string;
 }
 
 export type ClientType = (typeof CLIENT_TYPES)[number];
@@ -169,7 +184,7 @@ export interface ServerData {
   thread_updated: { thread: ThreadInfo };
   turn_start: { user_text: string };
   token: { text: string };
-  turn_done: { text: string; stopped: boolean };
+  turn_done: { text: string; stopped: boolean; emotion?: string | null };
   error: {
     code: ErrorCode;
     message: string;
@@ -182,10 +197,21 @@ export interface ServerData {
   model_status: ModelStatus;
   screen_companions: ScreenCompanions;
   voice_status: VoiceStatus;
+  waifu_state: { active: string | null; waifus: CompanionInfo[]; problems: string[]; pending: string | null };
+  surface_status: { role: "driver" | "observer" };
+  /** One spoken clause (FR-V-2); `audio_b64` is empty when the voice backend is down. */
+  speak: { text: string; audio_b64: string; mime: string };
+  camera_request: Record<string, never>;
 }
 
 export interface ClientData {
   hello: { client: "main" | "pet" | "dev"; protocol: number };
+  send: { text: string };
+  send_file: { filename: string; kind: "image" | "text"; content: string; caption: string };
+  stop: Record<string, never>;
+  switch_waifu: { id: string };
+  set_temp: { on: boolean };
+  camera_frame: { image_b64: string | null };
   thread_list: Record<string, never>;
   thread_search: { query: string };
   thread_new: Record<string, never>;
@@ -224,14 +250,13 @@ export function clientFrame<T extends ClientType>(
   return { v: PROTOCOL_VERSION, type, id: `c${Date.now().toString(36)}${counter}`, thread, data };
 }
 
-export type ParseResult =
-  | { kind: "legacy" }
-  | { kind: "frame"; frame: Frame }
-  | { kind: "error"; reason: string };
+export type ParseResult = { kind: "frame"; frame: Frame } | { kind: "error"; reason: string };
 
-/** Classifies an incoming message: a legacy flat message, a valid v1 frame, or a problem. */
+/** A valid v1 frame, or the problem with the message. */
 export function parseFrame(raw: unknown): ParseResult {
-  if (typeof raw !== "object" || raw === null || !("v" in raw)) return { kind: "legacy" };
+  if (typeof raw !== "object" || raw === null || !("v" in raw)) {
+    return { kind: "error", reason: "the kernel sent a message without a protocol version" };
+  }
   const f = raw as Record<string, unknown>;
   if (f.v !== PROTOCOL_VERSION) {
     return { kind: "error", reason: `kernel speaks protocol ${String(f.v)}, this window speaks ${PROTOCOL_VERSION}` };

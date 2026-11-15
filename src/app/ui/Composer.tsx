@@ -6,7 +6,7 @@
 
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 
-import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../../file-upload";
+import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
 import { canSend } from "../chat-state";
 import { actions, useChat, type Attachment } from "../store";
 import { CompanionChip } from "./CompanionChip";
