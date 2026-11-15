@@ -53,16 +53,16 @@ flowchart LR
 
 | Process | Owner | Started | Notes |
 |---|---|---|---|
-| Tauri main window | user | on launch | Chat, Stage, 3D views (K0 keeps Yuri's small widget window; K1 builds the new one) |
+| Tauri main window | user | on launch | Chat, Stage, 3D views (Chat since K1; Yuri's widget window was deleted, D-062) |
 | Pet overlay window | Tauri | when a pet is brought out | One per monitor (D-014) |
 | Kernel (`KASANE/`, Python) | **Tauri** (child, Windows Job Object) | at launch, off the window's thread | `127.0.0.1:8780` (D-027) |
-| TTS backend (GPT-SoVITS API) | kernel (child, inside the Job Object) | after the first window connects and the chat model has loaded (D-060) | Folder in `config.yaml` `tts.gpt_sovits.launch` (later Settings); outside this repo; default port 9880; log `logs/gpt_sovits.log` |
+| TTS backend (GPT-SoVITS API) | kernel (child, inside the Job Object) | when the user turns voice mode on (D-061); stops `tts.idle_stop_s` after it goes off | Folder in `config.yaml` `tts.gpt_sovits.launch` (later Settings); outside this repo; default port 9880; log `logs/gpt_sovits.log` |
 | `llama-server` | kernel (child) | only when the user picks a llama.cpp model or messages a thread that uses one (D-060) | Unloaded before an Ollama large model loads |
 | Ollama | external service | by the user | The kernel only talks HTTP to it |
 
-**Startup (D-060, superseding D-027's parallel start):** Tauri creates the window and, on another thread, clears a stale kernel listener and starts the kernel. The kernel opens its port at once and loads nothing heavy until the first window connects. Then, one at a time: the thread's chat model (Ollama or API only; a llama.cpp model waits to be picked), the TTS backend, the speech model (only if `voice.stt.warm_up_on_start`), the memory catch-up pass. The router reads its cached catalog at once.
+**Startup (D-060, superseding D-027's parallel start):** Tauri creates the window and, on another thread, clears a stale kernel listener and starts the kernel. The kernel opens its port at once and loads nothing heavy until the first window connects. Then, one at a time: the thread's chat model (Ollama or API only; a llama.cpp model waits to be picked), then the memory catch-up pass. The router reads its cached catalog at once. Voice (the TTS backend and the speech model) starts only when the user turns voice mode on (D-061). The code is `KASANE/boot.py`.
 
-**Shutdown:** tray Quit → `POST /shutdown` to the kernel → memory consolidation → kernel stops its children → hard kill after about 5 s. The Job Object (kill-on-close) guarantees no orphans if Tauri is killed.
+**Shutdown:** tray Quit → `POST /shutdown` to the kernel → every window's session closes and runs its memory pass (`/shutdown` waits for windows still closing, D-062) → kernel stops its children → hard kill after about 5 s. The Job Object (kill-on-close) guarantees no orphans if Tauri is killed.
 
 **Health:** the kernel will expose a health endpoint (new) and publish `status` events that feed the Doctor panel (FR-SET-3).
 
@@ -72,12 +72,20 @@ The kernel keeps Yuri's **flat module layout**: the `KASANE/` folder is put on `
 
 ```
 KASANE/
-  app.py  bus.py  config.py  llm.py  settings.py  check.py  context_budget.py   (from Yuri)
+  app.py                 the server only: routes, lifespan, entry point (D-062)
+  session.py             one Session per window; a handler `on_<type>` per protocol message
+  turns.py               one model turn: recall, prompt, router, stream, speech
+  ambient.py             the screen companions' checks (Task Guide, OCR watch)
+  companions.py          the window's active companion: persona and voice only
+  boot.py                start-up order (D-060, D-061), stale-kernel takeover
+  hub.py                 open windows, the driver, broadcasts, the shutdown event
+  model_loader.py        one background loader for the chat model (D-054)
+  bus.py  config.py  llm.py  check.py  context_budget.py  persona.py  shell_keys.py
   paths.py               DONE (K0): ALL filesystem locations
   waifus/                DONE (K0): pack model, loader, validator, registry (instruction template comes in K3)
   prompting.py           DONE (K0): persona prompt + shared app addendum
   threads/               NEW (K1): SQLite thread store
-  conversation.py        NEW (K1): turn loop extracted from ws_endpoint
+  conversation.py        NEW (K1): threads and history for a window (`get_manager()`)
   protocol/              NEW (K1): typed message models
   router/                from Yuri; K1 adds the `chat` role and the egress policy (D-025)
   models/                NEW (K1): backend lifecycle, VRAM manager, capability registry
@@ -87,8 +95,7 @@ KASANE/
   scenes/                NEW (K5): scene pack loader and director
   tests/  conftest.py
 src/
-  (K0) Yuri's engine and widget UI as seeded
-  (K1+) app/ React chrome · engine/ imperative three.js · net/ typed WebSocket client
+  app/ React chrome · engine/ imperative three.js (Yuri's avatar code, for the K2 Stage) · net/ typed WebSocket client
 src-tauri/               windows, tray, hotkeys, child processes, overlay hit-testing
 config/                  config.example.yaml, models.example.yaml, secrets.example.yaml
 scripts/                 dev.mjs, doctor.mjs, check.mjs (new), seed_waifus.py (new), packaging
@@ -101,7 +108,7 @@ docs/
 | Module | Responsibility | Key invariants |
 |---|---|---|
 | `waifus/` | Parse/validate packs, hot-reload, expose `Waifu` objects | Pure data; no behaviour flags |
-| `conversation.py` | Owns turns: resolve active waifu → recall memory → assemble prompt → call router → stream → speech pipeline → persist | Same code path for every waifu |
+| `session.py`, `turns.py` | A window's messages (one `Session.on_<type>` each); a turn: resolve active waifu → recall memory → assemble prompt → call router → stream → speech pipeline → persist | Same code path for every waifu |
 | `router/` | Role-based decisions, providers, spend, audit, redaction | Local-only roles refused for cloud before a provider is chosen |
 | `models/` | Backend lifecycle (Ollama keep-alive, llama-server spawn), VRAM manager, capability registry | Only one big model resident at a time across backends |
 | `memory/` | Facts and episodes with supersede and decay | Not namespaced by waifu; writes name the speaker |
@@ -147,7 +154,7 @@ sequenceDiagram
 
 ## 5. Protocol
 
-WebSocket at `ws://127.0.0.1:8780/ws` (Yuri used 8765). Today it is **untyped JSON dicts with no version field** (`docs/notes/yuri-inventory.md` §4). Existing names are kept; nothing is renamed for its own sake.
+WebSocket at `ws://127.0.0.1:8780/ws` (Yuri used 8765). **Since D-062 the window speaks v1 only (§5.3);** a flat message gets `bad_message`. §5.1 to §5.2b record Yuri's untyped messages (`docs/notes/yuri-inventory.md` §4) for history; they are retired.
 
 ### 5.1 Existing messages (kept)
 
@@ -282,9 +289,9 @@ model tokens → sentence splitter → speech-safe normalizer → TTS adapter �
 
 ### 9.1 Main window
 
-Yuri's current UI is a **stage-first widget** (340×480 borderless, transparent, always-on-top window; avatar canvas, caption, input, mic, quick-action menu, log panel; inventory §11–12). K0 keeps it untouched apart from a temporary waifu dropdown. The sidebar, Chat view and normal app window arrive in K1; the stage code becomes the Stage view in K2.
+Yuri's UI was a **stage-first widget** (340×480 borderless, transparent, always-on-top window; inventory §11–12). K1 replaced it with the normal app window and deleted it (D-062); its avatar code is in `src/engine/` for the Stage view in K2.
 
-React renders chrome: sidebar, thread view, input row, popovers, settings, creator. **Since K1-02** (D-053) `index.html` is this window (`src/app/`: `chat-state.ts` pure reducer, `store.ts`, `ui/`; `src/net/kernel.ts` socket) and Yuri's widget lives at `widget.html` until K2. A **store** (default Zustand, D-013) is fed by WebSocket events. The **engine** (`src/engine/`) is an imperative three.js module mounted into a canvas ref; React never drives per-frame state.
+React renders chrome: sidebar, thread view, input row, popovers, settings, creator. **Since K1-02** (D-053) `index.html` is this window (`src/app/`: `chat-state.ts` pure reducer, `store.ts`, `ui/`; `src/net/kernel.ts` socket). A **store** (default Zustand, D-013) is fed by WebSocket events. The **engine** (`src/engine/`) is an imperative three.js module mounted into a canvas ref; React never drives per-frame state.
 
 Views of one thread: **Chat**, **Stage**, **3D**. All three read the same store.
 

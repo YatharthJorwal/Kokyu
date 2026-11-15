@@ -106,7 +106,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-07b Capability registry (FR-M-10): the user answered (2026-11-15, relayed): per-model capability and effort data in `config/models.yaml` as SPEC says; llama.cpp presets stay in `config.yaml` (D-054). Record a DECISIONS entry superseding D-054's "Proposed" bullet; lands with the effort slider (K1-11)
 - [x] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6) (c54a938; D-058)
 - [x] K1-08b Generic `openai_compat` provider (base URL plus key; AI Router, OpenRouter, DeepSeek presets); end-user keys in the Windows Credential Manager through the shell (D-037, FR-R-6) (5b04a30; D-059: one endpoint at a time, the user's choice; a custom endpoint is config-only until K1-13)
-- [ ] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-6, ARCHITECTURE §7.3)
+- [ ] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-6, ARCHITECTURE §7.3). Input from session 4: a cold `qwen3.5:9b` load took 104.6 s while the `qwen3.5:4b` classifier and the 9B swapped each other out of VRAM (about 6.6 GB already in use before the load). A peer's `KASANE/vram.py` + `tests/test_vram.py` wait untracked
 - [x] K1-10 Model chip + popover (search, Local/API sections, badges, footer meters) (FR-M-1, 2, 5, 7); a "loading model" state while the kernel warms or switches models (D-052, D-054) (c2b1832)
 - [ ] K1-11 Effort slider with animation and reduced-motion fallback (FR-M-8, 9, 11)
 - [ ] K1-12 Inline API failure UX with Retry / Switch model (FR-R-5)
@@ -114,13 +114,16 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [ ] K1-14 Tests, `STATE`/`HANDOFF` update
 - [x] K1-B1 Lazy boot (user request, D-060): nothing heavy before the window; llama.cpp only when picked; the kernel owns GPT-SoVITS; Vite ignores runtime folders (9a667ba)
 - [x] K1-B2 App icon from the owner's reference, transparent corners (d89c094)
+- [x] K1-B3 Voice starts only when it is used: a voice mode switch in the `＋` tray starts GPT-SoVITS and faster-whisper; nothing voice-related at launch (D-061) (2a31515)
 
-### Session 4 proposal (awaiting the user's approval; R-46, R-50)
+### Session 4 plan (R-46, R-50)
 
-The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a tidy tree, K1 finished and the UI matched to `docs/reference-images/chat-ui.webp`. Proposed order, each a separate commit:
+The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a tidy tree, K1 finished and the UI matched to `docs/reference-images/chat-ui.webp`, then: "code still mentions Yuri all the time. fix it. make it a flexible orchestrator, yuri must only be a character." Order, each a separate commit:
 
-- [ ] C-1 Tidy the tree: delete the Yuri widget (`widget.html`, `src/*.ts`, `src/style.css`; Yuri's repo stays the reference for K2) once the window speaks v1 only; remove `KASANE/vrm/`, `KASANE/voice_files/`; rename Cargo `yuri` → `kokyu`, `orchestrator.log` → `kernel.log`; drop the tray's API-model and click-through items; folder map in `CLAUDE.md` §4 (D-061)
-- [ ] C-2 Kernel rebuild in place: split `app.py` into `server.py`, `boot.py`, `session.py` (one class per window, a handler per message type), `turns.py`; `logging` instead of `print("[yuri] …")` (R-13); retire the legacy flat protocol and the shadow-mode API toggle (D-049); lazy imports for STT, camera, OCR, pyttsx3; measure boot and first token before and after
+- [x] C-1 Tidy the tree: delete the Yuri widget (`widget.html`, `src/*.ts`, `src/style.css`; Yuri's repo stays the reference for K2) once the window speaks v1 only; remove `KASANE/vrm/`, `KASANE/voice_files/`; rename Cargo `yuri` → `kokyu`, `orchestrator.log` → `kernel.log`; drop the tray's API-model and click-through items; folder map in `CLAUDE.md` §4 (D-062) (038ad7e naming, logging, shell; d512ac9 widget and flat protocol gone; `KASANE/voice_files/` stays as `build_premade.py`'s input; `KASANE/vrm/` is C-1b)
+- [ ] C-1b Delete `KASANE/vrm/` (user): byte-identical copies of `assets/premade/*/model.vrm` (SHA-256 checked), gitignored, read by nothing; Claude's delete was refused by auto mode
+- [x] C-2 Kernel rebuild in place: split `app.py` into `server.py`, `boot.py`, `session.py` (one class per window, a handler per message type), `turns.py`; `logging` instead of `print("[yuri] …")` (R-13); retire the legacy flat protocol and the shadow-mode API toggle (D-049); lazy imports for STT, camera, OCR, pyttsx3; measure boot and first token before and after (D-062: d5da9f8 split, `app.py` kept as the server; 8e4997b Quit waits for the memory pass; `import app` 750 → 615 ms, camera/OCR/pyttsx3 were not on the import path; first token not re-measured)
+- [x] K1-15a Heart and rotating thinking lines above the input; threads fill from the bottom (FR-C-5, D-063) (fb804a1)
 - [ ] K1-15 UI to the reference: frameless window with its own title-bar buttons; top bar (companion chip with avatar, Temp Chat switch); sidebar (logo, New chat, search, groups, Settings gear); composer (attach, mic, round send); model chip under the composer; popover badges (fits, vision, thinking, tools), effort slider, spend footer
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 

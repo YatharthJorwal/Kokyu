@@ -61,35 +61,45 @@ These are never traded away for convenience. Full list with rationale: `docs/RUL
 
 ```
 CLAUDE.md             this file
-README.md  LICENSE    public face (MIT)
+README.md  LICENSE    public face (proprietary licence, D-040)
 KASANE/               Python kernel (flat modules, folder on sys.path: `import llm`, `from audio import tts`;
-                      there is NO `kasane` package). app.py, bus.py, config.py, paths.py, router/, memory/, audio/ ...
-src/                  frontend: Yuri's engine and widget UI (K0); React chrome + engine/ + net/ (K1+)
-src-tauri/            Rust: windows, tray, hotkeys, child processes (Job Object)
+                      there is NO `kasane` package). D-062 layout:
+                        app.py        the server only: routes, lifespan, entry point
+                        session.py    one Session per window; `on_<type>` per protocol message
+                        turns.py      one model turn (recall, prompt, router, stream, speech)
+                        ambient.py    screen companions (Task Guide, OCR watch)
+                        companions.py the active companion's persona and voice, nothing more
+                        boot.py       start-up order (D-060, D-061); hub.py open windows and the driver
+                        router/ memory/ audio/ senses/ tools/ waifus/ threads/ protocol/ paths.py config.py llm.py
+                        voice_files/  build_premade.py's input (voice clips; .wav gitignored)
+src/                  frontend: app/ React window · engine/ three.js avatar code (K2 Stage) · net/ typed socket
+src-tauri/            Rust: window, tray, child processes (Job Object), API keys (Credential Manager)
+assets/premade/       Luna and Yuri packs (VRM, voice, prompt; untracked user assets, D-041)
 config/               config.example.yaml, models.example.yaml, secrets.example.yaml
-scripts/              dev.mjs, doctor.mjs, check.mjs, seed_waifus.py, packaging
+scripts/              dev.mjs, doctor.mjs, check.mjs, clean.mjs, test-frontend.mjs, build_premade.py
 tests-fe/             frontend tests (pure logic; Node test runner)
 docs/                 SCOPE, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, HANDOFF, TTS-BACKEND, notes/
 data/                 runtime data (gitignored)
 ```
 
-The tree is real as of K0 (seeded from Yuri, renamed, reshaped). Yuri's layout and findings: `docs/notes/yuri-inventory.md`. Check `STATE.md` for what actually exists.
+Seeded from Yuri in K0; since D-062 Yuri is only a premade character and her widget is gone. Yuri's old layout and findings: `docs/notes/yuri-inventory.md`. Check `STATE.md` for what actually exists.
 
 ## 5. Commands
 
-Taken from Yuri's `package.json` and handoff; **confirm each after the seed (K0-03/04)** and fix this list.
+Confirmed on the user's PC (session 4, 2026-11-15).
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt
 npm install
 
-npm run tauri dev       # desktop shell; starts the kernel and the TTS backend itself (runs `npm run dev:ui` first)
+npm run tauri dev       # desktop shell; starts the kernel, which starts voice only when voice mode is on (D-061)
 npm run dev             # kernel + page for a plain browser tab (reuses a kernel already running)
 npm run dev:ui          # page only (what tauri dev uses). Never run it together with `npm run dev` or `tauri dev`: port 1420
 npm run doctor          # why a window does not load
 npm run build           # tsc + vite build
 npm run test:fe         # frontend pure-logic tests
+npm run clean           # dist, test caches, __pycache__ (`clean:all` adds src-tauri/target)
 npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest (add `-- --skip-cargo` without a Rust toolchain; KOKYU_PYTHON overrides the interpreter)
 .\.venv\Scripts\python.exe -m pytest KASANE -q
 .\.venv\Scripts\python.exe KASANE\check.py --refresh   # config, key, catalog, spend
