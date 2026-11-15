@@ -7,7 +7,16 @@ import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
 import type { Effort, ServerData } from "../net/protocol";
-import { canPickModel, canRegenerate, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
+import {
+  canPickModel,
+  canRegenerate,
+  canSend,
+  initialState,
+  reduce,
+  type ChatEvent,
+  type ChatState,
+  type SettingsSection,
+} from "./chat-state";
 import { VoicePlayer } from "./voice";
 
 /** A file ready to send: an image as base64 JPEG, or a text file's content (src/file-upload.ts). */
@@ -158,6 +167,35 @@ export const actions = {
 
   closePicker(): void {
     dispatch({ kind: "picker", open: false });
+  },
+
+  /** K1-13: Settings opens on a section; the Doctor and Memory ask the kernel for fresh data. */
+  openSettings(section: SettingsSection = "models"): void {
+    dispatch({ kind: "settings", section });
+    if (section === "doctor") socket.send("doctor", {});
+    if (section === "memory") socket.send("memory_list", {});
+    if (section === "models") socket.send("model_list", {});
+  },
+
+  closeSettings(): void {
+    dispatch({ kind: "settings", section: null });
+  },
+
+  runDoctor(): boolean {
+    return socket.send("doctor", {});
+  },
+
+  /** FR-MEM-4: the kernel supersedes the fact with the new wording (nothing is deleted). */
+  correctFact(id: number, text: string): boolean {
+    return socket.send("memory_edit", { id, text });
+  },
+
+  forgetFact(id: number): boolean {
+    return socket.send("memory_forget", { id });
+  },
+
+  restoreFact(id: number): boolean {
+    return socket.send("memory_restore", { id });
   },
 
   /** Re-fetches the API catalog (FR-M-4). */

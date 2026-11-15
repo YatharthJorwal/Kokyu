@@ -30,6 +30,11 @@ export const CLIENT_TYPES = [
   "screen_companion",
   "typing",
   "voice_mode",
+  "doctor",
+  "memory_list",
+  "memory_edit",
+  "memory_forget",
+  "memory_restore",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -50,6 +55,8 @@ export const SERVER_TYPES = [
   "surface_status",
   "speak",
   "camera_request",
+  "doctor_report",
+  "memory_facts",
 ] as const;
 
 export const ERROR_CODES = [
@@ -206,6 +213,27 @@ export interface ServerData {
   /** One spoken clause (FR-V-2); `audio_b64` is empty when the voice backend is down. */
   speak: { text: string; audio_b64: string; mime: string };
   camera_request: Record<string, never>;
+  doctor_report: { checks: DoctorCheck[] };
+  memory_facts: { facts: MemoryFact[] };
+}
+
+/** K1-13 (FR-SET-3): one component's state and how to fix it. */
+export interface DoctorCheck {
+  id: string;
+  label: string;
+  state: "ok" | "warn" | "fail" | "off";
+  detail: string;
+  hint: string | null;
+}
+
+/** K1-13 (FR-MEM-4): a remembered fact; forgotten ones can be restored. */
+export interface MemoryFact {
+  id: number;
+  content: string;
+  source: string;
+  pinned: boolean;
+  created_ts: number;
+  forgotten: boolean;
 }
 
 export interface ClientData {
@@ -230,6 +258,11 @@ export interface ClientData {
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
   voice_mode: { on: boolean };
+  doctor: Record<string, never>;
+  memory_list: Record<string, never>;
+  memory_edit: { id: number; text: string };
+  memory_forget: { id: number };
+  memory_restore: { id: number };
 }
 
 export type Effort = "off" | "low" | "medium" | "high" | "max";

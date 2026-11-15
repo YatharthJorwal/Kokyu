@@ -3,6 +3,7 @@
 
 import { Composer } from "./ui/Composer";
 import { NoticeBar } from "./ui/NoticeBar";
+import { SettingsDialog } from "./ui/SettingsDialog";
 import { Sidebar } from "./ui/Sidebar";
 import { ThinkingRow } from "./ui/ThinkingRow";
 import { ThreadView } from "./ui/ThreadView";
@@ -33,6 +34,7 @@ export function App() {
         <ThinkingRow />
         <Composer />
       </main>
+      <SettingsDialog />
     </div>
   );
 }

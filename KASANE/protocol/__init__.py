@@ -114,6 +114,17 @@ class ModelListRequest(_Data):
     refresh: bool = False             # re-fetch the API catalog (FR-M-4)
 
 
+class FactRef(_Data):
+    """K1-13 (FR-MEM-4): one remembered fact."""
+
+    id: int = Field(ge=1)
+
+
+class FactEdit(_Data):
+    id: int = Field(ge=1)
+    text: str = Field(min_length=1, max_length=2000)
+
+
 # Client -> kernel, versioned. The data model for each type.
 CLIENT_TYPES: dict[str, type[_Data]] = {
     "hello": Hello,
@@ -137,6 +148,11 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
     "voice_mode": VoiceModeData,      # D-061: voice on or off; it starts only when turned on
+    "doctor": Empty,                  # K1-13 (FR-SET-3): run the Doctor's checks
+    "memory_list": Empty,             # K1-13 (FR-MEM-4): the remembered facts
+    "memory_edit": FactEdit,          # correct a fact (the old one is superseded, not deleted)
+    "memory_forget": FactRef,         # forget a fact (restorable)
+    "memory_restore": FactRef,        # bring a forgotten fact back
 }
 
 # Kernel -> client, versioned.
@@ -158,6 +174,8 @@ SERVER_TYPES: tuple[str, ...] = (
     "surface_status", # this window drives turns, or watches
     "speak",          # one spoken clause: caption text and a WAV (FR-V-2)
     "camera_request", # the kernel wants one camera frame (K2-07)
+    "doctor_report",  # K1-13 (FR-SET-3): one row per component, with a fix hint
+    "memory_facts",   # K1-13 (FR-MEM-4): live facts, then forgotten ones
 )
 
 ERROR_CODES: tuple[str, ...] = (

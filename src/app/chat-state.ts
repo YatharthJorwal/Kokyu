@@ -6,8 +6,10 @@
 
 import {
   stripTrailingTag,
+  type DoctorCheck,
   type ErrorCode,
   type Frame,
+  type MemoryFact,
   type ModelListData,
   type ModelStatus,
   type ScreenCompanions,
@@ -19,6 +21,8 @@ import {
 import { shortRef } from "./models";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
+/** K1-13: the Settings dialog's sections (FR-SET-1; the rest arrive with their phases). */
+export type SettingsSection = "models" | "memory" | "doctor" | "about";
 export type TurnPhase = "idle" | "thinking" | "replying";
 export type SurfaceRole = "driver" | "observer";
 
@@ -80,6 +84,12 @@ export interface ChatState {
   screen: ScreenCompanions | null;
   /** Voice mode (D-061); null until the kernel says. */
   voice: VoiceStatus | null;
+  /** K1-13: the open Settings section; null when Settings is closed. */
+  settings: SettingsSection | null;
+  /** The Doctor's last report (FR-SET-3); null until asked. */
+  doctor: DoctorCheck[] | null;
+  /** The remembered facts (FR-MEM-4); null until asked. */
+  memory: MemoryFact[] | null;
 }
 
 export type ChatEvent =
@@ -90,7 +100,8 @@ export type ChatEvent =
   | { kind: "sent"; text: string | null }
   | { kind: "regenerating" }
   | { kind: "dismiss_notice" }
-  | { kind: "picker"; open: boolean };
+  | { kind: "picker"; open: boolean }
+  | { kind: "settings"; section: SettingsSection | null };
 
 export const initialState: ChatState = {
   connection: "connecting",
@@ -112,6 +123,9 @@ export const initialState: ChatState = {
   pickerOpen: false,
   screen: null,
   voice: null,
+  settings: null,
+  doctor: null,
+  memory: null,
 };
 
 let localCounter = 0;
@@ -352,6 +366,10 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       const { role } = frame.data as ServerData["surface_status"];
       return { ...state, role: role === "observer" ? "observer" : "driver" };
     }
+    case "doctor_report":
+      return { ...state, doctor: (frame.data as ServerData["doctor_report"]).checks };
+    case "memory_facts":
+      return { ...state, memory: (frame.data as ServerData["memory_facts"]).facts };
     case "error": {
       const data = frame.data as ServerData["error"];
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };
@@ -413,5 +431,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, notice: null };
     case "picker":
       return { ...state, pickerOpen: event.open && canPickModel(state) };
+    case "settings":
+      return { ...state, settings: event.section, pickerOpen: false };
   }
 }

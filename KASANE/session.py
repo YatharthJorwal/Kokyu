@@ -22,6 +22,7 @@ import ambient
 import boot
 import companions
 import conversation
+import doctor
 import hub
 import llm
 import model_loader
@@ -31,6 +32,7 @@ import turns
 import waifus
 from audio import voice_mode
 from config import CONFIG
+from memory import viewer as memory_viewer
 from memory import writer
 from router import listing as model_listing
 from senses import camera, ocr_watch, task_guide
@@ -531,6 +533,33 @@ class Session:
         # The chip's popover. Read-only, any window.
         listed = await model_listing.model_list(router.get_router(), refresh=msg.data.refresh, cfg=CONFIG)
         await self.ws.send_json(protocol.frame("model_list", listed))
+
+    # ── Settings (K1-13): the Doctor and the memory viewer ──────────────────
+    # App-level, not about the conversation: any window may ask, observers too.
+
+    async def on_doctor(self, msg: Any) -> None:
+        """FR-SET-3: one row per component, each with a fix hint."""
+        checks = await doctor.report(router.get_router())
+        await self.ws.send_json(protocol.frame("doctor_report", {"checks": checks}))
+
+    async def send_memory_facts(self) -> None:
+        await self.ws.send_json(protocol.frame("memory_facts", {"facts": await memory_viewer.facts()}))
+
+    async def on_memory_list(self, msg: Any) -> None:
+        await self.send_memory_facts()
+
+    async def on_memory_edit(self, msg: Any) -> None:
+        """FR-MEM-4: the user's wording supersedes the fact (never a hard delete, FR-MEM-3)."""
+        await memory_viewer.correct(msg.data.id, msg.data.text)
+        await self.send_memory_facts()
+
+    async def on_memory_forget(self, msg: Any) -> None:
+        await memory_viewer.forget(msg.data.id)
+        await self.send_memory_facts()
+
+    async def on_memory_restore(self, msg: Any) -> None:
+        await memory_viewer.restore(msg.data.id)
+        await self.send_memory_facts()
 
     async def on_model_load(self, msg: Any) -> None:
         # Try again after a failed load. Observers only watch; the driver never reloads mid-reply.

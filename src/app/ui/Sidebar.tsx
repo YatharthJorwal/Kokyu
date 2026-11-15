@@ -93,8 +93,7 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        {/* shortcut: Settings opens nothing until K1-13 builds the page */}
-        <button type="button" className="settings" disabled title="Settings arrive with K1-13">
+        <button type="button" className="settings" onClick={() => actions.openSettings()}>
           Settings
         </button>
         <span className={`conn conn-${connection}`} role="status">

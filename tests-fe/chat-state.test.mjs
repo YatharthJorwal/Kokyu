@@ -289,3 +289,22 @@ test("voice mode's state comes from the kernel and goes on disconnect (D-061)", 
   s = reduce(s, { kind: "status", status: "offline" });
   assert.equal(s.voice, null); // a restarted kernel starts with voice off
 });
+
+test("Settings opens on a section and keeps the Doctor's and memory's last answers", () => {
+  // K1-13 (FR-SET-3, FR-MEM-4)
+  let s = run(online);
+  assert.equal(s.settings, null);
+  s = reduce(s, { kind: "picker", open: true });
+  s = reduce(s, { kind: "settings", section: "doctor" });
+  assert.equal(s.settings, "doctor");
+  assert.equal(s.pickerOpen, false); // one popup at a time
+  const checks = [{ id: "ollama", label: "Ollama", state: "fail", detail: "Not reachable", hint: "Start Ollama" }];
+  s = reduce(s, frame("doctor_report", { checks }, null));
+  assert.deepEqual(s.doctor, checks);
+  const facts = [{ id: 3, content: "The user likes green tea", source: "writer_pass", pinned: false, created_ts: 1, forgotten: false }];
+  s = reduce(s, frame("memory_facts", { facts }, null));
+  assert.deepEqual(s.memory, facts);
+  s = reduce(s, { kind: "settings", section: null });
+  assert.equal(s.settings, null);
+  assert.deepEqual(s.doctor, checks); // shown at once next time, then refreshed
+});
