@@ -156,6 +156,20 @@ export function currentModelRef(state: ChatState): string | null {
   return state.thread?.model_ref ?? state.defaults?.model_ref ?? state.models?.default_ref ?? null;
 }
 
+/** The kernel's model status when it concerns the open thread's model; a load of
+ * another thread's model (the kernel is shared) is not this chat's news. */
+export function modelStatusHere(state: ChatState): ModelStatus | null {
+  const status = state.modelStatus;
+  const current = currentModelRef(state);
+  if (!status || (current !== null && status.model_ref !== null && status.model_ref !== current)) return null;
+  return status;
+}
+
+/** The waking-up card is talking: the thinking line waits for it (D-063). */
+export function modelLoadingHere(state: ChatState): boolean {
+  return modelStatusHere(state)?.state === "loading";
+}
+
 /** The effort a turn in the open thread runs with (FR-M-1: shown on the chip). */
 export function currentEffort(state: ChatState): string | null {
   return state.thread?.effort ?? state.defaults?.effort ?? null;

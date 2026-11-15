@@ -1,7 +1,7 @@
 // The input row (K1-02, K1-05): multi-line, Enter sends, Shift+Enter is a newline,
 // a pasted image or a dropped file is attached (FR-C-3); the `＋` tray (FR-C-4)
 // with the screen companions (K1-05b, FR-SC-1..4) and their status chips (FR-SC-2);
-// the status heart (FR-C-5); the companion chip (K1-06, FR-S-1); the model chip
+// the companion chip (K1-06, FR-S-1); the model chip
 // (K1-10, FR-M-1); Stop while a reply runs (FR-C-2).
 
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
@@ -10,7 +10,6 @@ import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upl
 import { canSend } from "../chat-state";
 import { actions, useChat, type Attachment } from "../store";
 import { CompanionChip } from "./CompanionChip";
-import { Heart } from "./Heart";
 import { ModelChip } from "./ModelChip";
 
 async function readAttachment(file: File): Promise<Attachment | string> {
@@ -135,7 +134,6 @@ export function Composer() {
       />
       <div className="composer-bar">
         <Tray onFile={(f) => void attach(f)} disabled={role === "observer"} />
-        <Heart />
         <CompanionChip />
         <ModelChip />
         {turn === "idle" ? (

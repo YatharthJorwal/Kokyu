@@ -1,9 +1,18 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { canPickModel, currentEffort, currentModelRef, initialState, modelLabel, reduce } from "../src/app/chat-state.ts";
+import {
+  canPickModel,
+  currentEffort,
+  currentModelRef,
+  initialState,
+  modelLabel,
+  modelLoadingHere,
+  reduce,
+} from "../src/app/chat-state.ts";
 import {
   SLOW_AFTER_S,
+  THINKING_LINES,
   WAKING_LINES,
   WAKING_STEP_S,
   awakeLine,
@@ -15,6 +24,7 @@ import {
   formatSize,
   isLocalRef,
   shortRef,
+  thinkingLine,
   wakingLine,
 } from "../src/app/models.ts";
 
@@ -150,4 +160,24 @@ test("the picker opens only when a model can be picked and closes on send or dis
   s = reduce(s, { kind: "status", status: "offline" });
   assert.equal(s.pickerOpen, false);
   assert.equal(s.modelStatus, null); // the kernel re-sends it on reconnect
+});
+
+test("the thinking line names her, walks the list from a random start and wraps (D-063)", () => {
+  assert.equal(thinkingLine("Luna", 0), "Luna is mulling it over…");
+  const turn = Array.from({ length: THINKING_LINES.length }, (_, i) => thinkingLine("Luna", i, 4));
+  assert.equal(new Set(turn).size, THINKING_LINES.length); // every line once before any repeats
+  assert.equal(turn[0], thinkingLine("Luna", THINKING_LINES.length, 4));
+  assert.ok(turn.every((l) => l.startsWith("Luna ") && l.endsWith("…")));
+  assert.equal(thinkingLine(null, 0), "Your waifu is mulling it over…");
+  // FR-W-3: only the name changes between companions
+  assert.equal(thinkingLine("Yuri", 3, 2).replace("Yuri", "Luna"), thinkingLine("Luna", 3, 2));
+});
+
+test("the thinking line waits while the waking-up card speaks for this thread's model", () => {
+  const status = (model_ref, state) => ({ kind: "frame", frame: { v: 1, type: "model_status", id: "s", thread: null, data: { model_ref, label: null, state, message: null, elapsed_s: 0 } } });
+  const hello = { kind: "frame", frame: { v: 1, type: "hello", id: "s", thread: null, data: { protocol: 1, kernel: "k", default_model_ref: "local:a" } } };
+  let s = reduce(reduce(initialState, hello), status("local:a", "loading"));
+  assert.equal(modelLoadingHere(s), true);
+  assert.equal(modelLoadingHere(reduce(s, status("local:b", "loading"))), false); // another thread's model
+  assert.equal(modelLoadingHere(reduce(s, status("local:a", "ready"))), false);
 });

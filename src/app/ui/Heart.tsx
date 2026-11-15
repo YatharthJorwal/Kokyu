@@ -1,7 +1,7 @@
-// The status heart (K1-05, FR-C-5): calm when idle,
-// a fast arc chasing round it while she thinks, a heartbeat while she replies,
-// and a slow arc while the kernel is not reachable. CSS in app.css; it stops
-// moving under prefers-reduced-motion.
+// The status heart (K1-05, FR-C-5), shown above the input box by ThinkingRow:
+// calm when idle, a fast arc chasing round it while she thinks, one beat as her
+// reply starts, and a slow arc while the kernel is not reachable. CSS in app.css;
+// it stops moving under prefers-reduced-motion.
 
 import { useChat } from "../store";
 

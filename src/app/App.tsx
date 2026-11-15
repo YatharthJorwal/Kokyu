@@ -4,6 +4,7 @@
 import { Composer } from "./ui/Composer";
 import { NoticeBar } from "./ui/NoticeBar";
 import { Sidebar } from "./ui/Sidebar";
+import { ThinkingRow } from "./ui/ThinkingRow";
 import { ThreadView } from "./ui/ThreadView";
 import { useChat } from "./store";
 
@@ -29,6 +30,7 @@ export function App() {
         <Header />
         <ThreadView />
         <NoticeBar />
+        <ThinkingRow />
         <Composer />
       </main>
     </div>

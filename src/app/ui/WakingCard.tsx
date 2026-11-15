@@ -6,15 +6,14 @@
 
 import { useEffect, useRef, useState } from "react";
 
-import { canPickModel, currentModelRef } from "../chat-state";
+import { canPickModel, modelStatusHere } from "../chat-state";
 import { awakeLine, failedLine, formatElapsed, wakingLine } from "../models";
 import { actions, useChat } from "../store";
 
 const AWAKE_MS = 2600;
 
 export function WakingCard() {
-  const status = useChat((s) => s.modelStatus);
-  const current = useChat(currentModelRef);
+  const status = useChat(modelStatusHere);
   const name = useChat((s) => s.companion?.name ?? null);
   const canPick = useChat(canPickModel);
   const [now, setNow] = useState(() => Date.now());
@@ -53,8 +52,6 @@ export function WakingCard() {
   }, [loading]);
 
   if (!status) return null;
-  // A load of another thread's model (the kernel is shared) is not this chat's news.
-  if (current !== null && status.model_ref !== null && status.model_ref !== current) return null;
 
   if (status.state === "loading") {
     const elapsed = (status.elapsed_s ?? 0) + (now - receivedAt.current) / 1000;

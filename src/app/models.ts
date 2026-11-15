@@ -123,3 +123,29 @@ export function awakeLine(name: string | null): string {
 export function failedLine(name: string | null): string {
   return withName("{name} couldn't wake up.", name);
 }
+
+// ── thinking ─────────────────────────────────────────────────────────────────
+// Beside the heart above the input box while a reply is on its way (FR-C-5,
+// D-063). The app's words, not the companion's: she supplies only her name (FR-W-3).
+
+export const THINKING_LINES = [
+  "{name} is mulling it over…",
+  "{name} is choosing her words…",
+  "{name} is thinking it through…",
+  "{name} is connecting the dots…",
+  "{name} is chewing on that…",
+  "{name} is untangling a thought…",
+  "{name} is weighing a few answers…",
+  "{name} is turning it over in her head…",
+  "{name} is having a little think…",
+  "{name} is gathering her thoughts…",
+];
+
+export const THINKING_STEP_S = 3;
+
+/** The line for the `step`-th change of a turn. `start` is where this turn begins
+ * in the list, so turns do not all open with the same words. */
+export function thinkingLine(name: string | null, step: number, start = 0): string {
+  const n = THINKING_LINES.length;
+  return withName(THINKING_LINES[(((start + step) % n) + n) % n], name);
+}

@@ -358,6 +358,13 @@ div.companion,
   min-height: 0;
   overflow-y: auto;
   padding: 24px max(24px, calc((100% - 760px) / 2));
+  display: flex;
+  flex-direction: column;
+}
+
+/* Pushes a short thread down to the input box; with a long one it is zero high. */
+.thread-spacer {
+  flex: 1 0 0;
 }
 
 .empty {
@@ -528,29 +535,12 @@ div.companion,
   font-size: 12px;
 }
 
-.typing {
-  color: var(--muted);
-  letter-spacing: 2px;
-  animation: pulse 1.2s ease-in-out infinite;
-}
-
-@keyframes pulse {
-  50% {
-    opacity: 0.35;
-  }
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .typing {
-    animation: none;
-  }
-}
-
 .divider {
   display: flex;
   align-items: center;
   gap: 12px;
-  margin: 8px 0 20px;
+  /* The message above brings 16px; flex items do not collapse margins (.thread). */
+  margin: 0 0 20px;
   color: var(--muted);
   font-size: 12px;
 }
@@ -896,8 +886,9 @@ div.companion,
   opacity: 0.5;
 }
 
+/* One beat as the first word of the reply arrives (D-063), not a beat per second. */
 .heart.replying svg {
-  animation: heart-beat 1.3s ease-in-out infinite;
+  animation: heart-beat 1.1s ease-in-out 1;
 }
 
 @keyframes heart-trace {
@@ -925,17 +916,57 @@ div.companion,
   }
 }
 
-/* Reduced motion: the states stay apart by colour and fill alone. */
+/* Its row, just above the input box (D-063): the heart and the thinking line. */
+.thinking-row {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: min(760px, calc(100% - 48px));
+  min-height: 20px;
+  margin: 0 auto 8px;
+  padding: 0 10px;
+}
+
+.thinking-line {
+  color: var(--muted);
+  font-size: 13px;
+  transition: opacity 600ms ease;
+}
+
+.thinking-line > [aria-hidden] {
+  display: inline-block;
+  animation: fade-in 0.4s ease;
+}
+
+.thinking-line.fading {
+  opacity: 0;
+}
+
+.sr-only {
+  position: absolute;
+  width: 1px;
+  height: 1px;
+  overflow: hidden;
+  clip-path: inset(50%);
+  white-space: nowrap;
+}
+
+/* Reduced motion: the states stay apart by colour and fill alone; only the words change. */
 @media (prefers-reduced-motion: reduce) {
   .heart .heart-arc,
   .heart.thinking .heart-arc,
-  .heart.replying svg {
+  .heart.replying svg,
+  .thinking-line > [aria-hidden] {
     animation: none;
   }
 
   .heart .heart-arc,
   .heart.thinking .heart-arc {
     stroke-dasharray: 100 0;
+  }
+
+  .thinking-line {
+    transition: none;
   }
 }
 

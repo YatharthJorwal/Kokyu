@@ -82,16 +82,20 @@ export function ThreadView() {
           <p className="empty-title">{companion ? `Talk to ${companion}` : "Start a conversation"}</p>
           <p className="muted">Your conversations are saved on this PC.</p>
         </div>
-      ) : null}
+      ) : (
+        // A short thread sits on the input box, like a messenger; a long one scrolls as usual.
+        <div className="thread-spacer" aria-hidden="true" />
+      )}
       {messages.map((m) => (
         <Message key={m.key} m={m} lastReply={m.key === lastReplyKey} />
       ))}
       <WakingCard />
-      {turn !== "idle" ? (
+      {turn !== "idle" && streaming ? (
+        // While she thinks, the line above the input box says so (ThinkingRow).
         <div className="msg assistant streaming">
           {companion ? <div className="speaker">{companion}</div> : null}
           <div className="bubble">
-            {streaming ? <Markdown text={streaming} /> : <span className="typing" aria-label="Thinking">•••</span>}
+            <Markdown text={streaming} />
           </div>
         </div>
       ) : null}
