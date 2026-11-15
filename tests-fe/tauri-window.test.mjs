@@ -10,11 +10,24 @@ const conf = JSON.parse(
 test("the main window is a normal app window, not the old widget (K1-00d)", () => {
   const w = conf.app.windows.find((x) => x.label === "main");
   assert.ok(w);
-  assert.equal(w.decorations, true);
   assert.equal(w.transparent, false);
   assert.equal(w.alwaysOnTop, false);
+  assert.equal(w.resizable, true);
   assert.ok(w.width >= 1000 && w.height >= 700);
   assert.ok(w.minWidth >= 800 && w.minHeight >= 560);
+});
+
+test("a frameless window draws its own buttons and may use them (K1-15, D-068)", () => {
+  const w = conf.app.windows.find((x) => x.label === "main");
+  const caps = JSON.parse(readFileSync(join(process.cwd(), "src-tauri", "capabilities", "default.json"), "utf8"));
+  if (w.decorations !== false) return;
+  assert.equal(w.shadow, true); // the system shadow is the window's only edge
+  for (const p of ["minimize", "toggle-maximize", "close", "start-dragging"]) {
+    assert.ok(caps.permissions.includes(`core:window:allow-${p}`), p);
+  }
+  const bar = readFileSync(join(process.cwd(), "src", "app", "ui", "TopBar.tsx"), "utf8");
+  assert.match(bar, /data-tauri-drag-region/);
+  assert.match(bar, /minimize\(\)[\s\S]*toggleMaximize\(\)[\s\S]*close\(\)/);
 });
 
 for (const key of ["csp", "devCsp"]) {

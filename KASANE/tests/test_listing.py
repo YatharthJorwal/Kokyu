@@ -17,7 +17,8 @@ TAGS = {
         {"name": "qwen3.5:4b", "size": 3_400_000_000, "details": {"family": "qwen35", "parameter_size": "4.7B", "quantization_level": "Q4_K_M"}},
         {"name": "nomic-embed-text:latest", "size": 274_000_000, "details": {"family": "nomic-bert"}},
         {"name": "bge-m3:latest", "size": 1_200_000_000, "details": {"family": "bert", "families": ["bert"]}},
-        {"name": "qwen3.5:9b", "size": 6_600_000_000, "details": {"family": "qwen35", "parameter_size": "9.7B"}},
+        {"name": "qwen3.5:9b", "size": 6_600_000_000, "details": {"family": "qwen35", "parameter_size": "9.7B"},
+         "capabilities": ["completion", "vision", "tools", "thinking"]},
         {"name": "broken"},
         "junk",
     ]
@@ -39,6 +40,8 @@ async def test_ollama_lists_chat_models_largest_first_without_embedding_models()
     assert rows[1]["detail"] == "Ollama · 4.7B · Q4_K_M"
     # the slider's detents come from config/models.example.yaml (FR-M-10)
     assert nine["efforts"] == ["off", "high"] and rows[2]["efforts"] == []
+    # badges come from Ollama's own capabilities; "completion" is every chat model's
+    assert nine["tags"] == ["vision", "tools", "thinking"] and rows[1]["tags"] == []
 
 
 @pytest.mark.asyncio

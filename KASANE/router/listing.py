@@ -75,6 +75,9 @@ def is_embedding_model(name: str, details: Mapping[str, Any] | None) -> bool:
     return any(str(f).lower() in EMBEDDING_FAMILIES for f in families if f)
 
 
+LOCAL_BADGES = ("vision", "thinking", "tools")
+
+
 def _bare(name: str) -> str:
     return name[: -len(":latest")] if name.endswith(":latest") else name
 
@@ -117,6 +120,8 @@ async def ollama_rows(
                 "available": True,
                 "note": None,
                 "fits": None,
+                # the picker's badges (D-068): what Ollama itself says the model can do
+                "tags": [c for c in item.get("capabilities") or () if c in LOCAL_BADGES],
                 "efforts": capabilities.efforts_for(f"local:ollama/{name}"),   # FR-M-8, FR-M-10
             }
         )

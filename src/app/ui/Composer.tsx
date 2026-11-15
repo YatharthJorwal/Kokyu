@@ -1,15 +1,16 @@
-// The input row (K1-02, K1-05): multi-line, Enter sends, Shift+Enter is a newline,
-// a pasted image or a dropped file is attached (FR-C-3); the `＋` tray (FR-C-4)
-// with the screen companions (K1-05b, FR-SC-1..4) and their status chips (FR-SC-2);
-// the companion chip (K1-06, FR-S-1); the model chip
-// (K1-10, FR-M-1); Stop while a reply runs (FR-C-2).
+// The input row (K1-02, K1-05; laid out to the reference in K1-15, D-068): one
+// rounded box with the paperclip tray (FR-C-4) and the screen companions in it
+// (K1-05b, FR-SC-1..4), the message (multi-line, Enter sends, Shift+Enter is a
+// newline, a pasted image or a dropped file is attached, FR-C-3), the mic (voice
+// input arrives in K2) and a round Send, or Stop while a reply runs (FR-C-2).
+// Status chips (FR-SC-2) sit above the message; the model chip (K1-10, FR-M-1)
+// sits under the box. The companion chip moved to the top bar.
 
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 
 import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
 import { canSend } from "../chat-state";
 import { actions, useChat, type Attachment } from "../store";
-import { CompanionChip } from "./CompanionChip";
 import { ModelChip } from "./ModelChip";
 
 async function readAttachment(file: File): Promise<Attachment | string> {
@@ -87,69 +88,85 @@ export function Composer() {
         : "Message…";
 
   return (
-    <div
-      className={dragging ? "composer dragging" : "composer"}
-      onDragOver={(e) => {
-        if (Array.from(e.dataTransfer.types).includes("Files")) {
-          e.preventDefault();
-          setDragging(true);
-        }
-      }}
-      onDragLeave={() => setDragging(false)}
-      onDrop={onDrop}
-    >
-      <VoiceChip />
-      <ScreenChips />
-      {attachment ? (
-        <div className="attachment">
-          <span>
-            {attachment.kind === "image" ? "Image" : "File"}: {attachment.filename}
-          </span>
-          <button type="button" aria-label={`Remove ${attachment.filename}`} onClick={() => {
-              setAttachment(null);
-              setProblem(null);
-            }}>
-            ×
-          </button>
-        </div>
-      ) : null}
-      {problem ? (
-        <p className="composer-problem" role="alert">
-          {problem}
-        </p>
-      ) : null}
-      <textarea
-        ref={box}
-        value={text}
-        onChange={(e) => {
-          setText(e.target.value);
-          actions.typing();
+    <div className="composer-area">
+      <div
+        className={dragging ? "composer dragging" : "composer"}
+        onDragOver={(e) => {
+          if (Array.from(e.dataTransfer.types).includes("Files")) {
+            e.preventDefault();
+            setDragging(true);
+          }
         }}
-        onKeyDown={onKeyDown}
-        onPaste={onPaste}
-        placeholder={attachment ? "Add a comment (optional)…" : placeholder}
-        rows={1}
-        aria-label="Message"
-        disabled={role === "observer"}
-      />
-      <div className="composer-bar">
-        <Tray onFile={(f) => void attach(f)} disabled={role === "observer"} />
-        <CompanionChip />
+        onDragLeave={() => setDragging(false)}
+        onDrop={onDrop}
+      >
+        <VoiceChip />
+        <ScreenChips />
+        {attachment ? (
+          <div className="attachment">
+            <span>
+              {attachment.kind === "image" ? "Image" : "File"}: {attachment.filename}
+            </span>
+            <button type="button" aria-label={`Remove ${attachment.filename}`} onClick={() => {
+                setAttachment(null);
+                setProblem(null);
+              }}>
+              ×
+            </button>
+          </div>
+        ) : null}
+        {problem ? (
+          <p className="composer-problem" role="alert">
+            {problem}
+          </p>
+        ) : null}
+        <div className="composer-row">
+          <Tray onFile={(f) => void attach(f)} disabled={role === "observer"} />
+          <textarea
+            ref={box}
+            value={text}
+            onChange={(e) => {
+              setText(e.target.value);
+              actions.typing();
+            }}
+            onKeyDown={onKeyDown}
+            onPaste={onPaste}
+            placeholder={attachment ? "Add a comment (optional)…" : placeholder}
+            rows={1}
+            aria-label="Message"
+            disabled={role === "observer"}
+          />
+          <button type="button" className="mic" aria-label="Talk" disabled title="Talking to her by voice arrives with the stage (K2)">
+            <svg viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="9" y="3" width="6" height="11" rx="3" />
+              <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
+            </svg>
+          </button>
+          {turn === "idle" ? (
+            <button
+              type="button"
+              className="send"
+              aria-label="Send"
+              title="Send"
+              onClick={submit}
+              disabled={!ready || (!text.trim() && !attachment)}
+            >
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <path d="M20.5 3.5L3.5 10.5l7 3 3 7z" />
+                <path d="M20.5 3.5l-10 10" />
+              </svg>
+            </button>
+          ) : (
+            <button type="button" className="stop" aria-label="Stop" title="Stop" onClick={() => actions.stop()}>
+              <svg viewBox="0 0 24 24" aria-hidden="true">
+                <rect x="7" y="7" width="10" height="10" rx="1.5" />
+              </svg>
+            </button>
+          )}
+        </div>
+      </div>
+      <div className="composer-under">
         <ModelChip />
-        {turn === "idle" ? (
-          <button
-            type="button"
-            className="send"
-            onClick={submit}
-            disabled={!ready || (!text.trim() && !attachment)}
-          >
-            Send
-          </button>
-        ) : (
-          <button type="button" className="stop" onClick={() => actions.stop()}>
-            Stop
-          </button>
-        )}
       </div>
     </div>
   );
@@ -271,16 +288,19 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
       <button
         type="button"
         className="tray-toggle"
-        aria-label="Add"
+        aria-label="Attach"
+        title="Attach a file; voice; screen companions"
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
-        ＋
+        <svg viewBox="0 0 24 24" aria-hidden="true">
+          <path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" />
+        </svg>
       </button>
       {open ? (
-        <div className="tray-menu" role="menu" aria-label="Add">
+        <div className="tray-menu" role="menu" aria-label="Attach">
           <button
             ref={first}
             type="button"

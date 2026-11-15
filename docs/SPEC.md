@@ -44,9 +44,9 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-C-1 | Threads MUST be creatable, renamable, deletable and searchable (title and message text). Stored in SQLite. | K1 |
 | FR-C-2 | Replies MUST stream token by token. **Stop** MUST halt generation (TARGET ≤ 300 ms) and keep the partial reply. Audio stops with it (TARGET ≤ 200 ms). | K1 |
 | FR-C-3 | The input box MUST be centered, multi-line (`Enter` sends, `Shift+Enter` newline), accept pasted images and dragged files. | K1 |
-| FR-C-4 | The `＋` tray MUST offer: upload file, camera, voice, screenshot, paste image. Items not yet implemented are visibly disabled, not hidden. | K1 stubs, K2 live |
+| FR-C-4 | The `＋` tray (opened by the paperclip in the input box, D-068) MUST offer: upload file, camera, voice, screenshot, paste image. Items not yet implemented are visibly disabled, not hidden. | K1 stubs, K2 live |
 | FR-C-5 | The **heart animation** (ported from Yuri) MUST show three states: idle, thinking, replying. It respects the reduced-motion setting. | K1 |
-| FR-C-6 | The sidebar MUST show waifus at top, history in the middle (grouped Today / Yesterday / Previous 7 days / Older, with the waifu's avatar badge), and **Settings** at the bottom. | K1 |
+| FR-C-6 | The sidebar MUST show New chat and search at the top, history in the middle (grouped Today / Yesterday / Previous 7 days / Older, with the waifu's avatar badge), and **Settings** at the bottom. The waifus are reached through the companion chip (FR-S-1); the sidebar no longer lists them (D-068). | K1 |
 | FR-C-7 | A **Chat / Stage** toggle MUST switch views of the same thread without losing state. | K2 |
 | FR-C-8 | Replies MUST render Markdown (code blocks with a copy button). What is *spoken* is the speech-safe version (FR-V-2). | K1 |
 | FR-C-9 | Each assistant message SHOULD offer *Copy* and *Regenerate*. | K1 |
@@ -56,7 +56,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-S-1 | A chip in the input row MUST show the active waifu's avatar and name. Its popover is a searchable list plus "＋ New waifu". | K1 |
+| FR-S-1 | A chip in the top bar (D-068; was the input row) MUST show the active waifu's avatar and name. Its popover is a searchable list plus "＋ New waifu". | K1 |
 | FR-S-2 | Switching MUST insert a visible divider ("Switched to Luna"), apply from the **next** turn (a turn in flight finishes with the old waifu), and keep prior messages on screen tagged with their speaker. | K1 |
 | FR-S-3 | Switching MUST send a short TTS **pre-warm** for the new waifu so the first real line is not slower. | K2 |
 | FR-S-4 | Clicking a waifu in the sidebar MUST open or continue a thread with her in **Stage** view. Clicking a history entry MUST open **Chat** view. | K2 |
@@ -66,7 +66,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-M-1 | There MUST be **one** model control: a chip in the input row showing the current model and effort label. | K1 |
+| FR-M-1 | There MUST be **one** model control: a chip under the input box (D-068) showing the current model and effort label. | K1 |
 | FR-M-2 | Its popover MUST have a search box and two clearly separated sections, **Local** and **API**, as one list (not a toggle). The current model carries a check mark. Picking a row is the whole action. | K1 |
 | FR-M-3 | **Local** lists Ollama models (`GET /api/tags`) plus llama.cpp presets from `config/models.yaml`. Each row shows size and a *fits / won't fit* hint from the VRAM manager. | K1 |
 | FR-M-4 | **API** lists the models of the user's configured OpenAI-compatible endpoints (AI Router, OpenRouter, DeepSeek and others as presets, or a custom base URL and key; D-037) from `/v1/models`, grouped by provider, with variant badges and a price hint when the catalog provides one. The catalog is cached; offline it shows the cache marked *stale*. A refresh button re-fetches. | K1 |

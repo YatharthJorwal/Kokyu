@@ -104,6 +104,11 @@ export const actions = {
     socket.send("thread_new", {});
   },
 
+  /** Temp Chat for the open thread (FR-MEM-5); the kernel saves it and answers with thread_updated. */
+  setTemp(on: boolean): void {
+    socket.send("set_temp", { on });
+  },
+
   openThread(id: string): void {
     const state = useChat.getState();
     if (state.turn !== "idle" || state.thread?.id === id) return;

@@ -6,6 +6,9 @@
 // The effort slider sits under the list, with the levels the model offers
 // (FR-M-8..11); while a reply is generating, its glow runs on the chip.
 // Local rows carry the VRAM manager's fits / won't fit hint (K1-09, FR-M-3).
+// K1-15 (D-068): the chip sits under the input box; each row is one line (name,
+// size or price, fits, badges) with the backend's detail in its tooltip, and the
+// footer says what was spent today.
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
@@ -141,9 +144,8 @@ function Row({
   onHover: () => void;
 }) {
   const size = formatSize(row.size_bytes);
-  const price =
-    row.price_in || row.price_out ? `$${(row.price_in ?? 0).toFixed(2)} / $${(row.price_out ?? 0).toFixed(2)} per M` : null;
-  const meta = [row.detail, size, price].filter(Boolean).join(" · ");
+  // per 1M tokens, in / out (the API section's heading says so)
+  const price = row.price_in || row.price_out ? `$${(row.price_in ?? 0).toFixed(2)} / $${(row.price_out ?? 0).toFixed(2)}` : null;
   const badges = badgesFor(row);
   return (
     <li>
@@ -156,54 +158,44 @@ function Row({
         disabled={!row.available}
         onMouseEnter={onHover}
         onClick={() => actions.setModel(row.ref)}
-        title={row.note ?? row.ref}
+        title={[row.label, row.detail, row.note].filter(Boolean).join("\n")}
       >
         <span className="check" aria-hidden="true">
           {current ? "✓" : ""}
         </span>
-        <span className="row-main">
-          <span className="row-label">
-            {row.label}
-            {badges.map((b) => (
-              <span key={b} className="badge variant">
-                {b}
-              </span>
-            ))}
-          </span>
-          {meta ? <span className="row-meta">{meta}</span> : null}
+        <span className="row-label">{row.label}</span>
+        <span className={row.note ? "row-meta row-note" : "row-meta"}>{row.note ?? size ?? price ?? ""}</span>
+        <span className="row-fit">
+          {row.note ? null : row.fits === false ? (
+            <span className="no-fit" title="Not enough free graphics memory beside the helper models">
+              won't fit
+            </span>
+          ) : row.fits ? (
+            <span className="fits">fits</span>
+          ) : null}
         </span>
-        {row.note ? (
-          <span className="row-note">{row.note}</span>
-        ) : row.fits === false ? (
-          <span className="badge no-fit" title="Not enough free graphics memory beside the helper models">
-            won't fit
-          </span>
-        ) : row.fits ? (
-          <span className="badge fits">fits</span>
-        ) : null}
+        <span className="row-badges">
+          {badges.map((b) => (
+            <span key={b} className="badge variant">
+              {b}
+            </span>
+          ))}
+        </span>
       </button>
     </li>
   );
 }
 
 function SpendFooter({ spend }: { spend: Spend }) {
-  // A cap is only worth showing when the budget is on (FR-M-7); off, say so.
-  const cap = (value: number | null) => (spend.enabled && value !== null ? ` of ${formatUsd(value)}` : "");
+  // A cap is only worth showing when the budget is on (FR-M-7); off, say so. The
+  // hour and the month are in the tooltip.
+  const of = (value: number, cap: number | null | undefined) =>
+    `${formatUsd(value)}${spend.enabled && cap != null ? ` of ${formatUsd(cap)}` : ""}`;
+  const more = `This hour ${of(spend.hour_usd ?? 0, spend.hourly_cap_usd)}; this month ${of(spend.month_usd, spend.monthly_cap_usd)}.`;
   return (
-    <footer className="model-footer">
-      <span>
-        Hour {formatUsd(spend.hour_usd ?? 0)}
-        {cap(spend.hourly_cap_usd ?? null)}
-      </span>
-      <span>
-        Today {formatUsd(spend.day_usd)}
-        {cap(spend.daily_cap_usd)}
-      </span>
-      <span>
-        Month {formatUsd(spend.month_usd)}
-        {cap(spend.monthly_cap_usd)}
-      </span>
-      {spend.enabled ? null : <span>Budget off</span>}
+    <footer className="model-footer" title={more}>
+      Spent today {of(spend.day_usd, spend.daily_cap_usd)}
+      {spend.enabled ? "" : " · budget off"}
     </footer>
   );
 }
@@ -389,6 +381,7 @@ function ModelPopover({ current }: { current: string | null }) {
           <section>
             <h3 className="list-head">
               API{models.api_provider ? ` · ${models.api_provider.label}` : ""}
+              {models.api.some((r) => r.price_in || r.price_out) ? <span className="per">$ per 1M in / out</span> : null}
               {models.api_stale ? <span className="badge stale">cached</span> : null}
               <button
                 type="button"

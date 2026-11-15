@@ -1,6 +1,8 @@
-// The sidebar (K1-03, FR-C-6): companions at the top, history in the middle
-// (grouped Today / Yesterday / Previous 7 days / Older, each with its
-// companion's badge, searchable, renamable, deletable) and Settings at the bottom.
+// The sidebar (K1-03, FR-C-6; laid out to the reference in K1-15, D-068): the
+// logo, New chat and search at the top, history in the middle (grouped Today /
+// Yesterday / Previous 7 days / Older, each with its companion's badge,
+// searchable, renamable, deletable) and the Settings gear at the bottom. The
+// companions moved to the chip in the top bar.
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
@@ -23,7 +25,6 @@ export function Sidebar() {
   const threads = useChat((s) => s.threads);
   const search = useChat((s) => s.search);
   const roster = useChat((s) => s.roster);
-  const companion = useChat((s) => s.companion);
   const busy = useChat((s) => s.turn !== "idle");
   const connection = useChat((s) => s.connection);
   const [query, setQuery] = useState("");
@@ -41,13 +42,9 @@ export function Sidebar() {
   return (
     <aside className="sidebar" aria-label="Conversations">
       <div className="brand">
-        <span className="brand-mark" aria-hidden="true">
-          ♡
-        </span>
+        <img className="brand-mark" src="/favicon.png" alt="" />
         <span className="brand-name">Kōkyū</span>
       </div>
-
-      <Companions roster={roster} active={companion} online={connection === "online"} />
 
       <button
         type="button"
@@ -55,21 +52,29 @@ export function Sidebar() {
         onClick={() => actions.newThread()}
         disabled={busy || connection !== "online"}
       >
-        + New chat
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <path d="M8 2.5v11M2.5 8h11" />
+        </svg>
+        New chat
       </button>
 
-      <input
-        className="thread-search"
-        type="search"
-        placeholder="Search chats"
-        maxLength={200}
-        aria-label="Search chats"
-        value={query}
-        onChange={(e) => setQuery(e.target.value)}
-        onKeyDown={(e) => {
-          if (e.key === "Escape") setQuery("");
-        }}
-      />
+      <label className="thread-search">
+        <svg viewBox="0 0 16 16" aria-hidden="true">
+          <circle cx="7" cy="7" r="4.5" />
+          <path d="M10.5 10.5l3 3" />
+        </svg>
+        <input
+          type="search"
+          placeholder="Search chats"
+          maxLength={200}
+          aria-label="Search chats"
+          value={query}
+          onChange={(e) => setQuery(e.target.value)}
+          onKeyDown={(e) => {
+            if (e.key === "Escape") setQuery("");
+          }}
+        />
+      </label>
 
       <nav className="history" aria-label="History">
         {searching ? (
@@ -93,44 +98,17 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <button type="button" className="settings" onClick={() => actions.openSettings()}>
-          Settings
+        <button type="button" className="settings" aria-label="Settings" title="Settings" onClick={() => actions.openSettings()}>
+          <svg viewBox="0 0 24 24" aria-hidden="true">
+            <circle cx="12" cy="12" r="3.2" />
+            <path d="M12 2.8l1.6 2.3 2.7-.7.9 2.6 2.6.9-.7 2.7 2.3 1.6-2.3 1.6.7 2.7-2.6.9-.9 2.6-2.7-.7L12 21.2l-1.6-2.3-2.7.7-.9-2.6-2.6-.9.7-2.7L2.8 12l2.3-1.6-.7-2.7 2.6-.9.9-2.6 2.7.7z" />
+          </svg>
         </button>
         <span className={`conn conn-${connection}`} role="status">
           {connection === "online" ? "Connected" : connection === "connecting" ? "Connecting…" : "Kernel offline"}
         </span>
       </div>
     </aside>
-  );
-}
-
-function Companions({ roster, active, online }: { roster: Companion[]; active: Companion | null; online: boolean }) {
-  if (roster.length === 0) {
-    return (
-      <div className="companion">
-        <Initial name={null} />
-        <span>No companion installed</span>
-      </div>
-    );
-  }
-  // Switching changes only her voice and persona; a reply in progress finishes first (FR-S-2).
-  return (
-    <ul className="companions" aria-label="Companions">
-      {roster.map((w) => (
-        <li key={w.id}>
-          <button
-            type="button"
-            className={w.id === active?.id ? "companion active" : "companion"}
-            aria-pressed={w.id === active?.id}
-            disabled={!online}
-            onClick={() => actions.switchWaifu(w.id)}
-          >
-            <Initial name={w.name} />
-            <span>{w.name}</span>
-          </button>
-        </li>
-      ))}
-    </ul>
   );
 }
 

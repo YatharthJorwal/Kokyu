@@ -1,15 +1,15 @@
 /* Kōkyū chat window (K1-02). Plain CSS with variables (D-013), dark first. */
 
 :root {
-  --bg: #15131a;
-  --panel: #1c1a23;
-  --panel-2: #24212d;
-  --line: #2f2b3a;
-  --text: #ece8f4;
-  --muted: #9a93ab;
-  --accent: #e57fa8;
-  --accent-ink: #1a0f15;
-  --user: #2d2840;
+  --bg: #17131c;
+  --panel: #1f1a26;
+  --panel-2: #2a2333;
+  --line: #352d41;
+  --text: #f1ecf7;
+  --muted: #a39bb4;
+  --accent: #f27aa6;
+  --accent-ink: #2a0d1a;
+  --user: #2f2840;
   --danger: #e5707a;
   --radius: 14px;
   --sidebar: 260px;
@@ -63,7 +63,7 @@ button:disabled {
   flex-direction: column;
   gap: 12px;
   min-height: 0;
-  padding: 16px 12px;
+  padding: 18px 14px 12px;
   background: var(--panel);
   border-right: 1px solid var(--line);
 }
@@ -71,56 +71,60 @@ button:disabled {
 .brand {
   display: flex;
   align-items: center;
-  gap: 8px;
-  padding: 0 6px;
+  gap: 10px;
+  padding: 0 6px 6px;
   font-weight: 600;
-  font-size: 17px;
+  font-size: 20px;
+  letter-spacing: 0.01em;
 }
 
 .brand-mark {
-  color: var(--accent);
+  width: 30px;
+  height: 30px;
+  border-radius: 8px;
 }
 
-.companion {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: 100%;
-  padding: 8px 6px;
-  border: 0;
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
-}
-
-div.companion,
-.companion.active,
-.companion:hover:not(:disabled) {
-  background: var(--panel-2);
-}
-
-.companion:not(.active) .avatar-dot {
-  background: var(--line);
-  color: var(--text);
-}
-
-.companions {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  max-height: 30vh;
-  margin: 0;
-  padding: 0;
-  overflow-y: auto;
-  list-style: none;
+/* inline icons drawn with strokes, sized by their box */
+.sidebar svg,
+.top-bar svg,
+.composer svg {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.7;
+  stroke-linecap: round;
+  stroke-linejoin: round;
 }
 
 .thread-search {
-  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 0 12px;
   border: 1px solid var(--line);
-  border-radius: 10px;
-  background: var(--bg);
+  border-radius: 12px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.thread-search:focus-within {
+  border-color: color-mix(in srgb, var(--accent) 55%, var(--line));
+}
+
+.thread-search svg {
+  flex: none;
+  width: 16px;
+  height: 16px;
+}
+
+.thread-search input {
+  flex: 1;
+  min-width: 0;
+  padding: 10px 0;
+  border: 0;
+  outline: none;
+  background: transparent;
   color: var(--text);
+  font: inherit;
 }
 
 .group-head {
@@ -231,15 +235,28 @@ div.companion,
 }
 
 .new-chat {
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  border-radius: 10px;
-  background: transparent;
-  text-align: left;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 12px;
+  border: 0;
+  border-radius: 12px;
+  background: var(--accent);
+  color: #fff;
+  font-size: 16px;
+  font-weight: 500;
+  box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 25%, transparent);
+}
+
+.new-chat svg {
+  width: 18px;
+  height: 18px;
+  stroke-width: 2;
 }
 
 .new-chat:hover:not(:disabled) {
-  background: var(--panel-2);
+  background: color-mix(in srgb, var(--accent) 88%, #fff);
 }
 
 .history {
@@ -269,9 +286,14 @@ div.companion,
   text-overflow: ellipsis;
 }
 
-.thread-item:hover:not(:disabled),
+.thread-item:hover:not(:disabled) {
+  background: var(--panel-2);
+}
+
+/* the open thread: a lighter row with a pink edge, as in the reference */
 .thread-item.active {
   background: var(--panel-2);
+  box-shadow: inset 3px 0 0 var(--accent);
 }
 
 .badge,
@@ -288,13 +310,28 @@ div.companion,
   align-items: center;
   justify-content: space-between;
   padding-top: 8px;
-  border-top: 1px solid var(--line);
 }
 
 .settings {
-  padding: 6px 8px;
+  display: grid;
+  place-items: center;
+  width: 38px;
+  height: 38px;
+  padding: 0;
   border: 0;
+  border-radius: 10px;
   background: transparent;
+  color: var(--muted);
+}
+
+.settings svg {
+  width: 24px;
+  height: 24px;
+}
+
+.settings:hover {
+  background: var(--panel-2);
+  color: var(--text);
 }
 
 .conn {
@@ -330,22 +367,121 @@ div.companion,
   min-height: 0;
 }
 
-.chat-header {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 12px;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--line);
+/* ── top bar (K1-15, D-068) ──────────────────────────────── */
+
+.top-bar {
+  position: relative;
+  padding: 14px 24px 6px;
+  user-select: none;
 }
 
-.chat-header h1 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
-  white-space: nowrap;
-  overflow: hidden;
-  text-overflow: ellipsis;
+/* frameless in the desktop app: room for the window's own buttons above the row */
+.top-bar.framed {
+  padding-top: 36px;
+}
+
+.top-bar-row {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.top-bar-gap {
+  flex: 1;
+  align-self: stretch;
+}
+
+.window-controls {
+  position: absolute;
+  top: 0;
+  right: 0;
+  display: flex;
+}
+
+.window-controls button {
+  display: grid;
+  place-items: center;
+  width: 46px;
+  height: 32px;
+  padding: 0;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+}
+
+.window-controls svg {
+  width: 12px;
+  height: 12px;
+  stroke-width: 1.1;
+}
+
+.window-controls button:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.window-controls .close:hover {
+  background: #c42b1c;
+  color: #fff;
+}
+
+/* an on/off switch: a checkbox with role="switch" under a drawn track */
+.switch {
+  position: relative;
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text);
+  cursor: pointer;
+}
+
+.switch input {
+  position: absolute;
+  opacity: 0;
+  width: 1px;
+  height: 1px;
+}
+
+.switch-track {
+  position: relative;
+  width: 40px;
+  height: 22px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel-2);
+  transition: background 0.15s;
+}
+
+.switch-track::after {
+  content: "";
+  position: absolute;
+  top: 3px;
+  left: 3px;
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  background: #cfc8da;
+  transition: transform 0.15s;
+}
+
+.switch input:checked + .switch-track {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.switch input:checked + .switch-track::after {
+  background: #fff;
+  transform: translateX(18px);
+}
+
+.switch input:focus-visible + .switch-track {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+
+.switch:has(input:disabled) {
+  cursor: default;
+  opacity: 0.5;
 }
 
 .chips {
@@ -438,6 +574,10 @@ div.companion,
 .md ul,
 .md ol {
   padding-left: 22px;
+}
+
+.md li::marker {
+  color: var(--accent);
 }
 
 .md blockquote {
@@ -633,21 +773,33 @@ div.companion,
   background: transparent;
 }
 
+.composer-area {
+  margin: 0 auto 14px;
+  width: min(820px, calc(100% - 48px));
+}
+
 .composer {
   display: flex;
   flex-direction: column;
   gap: 6px;
-  margin: 0 auto 20px;
-  width: min(760px, calc(100% - 48px));
-  padding: 10px;
+  padding: 8px 8px 8px 10px;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 22px;
   background: var(--panel);
 }
 
+.composer-row {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+}
+
 .composer textarea {
+  flex: 1;
+  min-width: 0;
   min-height: 24px;
   max-height: 200px;
+  margin: 0 0 7px;
   resize: none;
   field-sizing: content;
   border: 0;
@@ -655,37 +807,65 @@ div.companion,
   background: transparent;
   color: var(--text);
   font: inherit;
+  font-size: 16px;
   line-height: 1.5;
-  padding: 4px 6px;
+  padding: 0 6px;
 }
 
+.composer .mic,
 .composer .send,
 .composer .stop {
-  padding: 7px 16px;
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
   border: 0;
-  border-radius: 10px;
-  font-weight: 600;
+  border-radius: 50%;
+}
+
+.composer svg {
+  width: 22px;
+  height: 22px;
+}
+
+.composer .mic {
+  background: transparent;
+  color: var(--muted);
 }
 
 .composer .send {
   background: var(--accent);
-  color: var(--accent-ink);
+  color: #fff;
+}
+
+.composer .send svg {
+  width: 20px;
+  height: 20px;
+  margin: 1px 2px 0 0;
+}
+
+.composer .send:disabled {
+  opacity: 0.4;
 }
 
 .composer .stop {
   background: var(--panel-2);
-  border: 1px solid var(--danger);
+  box-shadow: inset 0 0 0 1.5px var(--danger);
+  color: var(--danger);
 }
 
-.composer-bar {
+.composer .stop svg {
+  fill: currentColor;
+  stroke: none;
+}
+
+/* the model chip under the box, at its right (FR-M-1, D-068) */
+.composer-under {
   display: flex;
-  align-items: center;
-  gap: 8px;
-}
-
-.composer-bar .send,
-.composer-bar .stop {
-  margin-left: auto;
+  justify-content: flex-end;
+  margin-top: 8px;
 }
 
 .composer.dragging {
@@ -724,12 +904,15 @@ div.companion,
 }
 
 .tray-toggle {
-  width: 30px;
-  height: 30px;
-  border: 1px solid var(--line);
+  display: grid;
+  place-items: center;
+  width: 40px;
+  height: 40px;
+  padding: 0;
+  border: 0;
   border-radius: 50%;
   background: transparent;
-  color: var(--text);
+  color: var(--muted);
 }
 
 .tray-toggle:hover:not(:disabled),
@@ -1030,14 +1213,14 @@ div.companion,
   position: relative;
   display: inline-flex;
   align-items: center;
-  gap: 6px;
-  max-width: 340px;
-  padding: 5px 10px;
-  border: 1px solid var(--line);
-  border-radius: 999px;
+  gap: 8px;
+  max-width: 380px;
+  padding: 7px 14px;
+  border: 1px solid color-mix(in srgb, var(--accent) 70%, transparent);
+  border-radius: 12px;
   background: transparent;
-  color: var(--muted);
-  font-size: 13px;
+  color: var(--text);
+  font-size: 14px;
 }
 
 .model-chip:hover:not(:disabled),
@@ -1082,14 +1265,19 @@ div.companion,
 
 .kind-icon {
   flex: none;
-  width: 14px;
-  height: 14px;
+  width: 16px;
+  height: 16px;
 }
 
 .effort-label {
-  padding-left: 6px;
-  border-left: 1px solid var(--line);
+  color: var(--accent);
   white-space: nowrap;
+}
+
+.effort-label::before {
+  content: "·";
+  margin-right: 8px;
+  color: var(--muted);
 }
 
 .caret {
@@ -1128,11 +1316,11 @@ div.companion,
 .model-popover {
   position: absolute;
   bottom: calc(100% + 10px);
-  left: -4px;
+  right: 0;
   z-index: 20;
   display: flex;
   flex-direction: column;
-  width: min(440px, 86vw);
+  width: min(560px, 92vw);
   max-height: min(60vh, 520px);
   border: 1px solid var(--line);
   border-radius: 12px;
@@ -1181,6 +1369,13 @@ div.companion,
   text-transform: uppercase;
 }
 
+.list-head .per {
+  color: var(--muted);
+  font-weight: 400;
+  letter-spacing: 0;
+  text-transform: none;
+}
+
 .list-head .refresh {
   margin-left: auto;
   padding: 0 6px;
@@ -1222,26 +1417,34 @@ div.companion,
 }
 
 .badge.variant {
-  margin-left: 6px;
-  padding: 0 6px;
+  padding: 1px 8px;
+  border: 0;
+  background: var(--panel-2);
   font-size: 11px;
+  white-space: nowrap;
+}
+
+/* fits: a green dot; won't fit: a red one (K1-09, FR-M-3) */
+.row-fit .fits,
+.row-fit .no-fit {
+  font-size: 12px;
+  white-space: nowrap;
+}
+
+.row-fit .fits::before,
+.row-fit .no-fit::before {
+  content: "●";
+  margin-right: 5px;
+  font-size: 9px;
   vertical-align: 1px;
 }
 
-.badge.no-fit {
+.row-fit .fits::before {
+  color: #6fcf97;
+}
+
+.row-fit .no-fit {
   color: var(--danger);
-  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
-}
-
-.badge.fits {
-  opacity: 0.7;
-}
-
-.badge.no-fit,
-.badge.fits {
-  flex: none;
-  font-size: 11px;
-  white-space: nowrap;
 }
 
 .badge.stale {
@@ -1256,13 +1459,30 @@ div.companion,
   font-size: 13px;
 }
 
+/* One line per row, its columns lined up across the section: the list is the
+   grid and each row a subgrid (check, name, size or price, fits, badges). */
+.model-list ul {
+  display: grid;
+  grid-template-columns: 18px minmax(0, 1fr) auto auto auto;
+  column-gap: 10px;
+}
+
+.model-list li {
+  display: contents;
+}
+
+.model-list li.list-hint {
+  display: block;
+  grid-column: 1 / -1;
+}
+
 .model-row {
   display: grid;
-  grid-template-columns: 18px 1fr auto;
+  grid-column: 1 / -1;
+  grid-template-columns: subgrid;
   align-items: center;
-  gap: 8px;
   width: 100%;
-  padding: 7px 8px;
+  padding: 6px 8px;
   border: 0;
   border-radius: 8px;
   background: transparent;
@@ -1278,10 +1498,10 @@ div.companion,
   font-weight: 700;
 }
 
-.row-main {
+.row-badges {
   display: flex;
-  flex-direction: column;
-  min-width: 0;
+  justify-content: flex-end;
+  gap: 4px;
 }
 
 .row-label {
@@ -1301,9 +1521,12 @@ div.companion,
 }
 
 .row-meta {
+  max-width: 180px;
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+  text-align: right;
+  font-variant-numeric: tabular-nums;
 }
 
 .effort-section {
@@ -1313,9 +1536,9 @@ div.companion,
 
 .model-footer {
   display: flex;
-  justify-content: space-between;
+  justify-content: center;
   gap: 12px;
-  padding: 8px 14px;
+  padding: 10px 14px;
   border-top: 1px solid var(--line);
   color: var(--muted);
   font-size: 12px;
@@ -1324,14 +1547,29 @@ div.companion,
 
 /* ── companion chip (K1-06) ────────────────────────────── */
 
+.companion-chip {
+  gap: 10px;
+  padding: 4px 14px 4px 4px;
+  border-color: var(--line);
+  border-radius: 999px;
+  font-size: 16px;
+}
+
 .companion-chip .avatar-dot {
-  width: 20px;
-  height: 20px;
-  font-size: 11px;
+  width: 38px;
+  height: 38px;
+  font-size: 16px;
 }
 
 .companion-popover {
   width: min(300px, 86vw);
+}
+
+.top-bar .model-popover {
+  top: calc(100% + 8px);
+  bottom: auto;
+  left: 0;
+  right: auto;
 }
 
 .new-waifu {

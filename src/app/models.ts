@@ -41,26 +41,24 @@ export function formatUsd(value: number): string {
   return value < 10 ? `$${value.toFixed(2)}` : `$${Math.round(value)}`;
 }
 
-// Catalog tags worth a badge on an API row (FR-M-4 "variant badges"), in this
-// order; anything else stays searchable but unshown, so a row never gets a wall
-// of tags.
+// Tags worth a badge on a row (FR-M-4 "variant badges"; local rows carry Ollama's
+// own capabilities, D-068), always in this order so a badge keeps its column;
+// anything else stays searchable but unshown, so a row never gets a wall of tags.
 const BADGE_TAGS: Record<string, string> = {
-  reasoning: "reasoning",
-  thinking: "reasoning",
   vision: "vision",
+  reasoning: "thinking",
+  thinking: "thinking",
   tools: "tools",
   "tool-use": "tools",   // AI Router's spelling
   free: "free",
   zdr: "no retention",
 };
 
+const BADGE_ORDER = [...new Set(Object.values(BADGE_TAGS))];
+
 export function badgesFor(row: Pick<ModelRow, "tags">): string[] {
-  const out: string[] = [];
-  for (const tag of row.tags ?? []) {
-    const badge = BADGE_TAGS[tag.toLowerCase()];
-    if (badge && !out.includes(badge)) out.push(badge);
-  }
-  return out.slice(0, 3);
+  const have = new Set((row.tags ?? []).map((tag) => BADGE_TAGS[tag.toLowerCase()]));
+  return BADGE_ORDER.filter((badge) => have.has(badge)).slice(0, 3);
 }
 
 const EFFORT_LABELS: Record<string, string> = { off: "No thinking", low: "Low", medium: "Medium", high: "High", max: "Max" };
