@@ -2,12 +2,12 @@
 
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15 (night), session 4, after K1-13b
-- **Current phase:** **K1 code done except one item; the K1 gate needs the user.** Done: K1-00 to K1-15 and K1-13b, the session 4 cleanup (C-1, C-2: Yuri is only a character, D-062). Left: **K1-09b** (*Unload X* on the VRAM card), C-1b (the user deletes `KASANE/vrm/`), then the **K1 gate** (§6). The K0 manual gate (window, voice) is still open.
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `0222d2e`. This docs commit is pushed with it; if `git log origin/main..HEAD` shows anything, the push did not happen.
+- **Last updated:** 2026-11-15 (night), session 4 close, after K1-09b
+- **Current phase:** **K1 is code-complete; the K1 gate needs the user.** Done: K1-00 to K1-15 with K1-09b and K1-13b, the session 4 cleanup (C-1, C-2: Yuri is only a character, D-062). Left: C-1b (the user deletes `KASANE/vrm/`) and the **K1 gate** (§6). The K0 manual gate (window, voice) is still open.
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `a5fbe72`. This docs commit is pushed with it; if `git log origin/main..HEAD` shows anything, the push did not happen.
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's PC, 2026-11-15, after `0222d2e`):** `npm run check`: tsc, frontend tests 121, vite build, `cargo check`, pytest 992.
+- **Last green run (the user's PC, 2026-11-15, after `a5fbe72`):** `npm run check`: tsc, frontend tests 121, vite build, `cargo check`, pytest 997.
 
 ## 1. What exists
 
@@ -26,6 +26,7 @@
 | Model chip and popover: one line per row (name, size or price, fits, badges), vision / thinking / tools badges from Ollama's `capabilities`, effort slider, "Spent today" footer; a "waking up" card with Try again / Switch model (K1-07a, K1-10, K1-11) | Done; live verified |
 | Effort data in `config/models.yaml` / `models.example.yaml` (D-064); thinking gets `llm.reasoning_tokens` of room; an empty reply is an error | Done and tested; live verified on `qwen3.5:9b` |
 | VRAM manager v1 (K1-09, D-065): NVML from the driver, measured sizes in `data/vram_measured.json`, fits hints, a refusal before any unload that names what holds the memory | Done and tested; live verified (refusal card, fits / won't fit); the llama-server measurement on a real start not seen |
+| *Unload X* on that card (K1-09b, D-071): offered for a named Ollama model the kernel does not reload at once (the memory writer), not the classifier or the embedding model; one click unloads it and tries the load again | Done and tested (planner, loader, WebSocket path); **not seen in a window** (the user's `tauri dev` held the kernel port) |
 | Inline turn failures (K1-12, D-066): a card under the failed turn, plain words per kind (key refused, out of credit, rate limit, timeout, provider error), the provider's words under Details | Done and tested; live verified with Ollama unreachable; **no live API failure** (no key) |
 | Settings (K1-13, D-067): Models, Screen, Memory (correct, forget, restore), Doctor (one row per component with a fix hint), About | Done and tested; live verified in the browser pane |
 | Editable settings (K1-13b, D-070): `settings.json` in the app data folder wins over `config/config.yaml`, applied with no restart: the Ollama address (this PC only), a custom API endpoint, the budget caps, screen companions "On now" / "On at start" | Done and tested; live verified in the browser pane against a scratch kernel (refusals, saves, the API slot and spend line following, the file, a restart); "On at start" with a vision model and the key form's custom entry in the desktop window not seen |
@@ -33,7 +34,6 @@
 | AI Router and one API endpoint at a time; key in the Windows Credential Manager (D-058, D-059) | Done and tested with fakes; **no live API call** (no key on this PC) |
 | App icon | Done; not looked at in the taskbar or tray |
 | Premade packs `assets/premade/{luna,yuri}/` | Built by a peer session, **untracked**; the user decides about committing VRM/WAV (D-041) |
-| *Unload X* button on the VRAM card | Not started (K1-09b) |
 | TTS backend (Track T) | Not started; development uses the existing install (D-042) |
 
 ## 2. Environment
@@ -67,7 +67,7 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 
 | Claim | Status |
 |---|---|
-| Current tree on Windows: `npm run check` green (tsc, frontend 121, vite build, cargo check, pytest 992) | **Verified** (user's PC, after `0222d2e`) |
+| Current tree on Windows: `npm run check` green (tsc, frontend 121, vite build, cargo check, pytest 997) | **Verified** (user's PC, after `a5fbe72`) |
 | Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; memory and the Doctor never look at a waifu | **Verified** (tests) |
 | Every protocol client message type has a `Session.on_<type>` handler | **Verified** (test) |
 | Effort slider: per-model levels, remembered per model per thread, the chip glows while generating; High on `qwen3.5:9b` answers instead of thinking itself out of room | **Verified** (browser pane) |
@@ -77,6 +77,7 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 | K1-15 layout, popovers, tray, Temp Chat switch (saved by the kernel, shown in the sidebar), status line, replies right above the heart | **Verified** (browser pane) |
 | Settings → Models: a LAN Ollama address and a plain-http endpoint refused with the reason beside Save; a localhost address, a custom endpoint (the API heading switched to it) and caps (the spend line followed) saved to `settings.json` and back after a kernel restart; Settings → Screen "On at start" saved | **Verified** (browser pane, scratch data dir) |
 | A screen companion turned on at start through the vision check | **Verified** with fakes only (test); not run live, it would capture the screen |
+| *Unload X*: offered only for a model the card names and the kernel will not reload at once; a ref not offered is refused; an offered one is unloaded and the load runs again | **Verified** with fakes (tests); the card and a real unload not seen |
 | Anything inside the Tauri window (`npm run tauri dev`): the frameless window (drag, resize, the three buttons, close to tray), the tray menu, voice playback in WebView2, drag-drop, the native file dialog, the Key form | **Not verified** (Claude cannot see the window) |
 | Credential Manager and the kernel's stdin key pipe | **Verified** (`cargo test -- --ignored`, live vault) |
 | A live API model call; an API failure card from a real provider | **Not verified** (no key on this PC) |
@@ -93,6 +94,7 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 - **`KASANE/vrm/`** still holds duplicate VRMs (TODO C-1b; the user deletes it).
 - **Luna answered a request for a bullet list in prose** (live, session 4): the persona's "no markdown" rule wins. That is D-055's open question.
 - **The Doctor's GPU row counts an unmeasured llama-server as "other programs"** until it has been measured once.
+- **No *Unload* for the classifier** (D-071): when the 4B classifier is what blocks a load, the card offers only Try again / Switch model, because the kernel loads the classifier again right after the chat model. Freeing it for good is `models.local.classifier: null` (the open classifier question).
 - **The mic button is drawn but disabled** until voice input (K2).
 - **No API key on this PC**, so nothing on the API side has run against a real provider. First live check: `npm run tauri dev`, model chip → API → Key, save a key, pick an API model, send; then a wrong key for the failure card.
 - **Open questions waiting for the user:** the classifier, D-058 (unpriced models; a custom endpoint's models are unpriced too), D-055 ("no markdown"), D-057 (websocket token check), premade packs in git. See `HANDOFF.md` §6.
@@ -132,12 +134,13 @@ Tick and date when done.
 - [ ] A forced API error (for example a wrong key) shows the failure card with Retry / Switch model
 - [ ] Layout signed off against `docs/reference-images/chat-ui.webp`
 - [ ] Settings → Models: a custom endpoint saved, its key saved with Key in the model picker (it is listed there), one of its models answers with the budget off
+- [ ] A model marked *won't fit* picked: the card names what holds the memory; *Unload X* shows where offered (for example after switching away from the 9B) and loads the model when it frees enough
 
 | Gate | Date | Evidence | Signed by |
 |---|---|---|---|
 | K0 (automated) | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
 | K0 (manual, PC) | | | |
-| K1 (automated) | 2026-11-15 | `npm run check` green after `0222d2e`; browser-pane checks in §3 | Claude |
+| K1 (automated) | 2026-11-15 | `npm run check` green after `a5fbe72`; browser-pane checks in §3 | Claude |
 | K1 (manual, PC) | | | |
 
 ## 7. Update checklist (end of every session)

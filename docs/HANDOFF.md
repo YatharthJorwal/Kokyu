@@ -2,8 +2,8 @@
 
 **Read this at the start of every session. Rewrite it thoroughly at the end.** If the date below is old, trust `git log` over this file and ask the user. Status and numbers are in `STATE.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15, night (session 4, after K1-13b)
-- **Session:** 4 (15 November): lazy boot, icon, voice on demand, Yuri only a character and the kernel split (D-060 to D-063); then "push it and finish the rest": K1-04b, K1-07b/K1-11, K1-09, K1-12, K1-13, K1-15 (D-064 to D-069); then, with the user's answer "Settings file wins", K1-13b (D-070)
+- **Last updated:** 2026-11-15, night (session 4 close, after K1-09b)
+- **Session:** 4 (15 November): lazy boot, icon, voice on demand, Yuri only a character and the kernel split (D-060 to D-063); then "push it and finish the rest": K1-04b, K1-07b/K1-11, K1-09, K1-12, K1-13, K1-15 (D-064 to D-069); then, with the user's answer "Settings file wins", K1-13b (D-070); then "yeah finish up": K1-09b (D-071). K1 is code-complete.
 - **Written by:** Claude, with the user (Yatharth)
 
 ## 1. The project in ten lines
@@ -17,13 +17,17 @@
 7. Default chat model on this PC: **`qwen3.5:9b` on Ollama** (D-060). The 35B on llama.cpp starts only when picked (about 2 minutes).
 8. Spec v1.0 is the baseline (D-044); changes go through new decisions, and **every commit and decision cites its FR/D IDs** (the user checks this). SPEC rows changed by a decision carry its ID inline (D-068 amended FR-C-4, FR-C-6, FR-S-1, FR-M-1).
 9. Claude works **directly on the user's Windows PC** (`D:\AI\Kokyu.ai`, Claude desktop app), often while the user is away, and commits item by item after a green `npm run check`. Claude cannot see the Tauri window or hear audio: those stay "not verified" until the user looks.
-10. Plan: `TODO.md`. K1 is code-complete except K1-09b; the K1 gate is the user's (`STATE.md` §6).
+10. Plan: `TODO.md`. K1 is code-complete; the K1 gate is the user's (`STATE.md` §6). Next phase after the gate: K1b (installer walking skeleton).
 
 ## 2. How the user works
 
 Solo developer, casual, wants direct commands and no manual file shuffling, phases with gates, honesty about verified vs not. They want a **clean, fast, flexible** codebase and an uncluttered tree. They watch the browser pane and send short UI notes mid-task ("left side looks kinda blank below input, suggestions?", "move the bot's message box closer to heart"); do them, then say what was done and what else could be done. They run other Claude sessions in parallel; relayed answers arrive from them. They sometimes toggle a "ponytail" mode (smallest complete change); it was off this session.
 
 ## 3. What happened
+
+### Session 4, part 4 (15 November 2026, night): K1-09b, "yeah finish up"
+
+**`a5fbe72` (D-071):** the graphics-memory refusal card offers *Unload X* for a named Ollama model the kernel will not load again at once: in practice the previous chat model kept as the memory writer. Not the classifier or the embedding model: `warm_helpers` reloads them right after the chat model, so unloading them would only bring back the swap. One click unloads it (`keep_alive: 0`) and tries the load again; the kernel accepts only a model the failed status offers. Tested with fakes (pytest 997); **not seen in a window**: the user had `npm run tauri dev` running (its kernel on 8780, Vite on 1420), so Claude started no scratch kernel and sent nothing to Ollama.
 
 ### Session 4, part 3 (15 November 2026, night): K1-13b
 
@@ -51,9 +55,7 @@ K0 (seed from Yuri, packs, invariance) and K1-00 to K1-08b. See `git log`.
 
 ## 4. Where we stopped
 
-All code is committed through `0222d2e` (K1-13b), plus this docs commit; both are pushed. `npm run check` green after `0222d2e` (pytest 992, frontend 121). K1 is code-complete except:
-- **K1-09b** (*Unload X* on the VRAM refusal card, SPEC §5): small, not started;
-- **C-1b** (the user deletes `KASANE/vrm/`).
+All code is committed through `a5fbe72` (K1-09b), plus this docs commit; both are pushed. `npm run check` green after `a5fbe72` (pytest 997, frontend 121). **K1 is code-complete.** Left in K1: **C-1b** (the user deletes `KASANE/vrm/`) and the **K1 gate** (the user, `STATE.md` §6).
 
 Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `.claude/`; `package-lock.json` has an unrelated change.
 
@@ -62,7 +64,7 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 1. `git status`, `git log -5 --oneline`, `git log origin/main..HEAD` (should be empty). Then `npm run check`.
 2. Ask the user to run `npm run tauri dev` and walk the **K1 gate** in `STATE.md` §6 (frameless window drag / resize / buttons, close to tray; a local and an API model; model, effort and companion changed mid-thread; a wrong key for the failure card; the layout vs the reference). Also the open K0 items (voice per companion).
 3. Ask the §6 questions.
-4. K1-09b. Then, once the user signs the K1 gate, phase K1b (installer walking skeleton).
+4. Once the user signs the K1 gate, phase K1b (installer walking skeleton). Read its TODO section and PRODUCT.md first; plan before code (R-46).
 
 ## 6. Open questions for the user
 
@@ -77,6 +79,7 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 ## 7. Traps and gotchas
 
 - **Two config files (D-070):** `settings.json` (app data folder; `data/` in a checkout, the scratch dir under `KOKYU_DATA_DIR`) wins over `config/config.yaml`. Code must read `CONFIG` at call time (as all modules do): `config.install` swaps the object live, so a value copied from `CONFIG` at import or in a constructor goes stale (llama.cpp's Ollama address was one; fixed). Tests that install a config must put the old one back (`running_config` fixture in `test_settings_file.py`).
+- **The user may be running the app** (`npm run tauri dev`: a `python.exe app.py` from `src-tauri` on 8780 and Vite on 1420). Check `netstat -ano | grep -E ":(8780|1420) .*LISTEN"` before starting a scratch kernel; never stop theirs, and stop any preview that would connect to it (it reads their real data).
 - **Live tests of a custom endpoint:** use a `.invalid` host (`https://lab.example.invalid/v1`), so nothing can leave the machine.
 - **Where things live (D-062):** a message handler is `Session.on_<type>` in `session.py`; the turn is `turns.run_turn`; who drives is `hub.driver`. Adding a message type = `protocol/` model + `CLIENT_TYPES` entry + `src/net/protocol.ts` + one `on_<type>` (a test checks the handler exists).
 - **Tests patch the module that owns the name** (`turns.send_speak`, `companions.system_message`, `boot.check_chat_model`, `hub.driver`, `doctor._get_json` for every Doctor HTTP call including `/api/ps`, `vram.gpu_memory`). `conftest.py` stubs `vram.gpu_memory` and gives each test a fresh measured cache. To change `CONFIG` for a test use `kernel_fixtures.set_config(monkeypatch, cfg)`.
@@ -96,7 +99,7 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 ## 8. Deliberately not done
 
 - Real-window, tray, audio, API and visual verification in Tauri (needs the user or a key).
-- *Unload X* (K1-09b). Editing the default model and the llama.cpp presets in the app (they stay in config.yaml, D-070); voice settings (K2).
+- *Unload* for the classifier or the embedding model (D-071); the TTS backend as a named resident. Editing the default model and the llama.cpp presets in the app (they stay in config.yaml, D-070); voice settings (K2).
 - TTS backend and renderer as named VRAM residents (they show as "other programs"); several NVIDIA GPUs read as unknown.
 - Paging in the memory viewer (newest 500 live facts).
 - First-token latency not re-measured after the kernel split.
