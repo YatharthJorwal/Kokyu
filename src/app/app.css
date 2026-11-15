@@ -13,6 +13,7 @@
   --danger: #e5707a;
   --radius: 14px;
   --sidebar: 260px;
+  --column: 800px;
   color-scheme: dark;
   font-family: system-ui, "Segoe UI", sans-serif;
   font-size: 15px;
@@ -493,7 +494,7 @@ button:disabled {
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 24px max(24px, calc((100% - 760px) / 2));
+  padding: 24px max(24px, calc((100% - var(--column)) / 2)) 10px;
   display: flex;
   flex-direction: column;
 }
@@ -517,7 +518,20 @@ button:disabled {
 .msg {
   display: flex;
   flex-direction: column;
-  margin: 0 0 16px;
+  margin: 0 0 22px;
+}
+
+/* the newest item sits right above the heart (the end marker is the last child) */
+.thread > :nth-last-child(2) {
+  margin-bottom: 0;
+}
+
+.msg-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-height: 22px;
+  margin-bottom: 2px;
 }
 
 .msg.user {
@@ -635,7 +649,6 @@ button:disabled {
 .msg-actions {
   display: flex;
   gap: 4px;
-  margin-top: 4px;
   opacity: 0;
 }
 
@@ -646,7 +659,8 @@ button:disabled {
 }
 
 .msg-action {
-  padding: 2px 8px;
+  padding: 0 8px;
+  line-height: 20px;
   border: 1px solid var(--line);
   border-radius: 6px;
   background: transparent;
@@ -663,7 +677,6 @@ button:disabled {
 }
 
 .speaker {
-  margin-bottom: 4px;
   color: var(--accent);
   font-size: 13px;
   font-weight: 600;
@@ -700,7 +713,7 @@ button:disabled {
   justify-content: space-between;
   gap: 12px;
   margin: 0 auto 10px;
-  width: min(760px, calc(100% - 48px));
+  width: min(var(--column), calc(100% - 48px));
   padding: 10px 14px;
   border: 1px solid var(--danger);
   border-radius: 10px;
@@ -775,7 +788,7 @@ button:disabled {
 
 .composer-area {
   margin: 0 auto 14px;
-  width: min(820px, calc(100% - 48px));
+  width: min(var(--column), calc(100% - 48px));
 }
 
 .composer {
@@ -864,8 +877,27 @@ button:disabled {
 /* the model chip under the box, at its right (FR-M-1, D-068) */
 .composer-under {
   display: flex;
-  justify-content: flex-end;
+  align-items: center;
+  gap: 12px;
   margin-top: 8px;
+}
+
+.composer-status {
+  display: flex;
+  flex: 1;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  min-width: 0;
+  padding-left: 14px;
+}
+
+.status-hint {
+  color: var(--muted);
+  font-size: 13px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
 }
 
 .composer.dragging {
@@ -1153,10 +1185,9 @@ button:disabled {
   display: flex;
   align-items: center;
   gap: 10px;
-  width: min(760px, calc(100% - 48px));
+  width: min(var(--column), calc(100% - 48px));
   min-height: 20px;
-  margin: 0 auto 8px;
-  padding: 0 10px;
+  margin: 10px auto 10px;
 }
 
 .thinking-line {

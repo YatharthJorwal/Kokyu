@@ -558,3 +558,12 @@ Accepted · User asked for the UI matched to `docs/reference-images/chat-ui.webp
 - **Palette:** plum-black panels and a brighter pink (`--accent #f27aa6`); list bullets in replies are pink.
 **Not taken from the reference:** *VR space* and *Enable 2D pet* (3D mode and pets are later phases; a dead button there would mislead), the sakura logo (the app icon is used), the `zdr` label (it stays *no retention*).
 **Consequences:** `tests-fe/tauri-window.test.mjs` checks the frameless window's shadow, its four permissions and that the top bar wires the buttons. The window's look and dragging in the real WebView2 window are not verified until `npm run tauri dev` is run.
+
+## D-069 Replies end at their text; a status line fills the left under the input box
+Accepted · The user's review of K1-15: "left side looks kinda blank below input, suggestions?" and "move the bot's message box closer to heart (just some proper spacing like a chatui)" · Refines D-068 (K1-15; FR-C-5, FR-C-9, FR-SC-2, FR-MEM-5) · 2026-11-15
+**Context:** Under every reply sat an invisible row for Copy and Regenerate (shown on hover), so the newest reply ended about 66 px above the heart. Under the input box only the model chip sat at the right.
+**Decision:**
+- **Copy and Regenerate share the name line** of a reply (still shown on hover or keyboard focus), so a reply ends at its text. Turns are 22 px apart; the newest item has no bottom margin and the thread ends 10 px above the heart.
+- **One column width** (`--column`, 800 px) for the thread, the heart row, notices and the input box; the heart lines up with the reply text.
+- **A status line under the input box, at the left:** the voice and screen companion chips (FR-SC-2) move there from inside the box, so the box stays one row; with none on, it says "Temp Chat: this chat is not remembered" (FR-MEM-5) or, normally, "Enter to send · Shift+Enter for a new line".
+**Consequences:** No layout change on hover. The chips' one-click stop is unchanged, only placed under the box.

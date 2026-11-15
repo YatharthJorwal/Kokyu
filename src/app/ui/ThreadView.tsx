@@ -23,23 +23,26 @@ function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
   const classes = ["msg", m.role, m.pending ? "pending" : "", m.failed ? "failed" : ""].filter(Boolean).join(" ");
   return (
     <div className={classes}>
-      {m.role === "assistant" && m.speaker ? <div className="speaker">{m.speaker}</div> : null}
+      {m.role === "assistant" ? (
+        // The actions share the name's line (shown on hover), so the reply ends at its text.
+        <div className="msg-head">
+          {m.speaker ? <span className="speaker">{m.speaker}</span> : null}
+          <span className="msg-actions">
+            <CopyButton text={m.text} label="Copy reply" />
+            {regenerable ? (
+              <button type="button" className="msg-action" onClick={() => actions.regenerate()} title="Ask for another reply">
+                Regenerate
+              </button>
+            ) : null}
+          </span>
+        </div>
+      ) : null}
       <div className="bubble">{m.role === "assistant" ? <Markdown text={m.text} /> : m.text}</div>
       {m.stopped ? <div className="meta">Stopped</div> : null}
       {m.failed ? <div className="meta">Not answered</div> : null}
       {m.sentTo ? (
         <div className="meta" title="This attachment left your PC for the chosen API model">
           Sent to {shortRef(m.sentTo)}
-        </div>
-      ) : null}
-      {m.role === "assistant" ? (
-        <div className="msg-actions">
-          <CopyButton text={m.text} label="Copy reply" />
-          {regenerable ? (
-            <button type="button" className="msg-action" onClick={() => actions.regenerate()} title="Ask for another reply">
-              Regenerate
-            </button>
-          ) : null}
         </div>
       ) : null}
     </div>
@@ -129,7 +132,7 @@ export function ThreadView() {
       {turn !== "idle" && streaming ? (
         // While she thinks, the line above the input box says so (ThinkingRow).
         <div className="msg assistant streaming">
-          {companion ? <div className="speaker">{companion}</div> : null}
+          <div className="msg-head">{companion ? <span className="speaker">{companion}</span> : null}</div>
           <div className="bubble">
             <Markdown text={streaming} />
           </div>

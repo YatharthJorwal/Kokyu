@@ -3,8 +3,9 @@
 // (K1-05b, FR-SC-1..4), the message (multi-line, Enter sends, Shift+Enter is a
 // newline, a pasted image or a dropped file is attached, FR-C-3), the mic (voice
 // input arrives in K2) and a round Send, or Stop while a reply runs (FR-C-2).
-// Status chips (FR-SC-2) sit above the message; the model chip (K1-10, FR-M-1)
-// sits under the box. The companion chip moved to the top bar.
+// Under the box: a status line at the left (voice and screen companion chips,
+// FR-SC-2; Temp Chat; else a keyboard hint) and the model chip (K1-10, FR-M-1)
+// at the right. The companion chip moved to the top bar.
 
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 
@@ -100,8 +101,6 @@ export function Composer() {
         onDragLeave={() => setDragging(false)}
         onDrop={onDrop}
       >
-        <VoiceChip />
-        <ScreenChips />
         {attachment ? (
           <div className="attachment">
             <span>
@@ -166,6 +165,11 @@ export function Composer() {
         </div>
       </div>
       <div className="composer-under">
+        <div className="composer-status">
+          <VoiceChip />
+          <ScreenChips />
+          <StatusHint />
+        </div>
         <ModelChip />
       </div>
     </div>
@@ -178,6 +182,19 @@ const LATER = [
   { label: "Screenshot", hint: "Arrives with voice and the stage (K2)" },
   { label: "Paste image", hint: "Coming in K2. Ctrl+V in the message box works now" },
 ];
+
+/** The status line's quiet state: Temp Chat, else how to send. Silent while a chip speaks. */
+function StatusHint() {
+  const busy = useChat((s) => (s.voice?.on ?? false) || (s.screen?.task_guide.on ?? false) || (s.screen?.ocr_watch.on ?? false));
+  const temp = useChat((s) => s.thread?.temp ?? false);
+  const observer = useChat((s) => s.role === "observer");
+  if (busy || observer) return null;
+  return (
+    <span className="status-hint">
+      {temp ? "Temp Chat: this chat is not remembered" : "Enter to send · Shift+Enter for a new line"}
+    </span>
+  );
+}
 
 /** D-061: voice waking up, on, or failed with Try again; × turns it off. */
 function VoiceChip() {
