@@ -106,6 +106,10 @@ MAX_TOOL_ROUNDS = 3
 
 
 TOOL_STUCK_LINE = "The model kept calling tools and never answered. Try again."
+EMPTY_REPLY_LINE = (
+    "The model finished without saying anything. If it thinks first, it may have "
+    "spent the whole reply thinking: lower the effort or raise llm.reasoning_tokens."
+)
 
 
 async def send_audio(websocket: WebSocket, display: str, audio_bytes: bytes) -> None:
@@ -441,6 +445,13 @@ async def run_turn(
                     timings.mark("first_clause")
                     await stream.push(styled)
                 await stream.close()
+                if not reply_parts:
+                    # The model ended without a word (often a thinking model out of
+                    # room): say so, never a silent turn (FR-R-5, D-064).
+                    with contextlib.suppress(Exception):
+                        failure = {"code": "model_failed", "reason": "EMPTY_REPLY", "message": EMPTY_REPLY_LINE,
+                                   "model_ref": model_ref, "actions": ["retry", "switch_model"], "reply_to": None}
+                        await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
                 break
         else:
             # Used up every round still calling tools, never landed on an

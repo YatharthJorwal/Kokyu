@@ -175,6 +175,25 @@ export function currentEffort(state: ChatState): string | null {
   return state.thread?.effort ?? state.defaults?.effort ?? null;
 }
 
+const NO_EFFORTS: readonly string[] = [];
+
+/** The open thread's model's effort levels (FR-M-8, FR-M-10); empty: no slider. The
+ * same array each time for the same list, so a store selector can return it. */
+export function currentEfforts(state: ChatState): readonly string[] {
+  const ref = currentModelRef(state);
+  const row = [...(state.models?.local ?? []), ...(state.models?.api ?? [])].find((r) => r.ref === ref);
+  return row?.efforts ?? NO_EFFORTS;
+}
+
+/** The level the chip names: none for one the model does not offer, since the turn
+ * runs on its default (FR-M-8). Before the model list arrives (it loads with the
+ * picker), only a level the thread picked itself. */
+export function shownEffort(state: ChatState): string | null {
+  if (!state.models) return state.thread?.effort ?? null;
+  const effort = currentEffort(state);
+  return effort && currentEfforts(state).includes(effort) ? effort : null;
+}
+
 /** The chip's name for a model: the picker's label, else the load status's, else the id. */
 export function modelLabel(state: ChatState, ref: string | null): string {
   if (!ref) return "Default model";

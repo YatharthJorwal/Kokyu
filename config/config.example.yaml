@@ -179,6 +179,7 @@ audit:
 llm:
   temperature: 0.8
   max_tokens: 512
+  reasoning_tokens: 4096      # added to max_tokens while a model thinks: thinking counts against the cap (D-064)
   think: false                # hybrid-thinking models: keep reasoning off
   # One value for every call: Ollama reloads the model when two requests
   # disagree on it. Raise to 16384 only if nvidia-smi shows headroom.

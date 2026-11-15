@@ -4,8 +4,10 @@ import assert from "node:assert/strict";
 import {
   canPickModel,
   currentEffort,
+  currentEfforts,
   currentModelRef,
   initialState,
+  shownEffort,
   modelLabel,
   modelLoadingHere,
   reduce,
@@ -143,6 +145,38 @@ test("the chip shows the thread's model, else the kernel's default, by its label
   s = reduce(s, { kind: "status", status: "offline" });
   assert.equal(s.defaults, null);
   assert.equal(s.models, null);
+});
+
+test("the effort slider offers the current model's levels, and none for a model without them", () => {
+  // K1-11, FR-M-8: the kernel's model list carries each row's levels (FR-M-10, D-064)
+  const list = {
+    ...LIST,
+    local: [row("local:ollama/qwen3.5:9b", "qwen3.5:9b", { efforts: ["off", "high"] }), row("local:llamacpp/big", "Big")],
+  };
+  let s = reduce(initialState, online);
+  assert.deepEqual(currentEfforts(s), []); // no list yet
+  s = reduce(s, frame("hello", { protocol: 1, kernel: "KASANE", default_model_ref: "local:ollama/qwen3.5:9b", default_effort: null }));
+  s = reduce(s, frame("thread_opened", { thread: thread(null), messages: [] }, "t1"));
+  s = reduce(s, frame("model_list", list));
+  assert.deepEqual(currentEfforts(s), ["off", "high"]);
+  assert.equal(currentEfforts(s), currentEfforts(s)); // same array: a store selector may return it
+  s = reduce(s, frame("thread_updated", { thread: thread("local:llamacpp/big") }, "t1"));
+  assert.deepEqual(currentEfforts(s), []); // a row without levels: no slider
+  assert.equal(currentEfforts(s), currentEfforts(reduce(s, online))); // the empty list is shared too
+});
+
+test("the chip names an effort the model offers; before the list, only the thread's own pick", () => {
+  const list = { ...LIST, local: [row("local:ollama/qwen3.5:9b", "qwen3.5:9b", { efforts: ["off", "high"] })] };
+  let s = reduce(initialState, online);
+  s = reduce(s, frame("hello", { protocol: 1, kernel: "KASANE", default_model_ref: "local:ollama/qwen3.5:9b", default_effort: "low" }));
+  s = reduce(s, frame("thread_opened", { thread: thread(null), messages: [] }, "t1"));
+  assert.equal(shownEffort(s), null); // the config default may not fit this model: unknown yet
+  s = reduce(s, frame("thread_updated", { thread: { ...thread(null), effort: "high" } }, "t1"));
+  assert.equal(shownEffort(s), "high"); // found live: a reconnect lost "High" until the picker opened
+  s = reduce(s, frame("model_list", list));
+  assert.equal(shownEffort(s), "high");
+  s = reduce(s, frame("thread_updated", { thread: thread(null) }, "t1"));
+  assert.equal(shownEffort(s), null); // "low" is not one of this model's levels
 });
 
 test("the picker opens only when a model can be picked and closes on send or disconnect", () => {

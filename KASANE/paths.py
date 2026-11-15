@@ -68,6 +68,16 @@ def config_example_path() -> Path:
     return resource_dir() / "config" / "config.example.yaml"
 
 
+def models_path() -> Path:
+    """The user's per-model capability overrides (FR-M-10, D-064); optional."""
+    return config_dir() / "models.yaml"
+
+
+def models_example_path() -> Path:
+    """The shipped per-model capabilities (FR-M-10, D-064)."""
+    return resource_dir() / "config" / "models.example.yaml"
+
+
 def secrets_path() -> Path:
     return config_dir() / "secrets.local.yaml"
 

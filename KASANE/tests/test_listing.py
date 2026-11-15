@@ -35,6 +35,8 @@ async def test_ollama_lists_chat_models_largest_first_without_embedding_models()
     assert nine["label"] == "qwen3.5:9b" and nine["kind"] == "local" and nine["size_bytes"] == 6_600_000_000
     assert nine["detail"] == "Ollama · 9.7B" and nine["available"] and nine["fits"] is None
     assert rows[1]["detail"] == "Ollama · 4.7B · Q4_K_M"
+    # the slider's detents come from config/models.example.yaml (FR-M-10)
+    assert nine["efforts"] == ["off", "high"] and rows[2]["efforts"] == []
 
 
 @pytest.mark.asyncio

@@ -59,11 +59,11 @@ def test_bad_or_unsupported_references_are_rejected(bad):
 
 
 def test_effort_maps_to_each_backend():
-    assert model_ref.check_effort(None) is None and model_ref.check_effort("high") == "high"
+    assert model_ref.check_effort(None) is None and model_ref.check_effort("max") == "max"
     with pytest.raises(model_ref.ModelRefError):
-        model_ref.check_effort("max")
-    assert [model_ref.ollama_think(e) for e in (None, "off", "low", "high")] == [None, False, True, True]
-    assert [model_ref.openai_reasoning_effort(e) for e in (None, "off", "medium")] == [None, None, "medium"]
+        model_ref.check_effort("extreme")
+    # API: the provider's reasoning_effort for low, medium and high only (FR-M-10)
+    assert [model_ref.openai_reasoning_effort(e) for e in (None, "off", "medium", "max")] == [None, None, "medium", None]
 
 
 # -- decide_chat: one test per rule --------------------------------------------
@@ -183,8 +183,12 @@ async def test_ollama_gets_the_routed_model_always_and_effort_only_when_set(monk
     base = dict(role="chat", messages=({"role": "user", "content": "hi"},), tools=tools)
     [c async for c in provider.complete(ModelRequest(**base), model="qwen3.5:9b")]
     [c async for c in provider.complete(ModelRequest(**base, model_ref=LOCAL, effort="off"), model="qwen3.5:4b")]
+    [c async for c in provider.complete(ModelRequest(**base, model_ref=LOCAL, effort="high"), model="qwen3.5:4b")]
     # the router's model is always passed (D-052): helper roles no longer fall back to llm.model
-    assert seen == [{"model": "qwen3.5:9b"}, {"model": "qwen3.5:4b", "think": False}]
+    assert seen[:2] == [{"model": "qwen3.5:9b"}, {"model": "qwen3.5:4b", "think": False}]
+    # thinking counts against num_predict: it gets room on top of the reply cap (D-064)
+    room = llm.CONFIG.llm.max_tokens + llm.CONFIG.llm.reasoning_tokens
+    assert seen[2] == {"model": "qwen3.5:4b", "think": True, "num_predict": room}
 
 
 @pytest.mark.asyncio
@@ -241,6 +245,9 @@ async def test_llm_payload_uses_the_override_model_and_think(monkeypatch):
     monkeypatch.setattr(llm.httpx, "AsyncClient", FakeClient)
     out = [x async for x in llm._stream_ollama_native([{"role": "user", "content": "x"}], model="other:1b", think=True)]
     assert out == ["hi"] and captured["model"] == "other:1b" and captured["think"] is True
+    assert captured["options"]["num_predict"] == llm.CONFIG.llm.max_tokens
+    [x async for x in llm._stream_ollama_native([{"role": "user", "content": "x"}], num_predict=4608)]
+    assert captured["options"]["num_predict"] == 4608 and captured["options"]["num_ctx"] == llm.CONFIG.llm.num_ctx
 
 
 # -- over the WebSocket ---------------------------------------------------------
@@ -323,6 +330,33 @@ def test_model_and_effort_are_saved_on_the_thread_and_used_by_the_next_turn(kern
         assert (thread["model_ref"], thread["effort"]) == (LOCAL, "low")
         stored = [m for m in opened["data"]["messages"] if m["role"] == "assistant"]
         assert stored[0]["model_ref"] == LOCAL and stored[0]["effort"] == "low"
+
+
+def test_effort_is_remembered_per_model_in_the_thread(kernel):
+    # FR-M-11: back on a model, its effort comes back; a model used for the first time starts at its default
+    client, _ = kernel
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _temp_on(ws)
+
+        def pick(ref):
+            ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": ref}})
+            thread = _until(ws, "thread_updated")[0]["data"]["thread"]
+            return thread["model_ref"], thread["effort"]
+
+        def effort(level):
+            ws.send_json({"v": 1, "type": "set_effort", "data": {"effort": level}})
+            _until(ws, "thread_updated")
+
+        assert pick(LOCAL) == (LOCAL, None)
+        effort("off")
+        assert pick(API) == (API, None)
+        effort("high")
+        assert pick(LOCAL) == (LOCAL, "off")
+        assert pick(API) == (API, "high")
+    store = conversation.get_manager().store   # stored with the thread, so it survives a restart
+    [thread] = [t for t in store.list_threads() if t.model_ref == API]
+    assert thread.efforts == {LOCAL: "off", API: "high"} and thread.effort == "high"
 
 
 def test_a_blocked_api_model_shows_retry_and_switch_and_nothing_answers_instead(kernel):
@@ -455,6 +489,43 @@ async def test_screen_remarks_stay_out_of_an_api_models_context(tmp_path, monkey
         turns.record_unprompted(history, "Whoa, $4,210 in checking?", True, [], unprompted)
         await turns.run_turn(Socket(), history, "hm?", True, [], model_ref=ref, unprompted=unprompted)
     assert "$4,210" in seen[0] and "$4,210" not in seen[1]
+
+
+@pytest.mark.asyncio
+async def test_a_reply_with_no_words_is_an_error_not_silence(tmp_path, monkeypatch):
+    # Found live (D-064): qwen3.5:9b on High spent the whole reply cap thinking, and
+    # the turn ended with nothing on screen and nothing said.
+    premade = tmp_path / "premade"
+    make_pack(premade, "alpha", name="Alpha")
+    waifu = WaifuRegistry(premade, tmp_path / "user").get("alpha")
+    sent = []
+
+    async def thought_only(role, messages, tools, **kwargs):
+        yield {"type": "usage", "tokens_in": 2710, "tokens_out": 512}
+
+    async def nothing(*_a, **_k):
+        return None
+
+    async def silent(text, voice=None):
+        return b""
+
+    class Socket:
+        state = SimpleNamespace(waifu=waifu)
+
+        async def send_json(self, payload):
+            sent.append(payload)
+
+    monkeypatch.setattr(router, "stream_with_tools", thought_only)
+    monkeypatch.setattr(tts, "synthesize", silent)
+    monkeypatch.setattr(look_intent, "maybe_look", nothing)
+    monkeypatch.setattr(turns, "log_transcript_turn", nothing)
+    history = [{"role": "system", "content": "sys"}]
+    await turns.run_turn(Socket(), history, "17 times 23?", True, [], model_ref=LOCAL, effort="high")
+    errors = [f["data"] for f in sent if f["type"] == "error"]
+    assert [(e["code"], e["reason"]) for e in errors] == [("model_failed", "EMPTY_REPLY")]
+    assert errors[0]["actions"] == ["retry", "switch_model"] and errors[0]["model_ref"] == LOCAL
+    assert sent[-1]["type"] == "turn_done" and sent[-1]["data"]["text"] == ""
+    assert history == [{"role": "system", "content": "sys"}]   # no one-sided exchange left behind
 
 
 def test_model_failure_frames_cover_blocked_and_provider_errors_only():

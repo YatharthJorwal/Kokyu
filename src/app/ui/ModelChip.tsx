@@ -3,15 +3,28 @@
 // popover with a search box and Local and API sections as one list; the current
 // model has a check mark and picking a row is the whole action. While the kernel
 // loads the model the chip shows a spinner; a failed load shows a warning.
-// The effort slider joins the popover in K1-11, the fits hint with K1-09.
+// The effort slider sits under the list, with the levels the model offers
+// (FR-M-8..11); while a reply is generating, its glow runs on the chip.
+// The fits hint comes with K1-09.
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
-import { Fragment, useEffect, useMemo, useRef, useState, type FormEvent, type KeyboardEvent } from "react";
+import {
+  Fragment,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+  type FormEvent,
+  type KeyboardEvent,
+} from "react";
 
-import type { ModelListData, ModelRow, Spend } from "../../net/protocol";
-import { canPickModel, currentEffort, currentModelRef, modelLabel } from "../chat-state";
+import type { Effort, ModelListData, ModelRow, Spend } from "../../net/protocol";
+import { canPickModel, currentEffort, currentEfforts, currentModelRef, modelLabel, shownEffort as chipEffort } from "../chat-state";
+import { glowFor } from "../effort-slider";
 import { badgesFor, effortLabel, filterRows, formatSize, formatUsd, isLocalRef } from "../models";
 import { actions, useChat } from "../store";
+import { EffortSlider } from "./EffortSlider";
 
 function KindIcon({ local }: { local: boolean }) {
   return local ? (
@@ -37,7 +50,7 @@ function KindIcon({ local }: { local: boolean }) {
 export function ModelChip() {
   const ref = useChat(currentModelRef);
   const label = useChat((s) => modelLabel(s, currentModelRef(s)));
-  const effort = useChat(currentEffort);
+  const shownEffort = useChat(chipEffort);
   const status = useChat((s) => s.modelStatus);
   const open = useChat((s) => s.pickerOpen);
   const enabled = useChat(canPickModel);
@@ -64,7 +77,20 @@ export function ModelChip() {
     return () => document.removeEventListener("mousedown", onDown);
   }, [open]);
 
-  const classes = ["model-chip", loading ? "loading" : "", failed ? "failed" : "", open ? "open" : ""]
+  // FR-M-9: while a reply is generating, the effort's glow runs on the chip.
+  const glow = glowFor(shownEffort);
+  const generating = turn !== "idle" && glow.intensity > 0;
+  const glowStyle = generating
+    ? ({ "--effort-glow": glow.intensity, "--effort-period": `${glow.periodS}s` } as CSSProperties)
+    : undefined;
+
+  const classes = [
+    "model-chip",
+    loading ? "loading" : "",
+    failed ? "failed" : "",
+    open ? "open" : "",
+    generating ? "generating" : "",
+  ]
     .filter(Boolean)
     .join(" ");
 
@@ -73,6 +99,7 @@ export function ModelChip() {
       <button
         type="button"
         className={classes}
+        style={glowStyle}
         title={title}
         aria-haspopup="listbox"
         aria-expanded={open}
@@ -81,7 +108,7 @@ export function ModelChip() {
       >
         <KindIcon local={isLocalRef(ref)} />
         <span className="model-name">{label}</span>
-        {effort ? <span className="effort-label">{effortLabel(effort)}</span> : null}
+        {shownEffort ? <span className="effort-label">{effortLabel(shownEffort)}</span> : null}
         {loading ? <span className="spinner" aria-hidden="true" /> : null}
         {failed ? (
           <span className="warn" aria-label="Failed to load">
@@ -257,6 +284,8 @@ function ApiKeyForm({ models }: { models: ModelListData }) {
 
 function ModelPopover({ current }: { current: string | null }) {
   const models = useChat((s) => s.models);
+  const efforts = useChat(currentEfforts);
+  const effort = useChat(currentEffort);
   const [keyOpen, setKeyOpen] = useState(false);
   const [query, setQuery] = useState("");
   const [active, setActive] = useState(0);
@@ -403,6 +432,12 @@ function ModelPopover({ current }: { current: string | null }) {
           </section>
         ) : null}
       </div>
+      {efforts.length > 0 ? (
+        <section className="effort-section" aria-label="Effort">
+          <h3 className="list-head">Effort</h3>
+          <EffortSlider supported={efforts} value={effort} onChange={(next) => actions.setEffort(next as Effort)} />
+        </section>
+      ) : null}
       {keyOpen && models !== null ? <ApiKeyForm models={models} /> : null}
       {spend ? <SpendFooter spend={spend} /> : null}
     </div>

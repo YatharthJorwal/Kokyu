@@ -297,6 +297,7 @@ class LLMConfig:
     api_key: str = "ollama"
     temperature: float = 0.8
     max_tokens: int = 512
+    reasoning_tokens: int = 4096   # extra num_predict while a local model thinks (D-064)
     api_style: str = "ollama_native"
     think: bool | None = False
     num_ctx: int | None = 8192
@@ -755,6 +756,7 @@ def _derive_llm(
         "api_key": llm_raw.get("api_key") or "ollama",
         "temperature": llm_raw.get("temperature", defaults.temperature),
         "max_tokens": llm_raw.get("max_tokens", defaults.max_tokens),
+        "reasoning_tokens": llm_raw.get("reasoning_tokens", defaults.reasoning_tokens),
         "think": llm_raw.get("think", defaults.think),
         "num_ctx": llm_raw.get("num_ctx", defaults.num_ctx),
         "vision_model": llm_raw.get("vision_model", models.local.get("vision")),

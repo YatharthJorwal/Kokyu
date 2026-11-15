@@ -107,7 +107,7 @@ class SetModel(_Data):
 
 
 class SetEffort(_Data):
-    effort: Literal["off", "low", "medium", "high"] | None = None
+    effort: Literal["off", "low", "medium", "high", "max"] | None = None   # FR-M-8
 
 
 class ModelListRequest(_Data):

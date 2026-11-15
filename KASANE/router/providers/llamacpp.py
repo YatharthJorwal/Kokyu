@@ -27,7 +27,7 @@ import httpx
 import llm
 import paths
 from config import CONFIG, LlamaCppConfig, LlamaCppPreset, ProviderConfig
-from router import model_ref as model_refs
+from router import capabilities
 from router.errors import ProviderError
 from router.providers import airouter
 from router.providers.airouter import AirouterProvider
@@ -303,10 +303,10 @@ class LlamaCppProvider(AirouterProvider):
         payload["messages"] = openai_messages(list(request.messages))
         payload.pop("reasoning_effort", None)
         payload.pop("stream_options", None)
-        think = model_refs.ollama_think(request.effort)
+        think = capabilities.think_for(f"local:llamacpp/{model}", request.effort)   # FR-M-10
         if think is None:
-            think = bool(CONFIG.llm.think)
-        payload["chat_template_kwargs"] = {"enable_thinking": think}
+            think = CONFIG.llm.think
+        payload["chat_template_kwargs"] = {"enable_thinking": bool(think)}
         return payload
 
     async def complete(self, request: ModelRequest, *, model: str) -> AsyncIterator[ModelChunk]:

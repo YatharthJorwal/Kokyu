@@ -11,7 +11,7 @@ from __future__ import annotations
 from typing import AsyncIterator
 
 import llm
-from router import model_ref as model_refs
+from router import capabilities
 from router.types import ModelChunk, ModelRequest, Usage
 
 
@@ -30,9 +30,13 @@ class OllamaNativeProvider:
         overrides: dict = {}
         if model:
             overrides["model"] = model
-        think = model_refs.ollama_think(request.effort)
+        think = capabilities.think_for(f"local:ollama/{model}", request.effort)   # FR-M-10
         if think is not None:
             overrides["think"] = think
+        if think if think is not None else llm.CONFIG.llm.think:
+            # Thinking counts against num_predict: without room a thinking model
+            # spends the whole 512-token cap thinking and says nothing (D-064).
+            overrides["num_predict"] = llm.CONFIG.llm.max_tokens + llm.CONFIG.llm.reasoning_tokens
         if request.tools:
             async for event in llm.stream_reply_with_tools(messages, list(request.tools), **overrides):
                 if event["type"] == "content":

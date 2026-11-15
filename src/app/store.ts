@@ -6,7 +6,7 @@
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
-import type { ServerData } from "../net/protocol";
+import type { Effort, ServerData } from "../net/protocol";
 import { canPickModel, canRegenerate, canSend, initialState, reduce, type ChatEvent, type ChatState } from "./chat-state";
 import { VoicePlayer } from "./voice";
 
@@ -172,6 +172,12 @@ export const actions = {
     dispatch({ kind: "picker", open: false });
     if (ref === (state.thread?.model_ref ?? null)) return true;
     return socket.send("set_model", { model_ref: ref });
+  },
+
+  /** The open thread's effort, from the next turn on (FR-M-8; per model, FR-M-11). */
+  setEffort(effort: Effort): boolean {
+    if (!useChat.getState().thread) return false;
+    return socket.send("set_effort", { effort });
   },
 
   /** Try again after a failed load. */

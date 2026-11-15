@@ -20,7 +20,7 @@ PROVIDERS: dict[tuple[str, str], str] = {
 # router refuses a ref whose endpoint is not the active one.
 API_SLOT = "airouter"
 
-EFFORTS = ("off", "low", "medium", "high")
+EFFORTS = ("off", "low", "medium", "high", "max")   # canonical, lowest first (FR-M-8)
 
 
 class ModelRefError(ValueError):
@@ -73,13 +73,7 @@ def check_effort(effort: str | None) -> str | None:
     return effort
 
 
-def ollama_think(effort: str | None) -> bool | None:
-    """Ollama's `think` flag for hybrid-thinking models. None leaves the config default."""
-    if effort is None:
-        return None
-    return effort != "off"
-
-
 def openai_reasoning_effort(effort: str | None) -> str | None:
-    """OpenAI-style `reasoning_effort`. `off` and None send nothing."""
+    """OpenAI-style `reasoning_effort`. `off`, `max` and None send nothing (API models
+    offer low, medium and high, router/capabilities.py)."""
     return effort if effort in ("low", "medium", "high") else None

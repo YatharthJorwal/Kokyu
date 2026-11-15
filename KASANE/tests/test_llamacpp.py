@@ -214,7 +214,7 @@ async def test_the_provider_streams_with_thinking_switched_by_effort(tmp_path, m
 
     exe = tmp_path / "llama-server.exe"
     exe.write_bytes(b"")
-    p = preset(tmp_path)
+    p = preset(tmp_path, id="qwen3-big")   # config/models.example.yaml: Qwen3 has thinking off and on (D-064)
     cfg = LlamaCppConfig(server_path=str(exe), presets=(p,))
 
     async def spawn(*cmd, **kw):
@@ -225,8 +225,8 @@ async def test_the_provider_streams_with_thinking_switched_by_effort(tmp_path, m
     server = lc.LlamaCppServer(cfg, spawn=spawn, transport=t, ollama_url="http://o", poll_s=0)
     provider = lc.LlamaCppProvider(cfg, server, transport=t)
     base = dict(role="chat", messages=({"role": "system", "content": "s"}, {"role": "user", "content": "hi"}))
-    text = "".join([c.text async for c in provider.complete(ModelRequest(**base, effort="high"), model="big") if c.kind == "content"])
-    [c async for c in provider.complete(ModelRequest(**base), model="big")]
+    text = "".join([c.text async for c in provider.complete(ModelRequest(**base, effort="high"), model="qwen3-big") if c.kind == "content"])
+    [c async for c in provider.complete(ModelRequest(**base), model="qwen3-big")]
     assert text == "Hello"
     assert bodies[0]["chat_template_kwargs"] == {"enable_thinking": True}
     assert bodies[1]["chat_template_kwargs"] == {"enable_thinking": bool(config.CONFIG.llm.think)}

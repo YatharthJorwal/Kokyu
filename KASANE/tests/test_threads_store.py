@@ -131,3 +131,18 @@ def test_reopening_the_database_keeps_everything(tmp_path):
     second = ThreadStore(tmp_path / "threads.db")
     assert second.get_thread(t.id).title == "kept"
     assert [m.content for m in second.messages(t.id)] == ["still here"]
+
+
+def test_a_version_1_database_gains_the_efforts_column(tmp_path):
+    # FR-M-11 added threads.efforts; a database from before opens and works
+    db = tmp_path / "threads.db"
+    with sqlite3.connect(db) as conn:
+        conn.executescript(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,"
+            " updated_at REAL NOT NULL, active_waifu_id TEXT, model_ref TEXT, effort TEXT,"
+            " temp INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0);"
+            "INSERT INTO threads (id, created_at, updated_at) VALUES ('old', 1, 1);"
+        )
+    store = ThreadStore(db)
+    assert store.get_thread("old").efforts == {}
+    assert store.update_thread("old", efforts={"local:ollama/x": "off"}).efforts == {"local:ollama/x": "off"}

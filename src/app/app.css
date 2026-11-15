@@ -978,6 +978,7 @@ div.companion,
 }
 
 .model-chip {
+  position: relative;
   display: inline-flex;
   align-items: center;
   gap: 6px;
@@ -1003,6 +1004,25 @@ div.companion,
 
 .model-chip.failed {
   border-color: var(--danger);
+}
+
+/* FR-M-9: while a reply is generating, the effort's glow runs on the chip
+   (effort-glow-pulse is in ui/effort-slider.css; the chip sets the variables). */
+.model-chip.generating::after {
+  content: "";
+  position: absolute;
+  inset: -1px;
+  border-radius: inherit;
+  box-shadow: 0 0 calc(4px + var(--effort-glow) * 12px) var(--accent);
+  pointer-events: none;
+  animation: effort-glow-pulse var(--effort-period) ease-in-out infinite;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .model-chip.generating::after {
+    animation: none;
+    opacity: calc(var(--effort-glow) * 0.6);
+  }
 }
 
 .model-name {
@@ -1219,6 +1239,11 @@ div.companion,
   overflow: hidden;
   white-space: nowrap;
   text-overflow: ellipsis;
+}
+
+.effort-section {
+  padding: 4px 6px 6px;
+  border-top: 1px solid var(--line);
 }
 
 .model-footer {

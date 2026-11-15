@@ -1,0 +1,26 @@
+# Effort levels for local models (FR-M-10, D-064). Shipped with the app.
+#
+# To change or add a model, copy this file to config/models.yaml and edit the copy:
+# it is read first, then this one. The first entry whose `match` fits the model ref
+# wins. `match` is a shell-style pattern on the ref, case-insensitive
+# ('local:ollama/<name>' or 'local:llamacpp/<preset id>').
+#
+# `efforts` lists the levels the effort slider offers for the model, from the set
+# off, low, medium, high, max. Each says what the backend gets as `think`:
+#   true / false   thinking on or off (Qwen3, DeepSeek-R1, ...)
+#   low|medium|high  a thinking level, for models that take one (gpt-oss)
+# Neither Ollama nor llama-server takes a per-request thinking budget, so there is none here.
+# A model no entry matches has no effort slider and runs with its own default.
+#
+# API models need nothing here: a model the catalog marks as reasoning offers
+# low, medium and high, sent as the provider's reasoning_effort.
+
+local:
+  - match: 'local:ollama/gpt-oss*'
+    efforts: {low: low, medium: medium, high: high}
+  - match: 'local:*qwen3*'
+    efforts: {off: false, high: true}
+  - match: 'local:*deepseek-r1*'
+    efforts: {off: false, high: true}
+  - match: 'local:*magistral*'
+    efforts: {off: false, high: true}

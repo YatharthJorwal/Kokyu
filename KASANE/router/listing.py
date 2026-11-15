@@ -25,6 +25,7 @@ import httpx
 
 from config import CONFIG, Config, LlamaCppConfig
 from provider_presets import API_PRESETS
+from router import capabilities
 from router import model_ref as model_refs
 from router.decision import LOCAL_PROVIDER, model_for
 
@@ -109,6 +110,7 @@ async def ollama_rows(
                 "available": True,
                 "note": None,
                 "fits": None,
+                "efforts": capabilities.efforts_for(f"local:ollama/{name}"),   # FR-M-8, FR-M-10
             }
         )
     rows.sort(key=lambda r: (-(r["size_bytes"] or 0), r["label"]))
@@ -134,6 +136,7 @@ def llamacpp_rows(cfg: LlamaCppConfig) -> list[dict[str, Any]]:
                 "available": size is not None,
                 "note": None if size is not None else "model file not found",
                 "fits": None,
+                "efforts": capabilities.efforts_for(f"local:llamacpp/{preset.id}"),
             }
         )
     return rows
@@ -166,6 +169,7 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> l
                 "price_in": info.price_in or None,
                 "price_out": info.price_out or None,
                 "tags": list(info.tags) + (["zdr"] if getattr(info, "zdr", False) else []),
+                "efforts": capabilities.efforts_for(f"api:{backend}/{model_id}", info.tags),
             }
         )
     return rows

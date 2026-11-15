@@ -66,6 +66,11 @@ def _ollama_options(**overrides: Any) -> dict[str, Any]:
     return options
 
 
+def _cap(num_predict: int | None) -> dict[str, int]:
+    """A per-call reply cap for _ollama_options, or nothing for llm.max_tokens."""
+    return {"num_predict": num_predict} if num_predict else {}
+
+
 def explain_length_stop(prompt_tokens: int | None, gen_tokens: int | None) -> str:
     """Why a done_reason='length' reply stopped, from Ollama's own token
     counts. Pure so it can be tested: a reply that ended far below
@@ -165,16 +170,21 @@ def _request_error(url: str, exc: httpx.RequestError) -> LLMUnreachableError:
 
 
 async def stream_reply(
-    messages: list[dict[str, str]], *, model: str | None = None, think: bool | None = None
+    messages: list[dict[str, str]],
+    *,
+    model: str | None = None,
+    think: bool | str | None = None,
+    num_predict: int | None = None,
 ) -> AsyncIterator[str]:
     """Streams content-delta strings from the configured LLM server as they
     arrive. Raises LLMUnreachableError if the server can't be reached or
     errors out.
 
     `model` and `think` (K1-00c) override the configured model and thinking
-    flag for this one call: the thread's model choice and effort."""
+    flag for this one call: the thread's model choice and effort. `num_predict`
+    overrides the reply cap (a thinking model needs room, D-064)."""
     if CONFIG.llm.api_style == "ollama_native":
-        gen = _stream_ollama_native(messages, model=model, think=think)
+        gen = _stream_ollama_native(messages, model=model, think=think, num_predict=num_predict)
     else:
         gen = _stream_openai(messages, model=model)
 
@@ -187,7 +197,8 @@ async def stream_reply_with_tools(
     tools: list[dict[str, Any]],
     *,
     model: str | None = None,
-    think: bool | None = None,
+    think: bool | str | None = None,
+    num_predict: int | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Like stream_reply() above, but for turns that have tools available
     -- currently only turns.py's conversation loop. consolidation.py
@@ -237,7 +248,7 @@ async def stream_reply_with_tools(
         "messages": messages,
         "tools": tools,
         "stream": True,
-        "options": _ollama_options(),
+        "options": _ollama_options(**_cap(num_predict)),
     }
     if think is not None:
         payload["think"] = think
@@ -682,7 +693,10 @@ async def _stream_openai(messages: list[dict[str, str]], model: str | None = Non
 
 
 async def _stream_ollama_native(
-    messages: list[dict[str, str]], model: str | None = None, think: bool | None = None
+    messages: list[dict[str, str]],
+    model: str | None = None,
+    think: bool | str | None = None,
+    num_predict: int | None = None,
 ) -> AsyncIterator[str]:
     messages = fold_system_messages(messages)
     url = f"{CONFIG.llm.base_url.rstrip('/')}/api/chat"
@@ -690,7 +704,7 @@ async def _stream_ollama_native(
         "model": model or CONFIG.llm.model,
         "messages": messages,
         "stream": True,
-        "options": _ollama_options(),
+        "options": _ollama_options(**_cap(num_predict)),
     }
     if think is not None:
         payload["think"] = think

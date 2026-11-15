@@ -134,6 +134,8 @@ export interface ModelRow {
   tags?: string[];
   /** API rows: the vendor the model is listed under (FR-M-4). */
   group?: string | null;
+  /** The effort slider's detents, lowest first; empty = no slider (FR-M-8, FR-M-10). */
+  efforts?: Effort[];
 }
 
 export interface Spend {
@@ -228,7 +230,7 @@ export interface ClientData {
   voice_mode: { on: boolean };
 }
 
-export type Effort = "off" | "low" | "medium" | "high";
+export type Effort = "off" | "low" | "medium" | "high" | "max";
 
 export interface Frame<T extends ServerType = ServerType> {
   v: number;

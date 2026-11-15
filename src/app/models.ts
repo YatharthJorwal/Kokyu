@@ -63,7 +63,7 @@ export function badgesFor(row: Pick<ModelRow, "tags">): string[] {
   return out.slice(0, 3);
 }
 
-const EFFORT_LABELS: Record<string, string> = { off: "No thinking", low: "Low", medium: "Medium", high: "High" };
+const EFFORT_LABELS: Record<string, string> = { off: "No thinking", low: "Low", medium: "Medium", high: "High", max: "Max" };
 
 export function effortLabel(effort: string | null): string | null {
   return effort ? (EFFORT_LABELS[effort] ?? effort) : null;

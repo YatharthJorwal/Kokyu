@@ -551,7 +551,19 @@ class Session:
             # Loading another model would pull the one answering out from under it.
             await self.refuse("turn_running", "Wait for the reply to finish, or press Stop, then switch models.")
             return
-        await self._set_thread_field("model_ref", msg.data.model_ref)
+        # FR-M-11: effort is remembered per model in this thread. The old model's is
+        # kept; the new one gets its own back, or its default the first time.
+        old_ref = model_listing.effective_ref(self.thread.model_ref, CONFIG)
+        new_ref = model_listing.effective_ref(msg.data.model_ref, CONFIG)
+        efforts = {ref: e for ref, e in {**self.thread.efforts, old_ref: self.thread.effort}.items() if e is not None}
+        self.thread = await asyncio.to_thread(
+            self.manager.store.update_thread,
+            self.thread.id,
+            model_ref=msg.data.model_ref,
+            effort=efforts.get(new_ref),
+            efforts=efforts,
+        )
+        await self.send_thread_updated()
         if hub.drives(self.ws):
             # A pick loads at once; the chip shows the progress (FR-M-6).
             model_loader.LOADER.request(model_listing.effective_ref(self.thread.model_ref, CONFIG))
@@ -563,7 +575,7 @@ class Session:
         await self._set_thread_field("effort", msg.data.effort)
 
     async def _set_thread_field(self, field_name: str, value: Any) -> None:
-        """Per-thread model or effort, applied from the next turn on."""
+        """A per-thread setting (the effort), applied from the next turn on."""
         self.thread = await asyncio.to_thread(self.manager.store.update_thread, self.thread.id, **{field_name: value})
         await self.send_thread_updated()
 

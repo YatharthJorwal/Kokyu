@@ -19,7 +19,7 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 1
+SCHEMA_VERSION = 2   # 2: threads.efforts (FR-M-11)
 TITLE_MAX = 80
 SEARCH_LIMIT = 50
 
@@ -35,7 +35,8 @@ CREATE TABLE IF NOT EXISTS threads (
     model_ref       TEXT,
     effort          TEXT,
     temp            INTEGER NOT NULL DEFAULT 0,
-    archived        INTEGER NOT NULL DEFAULT 0
+    archived        INTEGER NOT NULL DEFAULT 0,
+    efforts         TEXT
 );
 CREATE TABLE IF NOT EXISTS messages (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -78,6 +79,8 @@ class Thread:
     effort: str | None = None
     temp: bool = False
     archived: bool = False
+    # FR-M-11: the effort last used with each model in this thread, by model ref
+    efforts: dict[str, str] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -148,14 +151,20 @@ def _thread(row: sqlite3.Row) -> Thread:
         effort=row["effort"],
         temp=bool(row["temp"]),
         archived=bool(row["archived"]),
+        efforts=_json_dict(row["efforts"]),
     )
 
 
-def _message(row: sqlite3.Row) -> Message:
+def _json_dict(text: str | None) -> dict[str, Any]:
     try:
-        meta = json.loads(row["meta"]) if row["meta"] else {}
+        value = json.loads(text) if text else {}
     except json.JSONDecodeError:
-        meta = {}
+        value = {}
+    return value if isinstance(value, dict) else {}
+
+
+def _message(row: sqlite3.Row) -> Message:
+    meta = _json_dict(row["meta"])
     return Message(
         id=row["id"],
         thread_id=row["thread_id"],
@@ -168,7 +177,7 @@ def _message(row: sqlite3.Row) -> Message:
         effort=row["effort"],
         tokens_in=row["tokens_in"],
         tokens_out=row["tokens_out"],
-        meta=meta if isinstance(meta, dict) else {},
+        meta=meta,
     )
 
 
@@ -180,6 +189,9 @@ class ThreadStore:
         with self._connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(_SCHEMA)
+            # v1 -> v2: a database made before FR-M-11 lacks the column
+            if "efforts" not in {r["name"] for r in db.execute("PRAGMA table_info(threads)")}:
+                db.execute("ALTER TABLE threads ADD COLUMN efforts TEXT")
             db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     @contextmanager
@@ -239,9 +251,9 @@ class ThreadStore:
             return [_thread(r) for r in db.execute(sql, (limit,)).fetchall()]
 
     def update_thread(self, thread_id: str, **fields: Any) -> Thread:
-        """Sets any of: title, active_waifu_id, model_ref, effort, temp, archived.
+        """Sets any of: title, active_waifu_id, model_ref, effort, temp, archived, efforts.
         Settings changes do not reorder the history list (updated_at is for messages)."""
-        allowed = {"title", "active_waifu_id", "model_ref", "effort", "temp", "archived"}
+        allowed = {"title", "active_waifu_id", "model_ref", "effort", "temp", "archived", "efforts"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"unknown thread fields: {sorted(unknown)}")
@@ -253,6 +265,8 @@ class ThreadStore:
         for flag in ("temp", "archived"):
             if flag in values:
                 values[flag] = int(bool(values[flag]))
+        if "efforts" in values:
+            values["efforts"] = json.dumps(values["efforts"]) if values["efforts"] else None
         assignments = ", ".join(f"{name} = ?" for name in values)
         with self._connect() as db:
             cur = db.execute(f"UPDATE threads SET {assignments} WHERE id = ?", (*values.values(), thread_id))
