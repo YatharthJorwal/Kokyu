@@ -204,7 +204,6 @@ voice:
     compute_type: 'int8'
     language: 'en'
     timeout_s: 20
-    warm_up_on_start: false     # true: load the speech model at boot (after the chat model and voice, D-060)
 
   vad:
     engine: 'silero_onnx'       # fallback chain: webrtcvad, then energy gate
@@ -235,6 +234,9 @@ tts:
   engine: 'gpt_sovits'
   stream: 'per_clause'
   fallback_engine: 'none'     # 'pyttsx3' opts in to the robotic placeholder voice
+  # Voice starts only when voice mode is turned on, never at launch (D-061). Turned
+  # off, the voice server stops after this many idle seconds.
+  idle_stop_s: 300
 
   gpt_sovits:
     api_url: 'http://127.0.0.1:9880/tts'

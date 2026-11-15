@@ -99,6 +99,7 @@ export function Composer() {
       onDragLeave={() => setDragging(false)}
       onDrop={onDrop}
     >
+      <VoiceChip />
       <ScreenChips />
       {attachment ? (
         <div className="attachment">
@@ -159,10 +160,45 @@ export function Composer() {
 // FR-C-4: every item is listed; the ones that arrive with K2 are visibly disabled.
 const LATER = [
   { label: "Camera", hint: "Arrives with voice and the stage (K2)" },
-  { label: "Voice", hint: "Arrives with voice and the stage (K2)" },
   { label: "Screenshot", hint: "Arrives with voice and the stage (K2)" },
   { label: "Paste image", hint: "Coming in K2. Ctrl+V in the message box works now" },
 ];
+
+/** D-061: voice waking up, on, or failed with Try again; × turns it off. */
+function VoiceChip() {
+  const voice = useChat((s) => s.voice);
+  const name = useChat((s) => s.companion?.name ?? "Her");
+  const canAct = useChat((s) => s.role === "driver" && s.connection === "online");
+  if (!voice?.on) return null;
+  const waking = voice.state === "loading" || voice.state === "idle";
+  const line =
+    voice.state === "failed"
+      ? `${name}'s voice couldn't start. ${voice.message ?? ""}`
+      : waking
+        ? `${name}'s voice is waking up…`
+        : `Voice on: ${name} speaks her replies`;
+  return (
+    <div className="screen-chips" role="status" aria-label="Voice">
+      <span className={waking ? "screen-chip voice-chip waking" : "screen-chip voice-chip"}>
+        <span aria-hidden="true">🔊</span> {line}
+        {voice.state === "failed" ? (
+          <button type="button" className="chip-retry" disabled={!canAct} onClick={() => actions.setVoice(true)}>
+            Try again
+          </button>
+        ) : null}
+        <button
+          type="button"
+          aria-label="Turn voice off"
+          title="Turn voice off"
+          disabled={!canAct}
+          onClick={() => actions.setVoice(false)}
+        >
+          ×
+        </button>
+      </span>
+    </div>
+  );
+}
 
 /** FR-SC-2: what is watching the screen, each stopped with one click. */
 function ScreenChips() {
@@ -208,6 +244,7 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
   const [asking, setAsking] = useState(false);
   const [task, setTask] = useState("");
   const screen = useChat((s) => s.screen);
+  const voiceOn = useChat((s) => s.voice?.on ?? false);
   const wrapper = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const first = useRef<HTMLButtonElement>(null);
@@ -256,6 +293,19 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
             }}
           >
             Upload file
+          </button>
+          <button
+            type="button"
+            role="menuitemcheckbox"
+            aria-checked={voiceOn}
+            title="She speaks her replies. The first time, her voice takes about a minute to wake up"
+            onClick={() => {
+              actions.setVoice(!voiceOn);
+              setOpen(false);
+            }}
+          >
+            Voice
+            <span className="soon">{voiceOn ? "on" : "off"}</span>
           </button>
           {LATER.map((item) => (
             <button key={item.label} type="button" role="menuitem" disabled title={item.hint}>

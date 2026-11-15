@@ -361,6 +361,9 @@ class TTSConfig:
     # opts in to the robotic placeholder voice (it breaks voice identity, FR-V-7).
     fallback_engine: str = "none"
     gpt_sovits: GPTSoVITSConfig = field(default_factory=GPTSoVITSConfig)
+    # Voice mode turned off: the voice server we started stops after this many idle
+    # seconds, so a quick off/on does not reload it (D-061).
+    idle_stop_s: float = 300.0
 
 
 @dataclass(frozen=True)
@@ -370,9 +373,6 @@ class STTConfig:
     compute_type: str = "int8"
     language: str | None = "en"
     timeout_s: int = 20
-    # Load the model at boot (after the chat model and the voice server) so the first
-    # voice turn doesn't pay for it. Off by default: the mic arrives with K2 (D-060).
-    warm_up_on_start: bool = False
 
 
 @dataclass(frozen=True)
@@ -791,6 +791,7 @@ def _derive_tts(raw: Mapping[str, Any]) -> TTSConfig:
         engine=tts_raw.get("engine", defaults.engine),
         stream=tts_raw.get("stream", defaults.stream),
         fallback_engine=tts_raw.get("fallback_engine", defaults.fallback_engine),
+        idle_stop_s=float(tts_raw.get("idle_stop_s", defaults.idle_stop_s)),
         gpt_sovits=_build(GPTSoVITSConfig, {**dataclasses.asdict(defaults.gpt_sovits), **sovits}),
     )
 

@@ -142,6 +142,11 @@ export const actions = {
     socket.send("screen_companion", task ? { mode, on, task } : { mode, on });
   },
 
+  /** Voice mode on or off (D-061): the voice server starts the first time it is turned on. */
+  setVoice(on: boolean): void {
+    socket.send("voice_mode", { on });
+  },
+
   // ── the model chip (K1-10) ──────────────────────────────────────────
 
   /** Opens the picker and asks the kernel what can be picked (fresh every time:

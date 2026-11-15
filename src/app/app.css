@@ -800,6 +800,23 @@ div.companion,
   color: var(--muted);
 }
 
+.screen-chip .chip-retry {
+  color: var(--accent);
+}
+
+/* D-061: the voice server waking up (about a minute the first time) */
+.voice-chip.waking {
+  animation: voice-waking 1.6s ease-in-out infinite;
+}
+
+@keyframes voice-waking {
+  50% { opacity: 0.55; }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .voice-chip.waking { animation: none; }
+}
+
 /* ── the status heart, ported from Yuri (K1-05, FR-C-5) ──── */
 
 .heart {

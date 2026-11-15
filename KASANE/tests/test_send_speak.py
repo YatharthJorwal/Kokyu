@@ -3,6 +3,7 @@
 import pytest
 
 import app
+from audio import voice_mode
 from audio import speech
 
 
@@ -16,6 +17,7 @@ class FakeWebSocket:
 
 @pytest.mark.asyncio
 async def test_send_speak_normalizes_only_the_voice(monkeypatch):
+    voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
     heard = {}
 
     async def fake_synth(text):

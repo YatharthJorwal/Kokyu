@@ -25,6 +25,7 @@ export const CLIENT_TYPES = [
   "regenerate",
   "screen_companion",
   "typing",
+  "voice_mode",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -40,6 +41,7 @@ export const SERVER_TYPES = [
   "model_list",
   "model_status",
   "screen_companions",
+  "voice_status",
 ] as const;
 
 export const ERROR_CODES = [
@@ -53,6 +55,14 @@ export const ERROR_CODES = [
   "model_failed",
   "vision_unavailable",
 ] as const;
+
+/** D-061: voice mode (replies spoken; the mic in K2). It starts only when turned on. */
+export interface VoiceStatus {
+  on: boolean;
+  state: "idle" | "loading" | "ready" | "failed";
+  message: string | null;
+  elapsed_s: number | null;
+}
 
 /** K1-05b (FR-SC-2): what is watching the screen right now. */
 export interface ScreenCompanions {
@@ -171,6 +181,7 @@ export interface ServerData {
   model_list: ModelListData;
   model_status: ModelStatus;
   screen_companions: ScreenCompanions;
+  voice_status: VoiceStatus;
 }
 
 export interface ClientData {
@@ -188,6 +199,7 @@ export interface ClientData {
   regenerate: Record<string, never>;
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
+  voice_mode: { on: boolean };
 }
 
 export type Effort = "off" | "low" | "medium" | "high";

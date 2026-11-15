@@ -26,12 +26,15 @@ def boot(monkeypatch):
 
         return run
 
+    async def no_voice():
+        raise AssertionError("voice must not start at launch (D-061)")
+
     monkeypatch.setattr(app, "_first_window", None)
     monkeypatch.setattr(app, "_check_router", step("router"))
     monkeypatch.setattr(app, "_check_chat_model", step("chat"))
-    monkeypatch.setattr(app, "_check_tts", step("tts"))
-    monkeypatch.setattr(app.stt, "warm_up", step("stt"))
     monkeypatch.setattr(app, "_startup_memory_pass", step("memory"))
+    monkeypatch.setattr(app.tts, "ensure_server", no_voice)
+    monkeypatch.setattr(app.stt, "preload", no_voice)
     return seen
 
 
@@ -43,8 +46,8 @@ async def test_nothing_heavy_loads_before_a_window_is_up(boot):
     assert boot == ["router"]
     app._first_window_event().set()
     await task
-    # then one heavy thing at a time, the chat model first
-    assert boot == ["router", "chat", "tts", "stt", "memory"]
+    # then one heavy thing at a time, the chat model first; voice never (D-061)
+    assert boot == ["router", "chat", "memory"]
 
 
 @pytest.mark.asyncio
@@ -55,7 +58,7 @@ async def test_one_failing_boot_step_does_not_stop_the_others(monkeypatch, boot)
     monkeypatch.setattr(app, "_check_chat_model", boom)
     app._first_window_event().set()
     await app._boot_sequence()  # must not raise
-    assert boot == ["router", "tts", "stt", "memory"]
+    assert boot == ["router", "memory"]
 
 
 def _with_stt(**overrides):
@@ -68,20 +71,12 @@ def _fresh_model_state(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_warm_up_loads_the_model_once(monkeypatch):
+async def test_preload_loads_the_model_once(monkeypatch):
     loads = []
-    monkeypatch.setattr(stt, "CONFIG", _with_stt(warm_up_on_start=True))
     monkeypatch.setattr(stt, "WhisperModel", lambda *a, **k: loads.append(1) or object())
-    await stt.warm_up()
-    await stt.warm_up()  # already loaded: no second load
+    await stt.preload()
+    await stt.preload()  # already loaded: no second load
     assert len(loads) == 1
-
-
-@pytest.mark.asyncio
-async def test_warm_up_can_be_switched_off(monkeypatch):
-    monkeypatch.setattr(stt, "CONFIG", _with_stt(warm_up_on_start=False))
-    monkeypatch.setattr(stt, "WhisperModel", lambda *a, **k: pytest.fail("must not load"))
-    await stt.warm_up()
 
 
 @pytest.mark.asyncio
@@ -95,9 +90,8 @@ async def test_a_failed_warm_up_never_raises_and_the_next_use_can_retry(monkeypa
         return object()
 
     monkeypatch.setattr(stt, "WhisperModel", flaky)
-    monkeypatch.setattr(stt, "CONFIG", _with_stt(warm_up_on_start=True))
-    await stt.warm_up()  # swallowed
-    assert "warm-up failed" in capsys.readouterr().err
+    await stt.preload()  # swallowed
+    assert "preload failed" in capsys.readouterr().err
     assert stt._get_model() is not None and len(attempts) == 2
 
 
@@ -118,7 +112,7 @@ def test_concurrent_first_uses_load_the_model_exactly_once(monkeypatch):
     assert len(loads) == 1
 
 
-def test_warm_up_switch_is_readable_from_voice_stt_config():
-    on = config.VoiceConfig(stt={**config.VoiceConfig().stt, "warm_up_on_start": True})
-    assert config._derive_stt({}, on).warm_up_on_start is True
-    assert config._derive_stt({}, config.VoiceConfig()).warm_up_on_start is False  # D-060: lazy by default
+def test_the_old_stt_warm_up_key_is_ignored():
+    # D-061: the speech model never loads at launch; old configs still parse
+    old = config.VoiceConfig(stt={**config.VoiceConfig().stt, "warm_up_on_start": True})
+    assert not hasattr(config._derive_stt({}, old), "warm_up_on_start")

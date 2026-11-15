@@ -63,6 +63,10 @@ class ScreenCompanion(_Data):
     task: str = Field(default="", max_length=TITLE_MAX)
 
 
+class VoiceModeData(_Data):
+    on: bool
+
+
 class SetModel(_Data):
     model_ref: str | None = None      # null = the local default model
 
@@ -101,6 +105,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "regenerate": Empty,              # K1-04: run the last exchange again (FR-C-9, Retry)
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
+    "voice_mode": VoiceModeData,      # D-061: voice on or off; it starts only when turned on
 }
 
 # Kernel -> client, versioned.
@@ -117,6 +122,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "model_list",     # K1-10 (FR-M-3, 4, 7)
     "model_status",   # K1-10 (FR-M-6): loading / ready / failed
     "screen_companions",  # K1-05b (FR-SC-2): what is watching the screen
+    "voice_status",   # D-061: voice on or off, and how its start is going
 )
 
 ERROR_CODES: tuple[str, ...] = (

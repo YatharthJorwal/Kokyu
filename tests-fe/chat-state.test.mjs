@@ -249,3 +249,11 @@ test("the screen companions' state comes from the kernel and goes on disconnect 
   s = reduce(s, { kind: "status", status: "offline" });
   assert.equal(s.screen, null); // a restarted kernel starts with both off (FR-SC-1)
 });
+
+test("voice mode's state comes from the kernel and goes on disconnect (D-061)", () => {
+  let s = run(online, frame("voice_status", { on: true, state: "loading", message: null, elapsed_s: 3 }, null));
+  assert.equal(s.voice.on, true);
+  assert.equal(s.voice.state, "loading");
+  s = reduce(s, { kind: "status", status: "offline" });
+  assert.equal(s.voice, null); // a restarted kernel starts with voice off
+});

@@ -7,6 +7,7 @@ from types import SimpleNamespace
 import pytest
 
 import app
+from audio import voice_mode
 import prompting
 import router
 from waifu_fixtures import make_pack
@@ -55,6 +56,7 @@ async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day."):
 
 @pytest.mark.asyncio
 async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(registry, monkeypatch):
+    voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
     a_calls, a_voices, a_hist = await _run_turn_as(registry.get("alpha"), monkeypatch)
     b_calls, b_voices, b_hist = await _run_turn_as(registry.get("beta"), monkeypatch)
 

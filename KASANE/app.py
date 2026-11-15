@@ -82,6 +82,7 @@ import waifus
 from audio import tts
 from audio import vad
 from audio import voice
+from audio import voice_mode
 from audio.chunking import extract_ready_chunks, flush
 from config import CONFIG
 from memory import embeddings, forget, recall, store, writer
@@ -193,14 +194,6 @@ async def _warm_helpers() -> None:
         print(f"[kokyu] warm-up of the embedding model failed: {exc}", file=sys.stderr)
 
 
-async def _check_tts() -> None:
-    try:
-        up = await tts.ensure_server()
-        print(f"[kokyu] tts: gpt_sovits {'up' if up else 'unavailable'}", file=sys.stderr, flush=True)
-    except Exception as exc:  # noqa: BLE001 -- voice diagnostics must not stop startup
-        print(f"[kokyu] tts startup check skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
-
-
 async def _check_router() -> None:
     try:
         rt = router.get_router()
@@ -231,16 +224,16 @@ def _first_window_event() -> asyncio.Event:
 
 async def _boot_sequence() -> None:
     """D-060: the kernel opens its port at once and loads nothing heavy until a
-    window is up, so the window paints on an idle PC. Then one heavy thing at a
-    time (the chat model, then the voice server, then the speech model, then the
-    memory catch-up pass): loading them together pegged every core and filled RAM.
-    The router reads its cached catalog straight away (cheap). Never raises."""
+    window is up, so the window paints on an idle PC. Then the chat model, then the
+    memory catch-up pass: loading everything together pegged every core and filled
+    RAM. Voice is not part of boot at all; it starts when the user turns voice mode
+    on (D-061). The router reads its cached catalog straight away (cheap). Never raises."""
     await asyncio.gather(_check_router(), _after_first_window(), return_exceptions=True)
 
 
 async def _after_first_window() -> None:
     await _first_window_event().wait()
-    for step in (_check_chat_model, _check_tts, stt.warm_up, _startup_memory_pass):
+    for step in (_check_chat_model, _startup_memory_pass):
         try:
             await step()
         except Exception as exc:  # noqa: BLE001 -- one failed step must not stop the rest
@@ -272,6 +265,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     boot.cancel()
     await writer.WRITER.stop(final_pass=True)
+    await voice_mode.VOICE.shutdown()
     tts.stop_server()
     # K1-01: a llama-server the router started must not outlive the kernel. A load
     # in progress is cancelled first, or it could start one after this.
@@ -393,7 +387,7 @@ async def _apply_waifu_switch(
     _save_active_id(target.id)
     await _send_waifu_state(websocket, registry)
     voice_params = _voice_of(websocket)
-    if voice_params is not None:
+    if voice_params is not None and voice_mode.VOICE.speaking():
         task = asyncio.create_task(tts.prewarm(voice_params))  # FR-S-3; never raises
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
@@ -499,8 +493,11 @@ async def _send_thread_opened(websocket: Any, thread: Any) -> None:
 
 
 async def _synthesize_for(websocket: Any, spoken: str) -> bytes:
-    """Speak in the active waifu's voice. A dead TTS backend yields empty audio: the
-    caption still shows and the reply stays text-only (FR-V-7)."""
+    """Speak in the active waifu's voice. With voice mode off (D-061) or a dead TTS
+    backend this yields empty audio: the caption still shows and the reply stays
+    text-only (FR-V-7)."""
+    if not voice_mode.VOICE.speaking():
+        return b""
     voice_params = _voice_of(websocket)
     try:
         if voice_params is None:
@@ -1418,6 +1415,7 @@ async def shutdown_endpoint() -> dict:
     with contextlib.suppress(Exception):
         await asyncio.wait_for(router.get_router().shutdown(), timeout=8)
     with contextlib.suppress(Exception):
+        await voice_mode.VOICE.shutdown()
         tts.stop_server()
 
     sys.stdout.flush()
@@ -1460,6 +1458,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     # value, and the router is the thing that actually obeys it.
     await websocket.send_json({"type": "settings", **runtime_settings.describe(router.get_router(), CONFIG)})
     await websocket.send_json(protocol.frame("screen_companions", _screen_status()))
+    await websocket.send_json(protocol.frame("voice_status", voice_mode.VOICE.status()))
 
     # The active waifu (persona + voice) lives on the connection; it starts as the one the
     # user last used. With no packs installed this stays None and the legacy persona runs.
@@ -1622,6 +1621,12 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         await websocket.send_json(protocol.frame("model_status", status))
 
     unsubscribe_model_status = model_loader.LOADER.subscribe(_push_model_status)
+
+    # D-061: every window shows whether voice is on and how its start is going.
+    async def _push_voice_status(status: dict[str, Any]) -> None:
+        await websocket.send_json(protocol.frame("voice_status", status))
+
+    unsubscribe_voice_status = voice_mode.VOICE.subscribe(_push_voice_status)
 
     try:
         active_now = _waifu_of(websocket)
@@ -2043,6 +2048,13 @@ async def ws_endpoint(websocket: WebSocket) -> None:
                 _last_typed_at = time.monotonic()
                 continue
 
+            if msg_type == "voice_mode":
+                # D-061: voice starts here, never at launch. Kernel-wide, so the driver
+                # changes it and every window sees it (like the screen companions).
+                if websocket is _driver:
+                    await voice_mode.VOICE.set(bool(data.get("on")))
+                continue
+
             if msg_type == "screen_companion":
                 # K1-05b (FR-SC-1..4, D-048): the + tray's Task Guide and OCR watch.
                 # Kernel-wide state, so only the driver changes it; every window sees it.
@@ -2299,6 +2311,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     finally:
         pending_waifu_id = None   # nobody is left to switch for: no divider, no saved choice
         unsubscribe_model_status()
+        unsubscribe_voice_status()
         _active_connections.discard(websocket)
         _connection_surface.pop(websocket, None)
         # This connection was the driver -- promote whichever other

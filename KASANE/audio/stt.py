@@ -90,16 +90,16 @@ def _load_model() -> None:
     )
 
 
-async def warm_up() -> None:
-    """Loads the speech model in the background at startup so the first spoken
-    turn is not also a model load. Best-effort: never raises (the first real
-    transcription simply loads it, as before)."""
-    if not CONFIG.stt.warm_up_on_start or _model is not None:
+async def preload() -> None:
+    """Loads the speech model off the event loop when voice mode is turned on, so
+    the first spoken turn is not also a model load. Never at launch (D-061).
+    Best-effort: never raises (the first real transcription loads it instead)."""
+    if _model is not None:
         return
     try:
         await asyncio.to_thread(_get_model)
-    except Exception as exc:  # noqa: BLE001 -- a failed warm-up must not affect startup
-        print(f"[yuri] stt warm-up failed (will retry on first use): {type(exc).__name__}: {exc}", file=sys.stderr)
+    except Exception as exc:  # noqa: BLE001 -- the first transcription retries
+        print(f"[kokyu] stt preload failed (will retry on first use): {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 def _transcribe_sync(audio_bytes: bytes) -> str:

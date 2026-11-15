@@ -39,3 +39,12 @@ def _no_app_keys():
     shell_keys.clear()
     yield
     shell_keys.clear()
+
+
+@pytest.fixture(autouse=True)
+def _voice_off():
+    """Voice mode is kernel-wide (D-061): every test starts with it off and idle."""
+    from audio import voice_mode
+
+    voice_mode.VOICE = voice_mode.VoiceMode()
+    yield
