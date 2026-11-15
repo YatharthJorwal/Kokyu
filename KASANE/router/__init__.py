@@ -723,6 +723,9 @@ class Router:
                 yield {"type": "content", "text": chunk.text}
             elif chunk.kind == "tool_calls":
                 yield {"type": "tool_calls", "calls": list(chunk.calls)}
+            elif chunk.kind == "usage" and chunk.usage is not None and not chunk.usage.estimated:
+                # Real counts only: the stored reply records them (FR-C-10); a guess is not one.
+                yield {"type": "usage", "tokens_in": chunk.usage.prompt_tokens, "tokens_out": chunk.usage.completion_tokens}
 
     async def describe_image(
         self,

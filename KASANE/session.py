@@ -294,6 +294,7 @@ class Session:
             return None
 
         async def save(user_text: str, reply: str, stopped: bool, meta: dict[str, Any]) -> None:
+            meta = dict(meta)
             await self.manager.record_exchange(
                 thread.id,
                 user_text,
@@ -302,6 +303,8 @@ class Session:
                 model_ref=thread.model_ref or CONFIG.chat.default_model_ref,
                 effort=thread.effort or CONFIG.chat.default_effort,
                 stopped=stopped,
+                tokens_in=meta.pop("tokens_in", None),
+                tokens_out=meta.pop("tokens_out", None),
                 meta=meta,
             )
             await self.send_thread_list()

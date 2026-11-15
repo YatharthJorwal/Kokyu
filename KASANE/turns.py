@@ -365,6 +365,7 @@ async def run_turn(
     spoken_parts: list[str] = []
     detected_emotion: str | None = None
     tool_messages: list[dict[str, Any]] = []
+    usage: dict[str, Any] = {}   # the reply round's token counts, where the backend reports them (FR-C-10)
     if unprompted and not local_model:
         # Her Task Guide and OCR remarks were written from screen captures: ambient
         # content an API model never sees (FR-SC-3, FR-R-7). `unprompted` holds them by identity.
@@ -412,6 +413,9 @@ async def run_turn(
                         )
                         tool_messages.append({"role": "tool", "content": result_text})
                     break  # re-enter the outer for-loop with results appended
+                if event["type"] == "usage":
+                    usage = event
+                    continue
                 buffer += event["text"]
                 if event["text"]:
                     await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
@@ -526,7 +530,8 @@ async def run_turn(
         if on_finished is not None:
             stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
             try:
-                meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to}
+                meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to,
+                        "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out")}
                 await on_finished(user_text, " ".join(reply_parts), stopped, {k: v for k, v in meta.items() if v is not None})
             except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                 log.warning(f"could not save the exchange to the thread: {exc}")

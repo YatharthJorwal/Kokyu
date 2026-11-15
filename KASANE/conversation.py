@@ -159,10 +159,13 @@ class ConversationManager:
         model_ref: str | None = None,
         effort: str | None = None,
         stopped: bool = False,
+        tokens_in: int | None = None,
+        tokens_out: int | None = None,
         meta: dict[str, Any] | None = None,
     ) -> tuple[Message, Message | None]:
         """Stores one user line and the reply to it. A reply cut off by Stop is kept
         (FR-C-2) and flagged; a turn with no reply at all stores only the user line.
+        The reply carries its token counts where the backend reported them (FR-C-10).
         `meta` rides on the user line: the turn's transcript_log row (log_id, so
         Regenerate can take it back out), an attachment's kind and the API model it
         went to (sent_to, FR-R-7)."""
@@ -178,6 +181,8 @@ class ConversationManager:
                 speaker_name=speaker.name,
                 model_ref=model_ref,
                 effort=effort,
+                tokens_in=tokens_in,
+                tokens_out=tokens_out,
                 meta={"stopped": True} if stopped else None,
             )
         return user, reply

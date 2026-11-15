@@ -305,3 +305,18 @@ async def test_startup_keeps_a_fresher_model_list_and_runs_once(tmp_path):
     await router.startup()                                      # what app.py's lifespan does
     await drain(router, ask())                                  # must not run startup() again
     assert catalog.loads == 0
+
+
+@pytest.mark.asyncio
+async def test_the_chat_stream_hands_on_real_token_counts_only(tmp_path):
+    # FR-C-10: the stored reply records the counts the provider reported; an estimate is not one.
+    real = Usage(prompt_tokens=1000, completion_tokens=50)
+    router = router_with(tmp_path, Scripted(ModelChunk.content("hi"), ModelChunk(kind="usage", usage=real), ModelChunk.done(real)))
+    messages = [{"role": "user", "content": "hi"}]
+    events = [e async for e in router.stream_with_tools("chat", messages, [], model_ref=API)]
+    assert events == [{"type": "content", "text": "hi"}, {"type": "usage", "tokens_in": 1000, "tokens_out": 50}]
+
+    guess = Usage(prompt_tokens=10, completion_tokens=5, estimated=True)
+    router = router_with(tmp_path, Scripted(ModelChunk.content("hi"), ModelChunk(kind="usage", usage=guess)))
+    events = [e async for e in router.stream_with_tools("chat", messages, [], model_ref=API)]
+    assert events == [{"type": "content", "text": "hi"}]

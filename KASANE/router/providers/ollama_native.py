@@ -12,7 +12,7 @@ from typing import AsyncIterator
 
 import llm
 from router import model_ref as model_refs
-from router.types import ModelChunk, ModelRequest
+from router.types import ModelChunk, ModelRequest, Usage
 
 
 class OllamaNativeProvider:
@@ -39,6 +39,8 @@ class OllamaNativeProvider:
                     yield ModelChunk.content(event["text"])
                 elif event["type"] == "tool_calls":
                     yield ModelChunk.tool_calls(event["calls"])
+                elif event["type"] == "usage":
+                    yield ModelChunk(kind="usage", usage=Usage(event["prompt_tokens"], event["completion_tokens"]))
         else:
             async for delta in llm.stream_reply(messages, **overrides):
                 yield ModelChunk.content(delta)

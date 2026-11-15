@@ -29,7 +29,7 @@ from router import model_ref
 from router.errors import ProviderError, RouteBlockedError
 from router.providers import OllamaNativeProvider
 from router.providers.airouter import AirouterProvider
-from router.types import ModelRequest, SECRET, UNTRUSTED
+from router.types import SECRET, UNTRUSTED, ModelRequest, Usage
 from senses import look_intent
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
@@ -185,6 +185,19 @@ async def test_ollama_gets_the_routed_model_always_and_effort_only_when_set(monk
     [c async for c in provider.complete(ModelRequest(**base, model_ref=LOCAL, effort="off"), model="qwen3.5:4b")]
     # the router's model is always passed (D-052): helper roles no longer fall back to llm.model
     assert seen == [{"model": "qwen3.5:9b"}, {"model": "qwen3.5:4b", "think": False}]
+
+
+@pytest.mark.asyncio
+async def test_ollamas_token_counts_reach_the_router_as_usage(monkeypatch):
+    # FR-C-10: Ollama reports the counts on its last chunk; the stored reply records them.
+    async def fake_tools(messages, tools, **kwargs):
+        yield {"type": "content", "text": "ok"}
+        yield {"type": "usage", "prompt_tokens": 300, "completion_tokens": 4}
+
+    monkeypatch.setattr(llm, "stream_reply_with_tools", fake_tools)
+    request = ModelRequest(role="chat", messages=({"role": "user", "content": "hi"},), tools=({"type": "function"},))
+    chunks = [c async for c in OllamaNativeProvider().complete(request, model="qwen3.5:9b")]
+    assert [(c.kind, c.usage) for c in chunks if c.kind == "usage"] == [("usage", Usage(300, 4))]
 
 
 def test_the_api_payload_carries_reasoning_effort():

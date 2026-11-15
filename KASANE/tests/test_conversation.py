@@ -150,6 +150,7 @@ def kernel(tmp_path, monkeypatch):
     async def fake_stream(role, messages, tools, **kwargs):
         last_user = [m["content"] for m in messages if m["role"] == "user"][-1]
         yield {"type": "content", "text": f"You said: {last_user}. [happy]"}
+        yield {"type": "usage", "tokens_in": 120, "tokens_out": 8}
 
     async def fake_synth(text, voice=None):
         return b""
@@ -210,6 +211,10 @@ def test_connect_opens_a_thread_and_a_reply_is_saved_to_it(kernel):
     assert opened["data"]["thread"]["title"] == "hello there" and opened["data"]["thread"]["temp"] is True
     roles = [(m["role"], m["content"], m["speaker_name"]) for m in opened["data"]["messages"]]
     assert roles == [("user", "hello there", None), ("assistant", "You said: hello there.", "Alpha")]
+    # FR-C-10: the reply records the backend's token counts; the user line does not carry them
+    user, reply = opened["data"]["messages"]
+    assert (reply["tokens_in"], reply["tokens_out"]) == (120, 8)
+    assert "tokens_in" not in (user["meta"] or {})
 
 
 def test_new_thread_starts_empty_and_the_old_one_keeps_its_history(kernel):

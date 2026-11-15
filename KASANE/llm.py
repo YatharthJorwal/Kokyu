@@ -202,7 +202,8 @@ async def stream_reply_with_tools(
     {"type": "tool_calls", "calls": [{"name": str, "arguments": dict}]}
     -- at which point the generator ends (the caller is expected to run
     the tools and start a fresh call with the results appended, see
-    turns.run_turn).
+    turns.run_turn). A reply ends with {"type": "usage", "prompt_tokens",
+    "completion_tokens"} when Ollama reported the counts.
 
     ollama_native only -- tool-calling isn't wired for the openai-
     compatible path (Phase 4 was built and tested against Ollama; add
@@ -363,6 +364,9 @@ async def stream_reply_with_tools(
             f"done_reason={done_reason!r}) after {chars_streamed} chars -- "
             "if she cut off mid-sentence, this is why.",
         )
+    # The stored reply records them (FR-C-10).
+    if prompt_tokens is not None or gen_tokens is not None:
+        yield {"type": "usage", "prompt_tokens": prompt_tokens, "completion_tokens": gen_tokens}
 
 
 # Models Ollama has told us can't do tool-calling (HTTP 400 "does not support

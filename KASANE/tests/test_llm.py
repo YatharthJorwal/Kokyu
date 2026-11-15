@@ -160,7 +160,11 @@ async def test_stream_reply_with_tools_sends_num_ctx_and_logs_token_counts(monke
         lambda **kw: real_client(transport=httpx.MockTransport(handler), **kw),
     )
     events = [e async for e in llm.stream_reply_with_tools([{"role": "user", "content": "x"}], [])]
-    assert events == [{"type": "content", "text": "Hi."}]
+    # the counts also end the stream, for the stored reply (FR-C-10)
+    assert events == [
+        {"type": "content", "text": "Hi."},
+        {"type": "usage", "prompt_tokens": 8100, "completion_tokens": 9},
+    ]
     assert seen["payload"]["options"]["num_ctx"] == 8192
 
     err = caplog.text
@@ -281,14 +285,14 @@ async def test_tool_calling_retries_without_tools_when_the_model_has_none(monkey
     _mock_http(monkeypatch, handler)
     tools = [{"type": "function", "function": {"name": "t", "description": "d", "parameters": {}}}]
     first = [e async for e in llm.stream_reply_with_tools([{"role": "user", "content": "hi"}], tools)]
-    assert first == [{"type": "content", "text": "Hello."}]
+    assert [e for e in first if e["type"] == "content"] == [{"type": "content", "text": "Hello."}]
     assert "tools" in payloads[0] and "tools" not in payloads[1]  # retried without them
     assert "doesn't support tool-calling" in caplog.text
 
     # remembered: the next turn doesn't pay for the failed attempt again
     payloads.clear()
     second = [e async for e in llm.stream_reply_with_tools([{"role": "user", "content": "again"}], tools)]
-    assert second == [{"type": "content", "text": "Hello."}]
+    assert [e for e in second if e["type"] == "content"] == [{"type": "content", "text": "Hello."}]
     assert len(payloads) == 1 and "tools" not in payloads[0]
     llm._NO_TOOLS_MODELS.clear()
 
@@ -614,7 +618,7 @@ async def test_tool_calling_request_survives_a_strict_template(monkeypatch):
     seen = []
     _mock_http(monkeypatch, _strict_template_server(seen))
     events = [e async for e in llm.stream_reply_with_tools(SPLICED, [])]
-    assert events == [{"type": "content", "text": "Hi."}]
+    assert [e for e in events if e["type"] == "content"] == [{"type": "content", "text": "Hi."}]
     roles = [m["role"] for m in seen[0]["messages"]]
     assert roles.count("system") == 1 and roles[0] == "system"
     assert "cake" in seen[0]["messages"][-1]["content"]
