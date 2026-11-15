@@ -11,6 +11,15 @@ import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
 import { WakingCard } from "./WakingCard";
 
+/** Her initial in a circle, shown when Appearance → Messages is "Bubbles" (D-073). */
+function Avatar({ name }: { name: string | null }) {
+  return (
+    <span className="avatar" aria-hidden="true">
+      {name ? name.slice(0, 1).toUpperCase() : ""}
+    </span>
+  );
+}
+
 function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
   const regenerable = useChat((s) => lastReply && canRegenerate(s));
   if (m.role === "divider") {
@@ -23,6 +32,7 @@ function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
   const classes = ["msg", m.role, m.pending ? "pending" : "", m.failed ? "failed" : ""].filter(Boolean).join(" ");
   return (
     <div className={classes}>
+      {m.role === "assistant" ? <Avatar name={m.speaker ?? null} /> : null}
       {m.role === "assistant" ? (
         // The actions share the name's line (shown on hover), so the reply ends at its text.
         <div className="msg-head">
@@ -132,6 +142,7 @@ export function ThreadView() {
       {turn !== "idle" && streaming ? (
         // While she thinks, the line above the input box says so (ThinkingRow).
         <div className="msg assistant streaming">
+          <Avatar name={companion} />
           <div className="msg-head">{companion ? <span className="speaker">{companion}</span> : null}</div>
           <div className="bubble">
             <Markdown text={streaming} />

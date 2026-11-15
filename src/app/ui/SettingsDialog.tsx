@@ -3,7 +3,8 @@
 // the budget, editable; the model lists read-only), Screen (the screen companions,
 // now and at start), Memory (read, correct, forget, restore the remembered facts),
 // Doctor (each component's state with a fix hint) and About. What is edited here is
-// saved in settings.json and applies at once (D-070). Voice, Waifus, Scenes, Pets
+// saved in settings.json and applies at once (D-070). Appearance is this window's own
+// look, kept on this PC by the page (D-073). Voice, Waifus, Scenes, Pets
 // and Advanced arrive with their phases.
 
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
@@ -12,9 +13,11 @@ import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, SettingsChange, Set
 import { modelLabel, type SettingsSection } from "../chat-state";
 import { formatSize, formatUsd } from "../models";
 import { actions, useChat } from "../store";
+import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
 
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "models", label: "Models" },
+  { id: "appearance", label: "Appearance" },
   { id: "screen", label: "Screen" },
   { id: "memory", label: "Memory" },
   { id: "doctor", label: "Doctor" },
@@ -56,6 +59,7 @@ export function SettingsDialog() {
             ✕
           </button>
           {section === "models" ? <ModelsSection /> : null}
+          {section === "appearance" ? <AppearanceSection /> : null}
           {section === "screen" ? <ScreenSection /> : null}
           {section === "memory" ? <MemorySection /> : null}
           {section === "doctor" ? <DoctorSection /> : null}
@@ -430,6 +434,89 @@ function DoctorSection() {
       <button type="button" onClick={() => actions.runDoctor()}>
         Check again
       </button>
+    </>
+  );
+}
+
+/** One row of choices; the picked one is pressed. */
+function Choices<T extends string>({ label, value, options, onPick }: {
+  label: string;
+  value: T;
+  options: { id: T; label: string }[];
+  onPick: (id: T) => void;
+}) {
+  return (
+    <div className="settings-choices" role="group" aria-label={label}>
+      {options.map((o) => (
+        <button key={o.id} type="button" aria-pressed={o.id === value} onClick={() => onPick(o.id)}>
+          {o.label}
+        </button>
+      ))}
+    </div>
+  );
+}
+
+function AppearanceSection() {
+  const [theme, setTheme] = useState<Theme>(loadTheme);
+  const change = (patch: Partial<Theme>) => {
+    const next = { ...theme, ...patch };
+    setTheme(next);
+    saveTheme(next);
+    applyTheme(next);
+  };
+  const accent = theme.accent ?? PRESETS[theme.preset].vars["--accent"];
+  return (
+    <>
+      <h3>Appearance</h3>
+      <h4>Theme</h4>
+      <Choices
+        label="Theme"
+        value={theme.preset}
+        options={(Object.keys(PRESETS) as Preset[]).map((id) => ({ id, label: PRESETS[id].label }))}
+        onPick={(preset) => change({ preset })}
+      />
+      <h4>Accent color</h4>
+      <div className="settings-choices accents" role="group" aria-label="Accent color">
+        <button type="button" aria-pressed={theme.accent === null} onClick={() => change({ accent: null })}>
+          The theme's own
+        </button>
+        {ACCENTS.map((c) => (
+          <button
+            key={c}
+            type="button"
+            className="swatch"
+            style={{ background: c }}
+            aria-pressed={theme.accent === c}
+            aria-label={`Accent ${c}`}
+            onClick={() => change({ accent: c })}
+          />
+        ))}
+        <label className="swatch custom" title="Any color">
+          <input type="color" value={accent} aria-label="Pick any accent color" onChange={(e) => change({ accent: e.target.value.toLowerCase() })} />
+        </label>
+      </div>
+      <h4>Messages</h4>
+      <Choices
+        label="Messages"
+        value={theme.messages}
+        options={[
+          { id: "open", label: "Open" },
+          { id: "bubbles", label: "Bubbles with her picture" },
+        ]}
+        onPick={(messages) => change({ messages })}
+      />
+      <h4>Text size</h4>
+      <Choices
+        label="Text size"
+        value={theme.size}
+        options={[
+          { id: "small", label: "Small" },
+          { id: "normal", label: "Normal" },
+          { id: "large", label: "Large" },
+        ]}
+        onPick={(size) => change({ size })}
+      />
+      <p className="muted settings-hint">Saved on this PC for every Kōkyū window.</p>
     </>
   );
 }

@@ -601,3 +601,12 @@ Accepted · The user ("only load the model that is selected. when selecting othe
 - `providers.local_ollama.keep_alive` (30m), which no request sent, now goes with every call to the picked model and the embedding model; any other model gets `keep_alive: 0`.
 - *Unload X* (D-071) may now offer the classifier: it is no longer warmed after a load.
 **Cost:** Task Guide's classifier and memory passes use the bigger chat model (slower, better). With a llama.cpp or API model they pay a cold load per call.
+
+## D-073 Settings → Appearance: themes kept by the page, not settings.json
+Accepted · The user ("fix the colors too. add a theme selector in ui which gives option to customize chat interface"; options picked: preset themes, accent color, message style, text size) · Not in SPEC; adds a Settings section beside FR-SET-1 · 2026-11-15
+**Context:** One dark plum palette was hard-coded, with a few colors outside the variables (a violet heart beside a pink accent, white text on any accent). The user's references are character-chat sites with neutral greys and replies in bubbles beside the character's picture.
+**Decision:**
+- Settings gains **Appearance**: a theme (Kōkyū plum, Midnight neutral greys, Light), an accent color (the theme's own, six swatches or any color), messages (Open, the current layout, or Bubbles: her replies in a bubble beside her initial) and a text size for chat messages (small, normal, large).
+- It is the window's own look, so the page keeps it in `localStorage` (`kokyu.theme`), applies it before the first paint, and other open windows follow through the `storage` event. The kernel never sees it; settings.json (D-070) stays for what the kernel uses. A stored value is checked field by field; anything unknown is the default (an accent must be `#rrggbb`).
+- Every color the window draws comes from a variable: the heart follows the accent, text on the accent is black or white by contrast, error cards mix the danger color into the background.
+**Not in v1:** her real picture in the bubble (the VRM thumbnail arrives with K2), a font choice, the roleplay styling of actions and asides (the modes plan).

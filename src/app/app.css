@@ -10,7 +10,10 @@
   --accent: #f27aa6;
   --accent-ink: #2a0d1a;
   --user: #2f2840;
+  --reply: #241e2c;
+  --on-accent: #ffffff;
   --danger: #e5707a;
+  --chat-size: 15px;
   --radius: 14px;
   --sidebar: 260px;
   --column: 800px;
@@ -244,7 +247,7 @@ button:disabled {
   border: 0;
   border-radius: 12px;
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
   font-size: 16px;
   font-weight: 500;
   box-shadow: 0 6px 18px color-mix(in srgb, var(--accent) 25%, transparent);
@@ -461,7 +464,7 @@ button:disabled {
   width: 14px;
   height: 14px;
   border-radius: 50%;
-  background: #cfc8da;
+  background: var(--muted);
   transition: transform 0.15s;
 }
 
@@ -471,7 +474,7 @@ button:disabled {
 }
 
 .switch input:checked + .switch-track::after {
-  background: #fff;
+  background: var(--on-accent);
   transform: translateX(18px);
 }
 
@@ -540,6 +543,7 @@ button:disabled {
 
 .bubble {
   max-width: 100%;
+  font-size: var(--chat-size);
   white-space: pre-wrap;
   overflow-wrap: anywhere;
   line-height: 1.55;
@@ -550,6 +554,44 @@ button:disabled {
   padding: 10px 14px;
   border-radius: var(--radius);
   background: var(--user);
+}
+
+/* Appearance → Messages "Bubbles" (D-073): her replies in a bubble beside her initial. */
+.avatar {
+  display: none;
+}
+
+[data-messages="bubbles"] .msg.assistant {
+  display: grid;
+  grid-template-columns: 34px minmax(0, 1fr);
+  column-gap: 10px;
+  align-items: start;
+}
+
+[data-messages="bubbles"] .msg.assistant > :not(.avatar) {
+  grid-column: 2;
+}
+
+[data-messages="bubbles"] .msg.assistant .avatar {
+  display: flex;
+  grid-column: 1;
+  grid-row: 1 / span 4;
+  align-items: center;
+  justify-content: center;
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 55%, #fff), var(--accent));
+  color: var(--on-accent);
+  font-weight: 600;
+}
+
+[data-messages="bubbles"] .msg.assistant .bubble {
+  justify-self: start;
+  max-width: 85%;
+  padding: 10px 14px;
+  border-radius: 4px var(--radius) var(--radius) var(--radius);
+  background: var(--reply);
 }
 
 .msg.pending .bubble {
@@ -717,7 +759,7 @@ button:disabled {
   padding: 10px 14px;
   border: 1px solid var(--danger);
   border-radius: 10px;
-  background: #2a1b20;
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
 }
 
 .turn-failure {
@@ -850,7 +892,7 @@ button:disabled {
 
 .composer .send {
   background: var(--accent);
-  color: #fff;
+  color: var(--on-accent);
 }
 
 .composer .send svg {
@@ -1077,7 +1119,7 @@ button:disabled {
   flex: none;
   width: 20px;
   height: 20px;
-  color: #75627a;
+  color: var(--muted);
   transition: color 250ms ease;
 }
 
@@ -1116,7 +1158,7 @@ button:disabled {
 }
 
 .heart.idle {
-  color: #8d72f2;
+  color: var(--accent);
 }
 
 .heart.idle .heart-arc,
@@ -1130,7 +1172,7 @@ button:disabled {
 }
 
 .heart.thinking {
-  color: #c2a6ff;
+  color: color-mix(in srgb, var(--accent) 60%, var(--text));
 }
 
 .heart.thinking .heart-arc {
@@ -1632,7 +1674,7 @@ button:disabled {
   width: 34px;
   height: 34px;
   border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, #f6b3cd, var(--accent));
+  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 55%, #fff), var(--accent));
   animation: breathe 3.2s ease-in-out infinite;
 }
 
@@ -1696,7 +1738,7 @@ button:disabled {
 
 .waking.failed {
   border-color: var(--danger);
-  background: #2a1b20;
+  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
 }
 
 .waking-actions {
@@ -1999,6 +2041,40 @@ button:disabled {
 
 .settings-status.failed {
   color: var(--danger);
+}
+
+.settings-choices {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+}
+
+.settings-body .settings-choices button[aria-pressed="true"] {
+  border-color: var(--accent);
+  box-shadow: inset 0 0 0 1px var(--accent);
+}
+
+.settings-body .settings-choices .swatch {
+  width: 28px;
+  height: 28px;
+  padding: 0;
+  border-radius: 50%;
+}
+
+.settings-choices .swatch.custom {
+  position: relative;
+  overflow: hidden;
+  border: 1px dashed var(--muted);
+  background: conic-gradient(#f27aa6, #f2b56b, #8fd4a4, #6cc6e8, #a8b4ff, #c49bff, #f27aa6);
+  cursor: pointer;
+}
+
+.settings-choices .swatch.custom input {
+  position: absolute;
+  inset: 0;
+  opacity: 0;
+  cursor: pointer;
 }
 
 .settings-hint {
