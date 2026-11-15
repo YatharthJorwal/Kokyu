@@ -26,6 +26,7 @@ import httpx
 
 import llm
 import paths
+import vram
 from config import CONFIG, LlamaCppConfig, LlamaCppPreset, ProviderConfig
 from router import capabilities
 from router.errors import ProviderError
@@ -124,14 +125,15 @@ def _bare(name: str) -> str:
     return name[: -len(":latest")] if name.endswith(":latest") else name
 
 
-def helper_models() -> frozenset[str]:
+def helper_models(cfg: Any = None) -> frozenset[str]:
     """Ollama models the kernel itself uses beside the chat model (classifier,
     memory writer, embeddings). They are small and stay loaded next to a MoE
     whose experts live in system RAM (D-052)."""
     from router.decision import LOCAL_PROVIDER, model_for
 
-    names = {model_for(LOCAL_PROVIDER, role, CONFIG.models) for role in ("classifier", "memory_writer", "embed")}
-    names.add(CONFIG.memory.embedding.model)
+    cfg = cfg or CONFIG
+    names = {model_for(LOCAL_PROVIDER, role, cfg.models) for role in ("classifier", "memory_writer", "embed")}
+    names.add(cfg.memory.embedding.model)
     return frozenset(_bare(n) for n in names if n)
 
 
@@ -225,6 +227,7 @@ class LlamaCppServer:
                     "llama-server.exe from a crash: end it in Task Manager), or change llamacpp.port."
                 )
             await unload_ollama(self._ollama_url, keep=self._keep, transport=self._transport)
+            before = await vram.gpu_memory()   # K1-09: what the server takes, measured
             log_path = paths.logs_dir() / LOG_NAME
             log_path.parent.mkdir(parents=True, exist_ok=True)
             log = open(log_path, "ab")  # noqa: SIM115 -- handed to the child, closed in _stop_locked
@@ -243,6 +246,8 @@ class LlamaCppServer:
             self.preset_id = preset.id
             self._deadline = asyncio.get_running_loop().time() + self.cfg.startup_timeout_s
             await self._wait_ready_locked(preset)
+            taken = vram.measured_delta(before, await vram.gpu_memory())
+            await asyncio.to_thread(vram.MEASURED.record, f"local:llamacpp/{preset.id}", taken)
 
     async def _wait_ready_locked(self, preset: LlamaCppPreset) -> None:
         loop = asyncio.get_running_loop()

@@ -647,6 +647,11 @@ class Router:
         """Whether the API provider has a key (the picker greys API rows without one)."""
         return self._api_key_present
 
+    def llamacpp_preset(self) -> str | None:
+        """The preset llama-server is serving now, if this router started one (K1-09)."""
+        server = getattr(self._llamacpp_provider, "server", None)
+        return server.preset_id if server is not None and server.running() else None
+
     async def stop_llamacpp(self) -> bool:
         """Stops llama-server if this router started one; True if one was running.
         Used when the user picks an Ollama chat model: one large local model at a

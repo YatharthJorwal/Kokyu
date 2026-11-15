@@ -20,6 +20,7 @@ import llm
 import model_loader
 import router
 import tools
+import vram
 import waifus
 from config import CONFIG
 from memory import embeddings, writer
@@ -87,14 +88,22 @@ async def load_chat_model(ref_text: str) -> None:
       tool list once, so the first message reuses that prefix (D-052).
     - Ollama: stop `llama-server` first: one large local model at a time (FR-M-6).
     - API: nothing to load.
-    Then the small helper models that run before every reply."""
+    Then the small helper models that run before every reply.
+
+    A local model that would not fit in VRAM beside the helpers is refused first,
+    naming what holds the memory; the current model stays loaded (K1-09)."""
     ref = model_refs.parse(ref_text)
     rt = router.get_router()
+    if ref.is_local:
+        check = await model_listing.load_check(str(ref), rt)
+        if check.fits is False:
+            raise vram.VramFullError(check.message or "not enough graphics memory")
     if ref.provider == "local_ollama":
         if await rt.stop_llamacpp():
             log.info("stopped llama-server: an Ollama chat model was picked")
         await llm.load_model(ref.model)
         await warm_helpers()
+        await vram.snapshot(lambda: llm.loaded_models())   # remembers what each model took
         return
     if ref.provider != "llamacpp":
         return

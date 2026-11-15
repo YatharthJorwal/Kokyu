@@ -1179,6 +1179,22 @@ div.companion,
   vertical-align: 1px;
 }
 
+.badge.no-fit {
+  color: var(--danger);
+  border-color: color-mix(in srgb, var(--danger) 45%, transparent);
+}
+
+.badge.fits {
+  opacity: 0.7;
+}
+
+.badge.no-fit,
+.badge.fits {
+  flex: none;
+  font-size: 11px;
+  white-space: nowrap;
+}
+
 .badge.stale {
   text-transform: none;
   letter-spacing: 0;

@@ -466,6 +466,20 @@ async def model_capabilities(model: str) -> list[str] | None:
     return [str(c) for c in caps] if isinstance(caps, list) else None
 
 
+async def loaded_models() -> Any | None:
+    """Ollama's `/api/ps` (the models in memory and how much of each is on the GPU),
+    or None when Ollama cannot be asked. Never raises: the VRAM manager's input
+    (K1-09), not a reason to fail anything."""
+    if CONFIG.llm.api_style != "ollama_native":
+        return None
+    try:
+        async with httpx.AsyncClient(timeout=httpx.Timeout(3.0, connect=1.0)) as client:
+            response = await client.get(f"{CONFIG.llm.base_url.rstrip('/')}/api/ps")
+        return response.json() if response.status_code < 400 else None
+    except (httpx.HTTPError, ValueError):
+        return None
+
+
 async def load_model(model: str | None = None) -> None:
     """Loads an Ollama model into VRAM now (an empty-prompt /api/generate is
     Ollama's documented way to do that) with the SAME num_ctx every real

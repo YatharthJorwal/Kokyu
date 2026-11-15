@@ -6,7 +6,9 @@ import dataclasses
 import httpx
 import pytest
 
-from config import CONFIG, ChatConfig, LlamaCppConfig, LlamaCppPreset
+import llm
+import vram
+from config import CONFIG, ChatConfig, LlamaCppConfig, LlamaCppPreset, VramConfig
 from router import listing
 from router.discovery import ModelCatalog, ModelInfo
 
@@ -168,3 +170,80 @@ def test_default_ref_and_labels():
     assert listing.label_for("local:llamacpp/other", cfg) == "other"
     assert listing.label_for("local:ollama/qwen3.5:9b", cfg) == "qwen3.5:9b"
     assert listing.label_for("nonsense", cfg) == "nonsense"
+
+
+# -- K1-09: the fits hint and the check before a load (FR-M-3, FR-M-6) ---------------
+# GPU and residents as measured on the dev PC (2026-11-15): 394 MB free of 12 GB.
+
+RTX = vram.GpuMemory("NVIDIA GeForce RTX 3060", 12288, 11893, 394, "nvml")
+PS = {"models": [
+    {"name": "qwen3.5:9b", "size": 5590 * vram.MB, "size_vram": 5590 * vram.MB},
+    {"name": "qwen3.5:4b", "size": 3207 * vram.MB, "size_vram": 3207 * vram.MB},
+    {"name": "nomic-embed-text:latest", "size": 320 * vram.MB, "size_vram": 320 * vram.MB},
+]}
+MORE_TAGS = {"models": [
+    *TAGS["models"],
+    {"name": "gemma3:27b", "size": 17_000_000_000, "details": {"family": "gemma3"}},
+    {"name": "qwen3:1.7b", "size": 1_400_000_000, "details": {"family": "qwen3"}},
+]}
+
+
+class NoLlamaServer:
+    def llamacpp_preset(self):
+        return None
+
+
+@pytest.fixture
+def gpu_cfg(tmp_path, monkeypatch):
+    async def gpu():
+        return RTX
+
+    async def ps():
+        return PS
+
+    monkeypatch.setattr(vram, "gpu_memory", gpu)
+    monkeypatch.setattr(llm, "loaded_models", ps)
+    gguf = tmp_path / "big.gguf"
+    gguf.write_bytes(b"\0")
+    helpers = {"classifier": "qwen3.5:4b", "memory_writer": "qwen3.5:4b", "embed": "nomic-embed-text"}
+    return dataclasses.replace(
+        CONFIG,
+        models=dataclasses.replace(CONFIG.models, local={**CONFIG.models.local, **helpers}),
+        memory=dataclasses.replace(CONFIG.memory, embedding=dataclasses.replace(CONFIG.memory.embedding, model="nomic-embed-text")),
+        llamacpp=LlamaCppConfig(presets=(LlamaCppPreset(id="big", label="Qwen 35B", model_path=str(gguf), n_cpu_moe=40),)),
+        vram=VramConfig(),
+    )
+
+
+@pytest.mark.asyncio
+async def test_local_rows_say_whether_they_fit(gpu_cfg):
+    data = await listing.model_list(NoLlamaServer(), cfg=gpu_cfg, transport=tags_transport(MORE_TAGS))
+    fits = {r["ref"]: r["fits"] for r in data["local"]}
+    assert fits == {
+        "local:llamacpp/big": None,            # experts in RAM: unknown until measured
+        "local:ollama/gemma3:27b": False,      # 16 GB + KV: more than the card
+        "local:ollama/qwen3.5:9b": True,       # already loaded
+        "local:ollama/qwen3.5:4b": True,       # a helper, already loaded
+        "local:ollama/qwen3:1.7b": True,       # fits once the 9B makes room
+        "local:ollama/broken": None,           # no size: nothing to estimate from
+    }
+
+
+@pytest.mark.asyncio
+async def test_no_gpu_reading_leaves_every_hint_unknown(tmp_path):
+    data = await listing.model_list(NoLlamaServer(), cfg=CONFIG, transport=tags_transport())
+    assert {r["fits"] for r in data["local"]} == {None}
+
+
+@pytest.mark.asyncio
+async def test_the_check_before_a_load_names_the_blocker(gpu_cfg):
+    check = await listing.load_check("local:ollama/gemma3:27b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
+    assert check.fits is False and "more than this GPU has (12.0 GB)" in check.message
+    vram.MEASURED.record("local:ollama/gemma3:27b", 7000)   # measured once: smaller than the estimate
+    check = await listing.load_check("local:ollama/gemma3:27b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
+    assert check.fits is False and check.message.startswith("It needs about 6.9 GB of graphics memory, but only 5.3 GB")
+    assert "In use: qwen3.5:4b (3.1 GB), other programs (2.7 GB), nomic-embed-text (0.3 GB)." in check.message
+    ok = await listing.load_check("local:ollama/qwen3:1.7b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
+    assert ok.fits is True
+    for unknown in ("api:airouter/vendor/chat-1", "local:ollama/not-pulled:1b", "local:llamacpp/big"):
+        assert (await listing.load_check(unknown, NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))).fits is None

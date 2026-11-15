@@ -482,6 +482,16 @@ class ChatConfig:
 
 
 @dataclass(frozen=True)
+class VramConfig:
+    """The VRAM manager (K1-09, ARCHITECTURE §7.3). A model never loaded here is
+    estimated as file size + KV cache + margin; a measured size replaces that."""
+
+    headroom_mb: int = 512         # kept free: the desktop, the renderer, spikes
+    kv_mb_per_1k_ctx: int = 128    # KV cache estimate per 1024 tokens of context
+    margin_mb: int = 512           # compute buffers and the rest of an estimate
+
+
+@dataclass(frozen=True)
 class Config:
     # v2 surface
     providers: Mapping[str, ProviderConfig] = field(default_factory=dict)
@@ -496,6 +506,7 @@ class Config:
     latency: LatencyConfig = field(default_factory=LatencyConfig)
     llamacpp: LlamaCppConfig = field(default_factory=LlamaCppConfig)
     chat: ChatConfig = field(default_factory=ChatConfig)
+    vram: VramConfig = field(default_factory=VramConfig)
 
     # v1 views, derived -- the ported modules read these unchanged
     llm: LLMConfig = field(default_factory=LLMConfig)
@@ -931,6 +942,7 @@ def load_config(path: pathlib.Path | str | None = None, *, quiet: bool = False) 
         latency=latency,
         llamacpp=_derive_llamacpp(raw),
         chat=_build(ChatConfig, _section(raw, "chat")),
+        vram=_build(VramConfig, _section(raw, "vram")),
         llm=llm,
         tts=_derive_tts(raw),
         stt=_derive_stt(raw, voice),

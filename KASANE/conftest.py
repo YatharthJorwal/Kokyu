@@ -29,6 +29,19 @@ def _no_real_model_loads(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_gpu(monkeypatch):
+    """No test reads the real GPU or remembers a measurement between tests (K1-09):
+    the VRAM manager sees no GPU unless a test gives it one."""
+    import vram
+
+    async def no_gpu():
+        return None
+
+    monkeypatch.setattr(vram, "gpu_memory", no_gpu)
+    monkeypatch.setattr(vram, "MEASURED", vram.MeasuredCache())
+
+
+@pytest.fixture(autouse=True)
 def _throwaway_data_dir(tmp_path_factory, monkeypatch):
     """No test writes the developer's real data or logs (audit.jsonl, spend.db,
     threads): KOKYU_DATA_DIR points at a throwaway folder, and the router singleton

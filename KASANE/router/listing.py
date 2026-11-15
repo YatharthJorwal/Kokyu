@@ -11,23 +11,30 @@ One `model_list` payload for the chip's popover:
 
 Every row is a plain dict that becomes JSON as is. A source that cannot be read
 (Ollama not running, no catalog yet) leaves its section empty with a reason; it
-never fails the whole list. The *fits / won't fit* hint is `None` until the VRAM
-manager exists (K1-09).
+never fails the whole list. Each local row carries the VRAM manager's *fits /
+won't fit* hint (K1-09): `None` when there is no GPU reading or nothing to
+estimate from. `load_check` is the same verdict, asked before a load.
 """
 from __future__ import annotations
 
 import asyncio
+import logging
 import pathlib
 from collections.abc import Mapping
 from typing import Any
 
 import httpx
 
+import llm
+import vram
 from config import CONFIG, Config, LlamaCppConfig
 from provider_presets import API_PRESETS
 from router import capabilities
 from router import model_ref as model_refs
 from router.decision import LOCAL_PROVIDER, model_for
+from router.providers.llamacpp import helper_models
+
+log = logging.getLogger(__name__)
 
 # Ollama model families that only embed (nomic-embed-text is "nomic-bert").
 EMBEDDING_FAMILIES = frozenset({"bert", "nomic-bert", "jina-bert", "xlm-roberta", "gte", "e5"})
@@ -175,6 +182,64 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> l
     return rows
 
 
+def _check(row: Mapping[str, Any], snap: vram.Snapshot, cfg: Config, label: str | None = None) -> vram.LoadCheck:
+    """Would this local row fit as the chat model? Reads the measured cache: off the loop."""
+    ref = row["ref"]
+    preset = cfg.llamacpp.preset(ref.split("/", 1)[1]) if row["backend"] == "llamacpp" else None
+    need = vram.need_for(
+        ref,
+        file_bytes=row["size_bytes"],
+        ctx=preset.ctx if preset else (cfg.llm.num_ctx or 2048),
+        cfg=cfg.vram,
+        experts_on_cpu=bool(preset and preset.n_cpu_moe),
+    )
+    return vram.plan(
+        ref,
+        label or row["label"],
+        need,
+        snap,
+        helpers={f"local:ollama/{name}" for name in helper_models(cfg)},
+        label_of=lambda r: label_for(r, cfg),
+        headroom_mb=cfg.vram.headroom_mb,
+    )
+
+
+async def _snapshot(rt: Any) -> vram.Snapshot:
+    preset = rt.llamacpp_preset() if hasattr(rt, "llamacpp_preset") else None
+    return await vram.snapshot(lambda: llm.loaded_models(), preset)
+
+
+async def with_fits(rows: list[dict[str, Any]], rt: Any, cfg: Config) -> list[dict[str, Any]]:
+    """FR-M-3: each local row's fits / won't fit hint (K1-09)."""
+    snap = await _snapshot(rt)
+    if snap.gpu is None or not rows:
+        return rows
+    verdicts = await asyncio.to_thread(lambda: [_check(row, snap, cfg).fits for row in rows])
+    return [{**row, "fits": fits} for row, fits in zip(rows, verdicts)]
+
+
+async def load_check(
+    ref: str, rt: Any, cfg: Config | None = None, *, transport: httpx.AsyncBaseTransport | None = None
+) -> vram.LoadCheck:
+    """Before loading a local chat model (FR-M-6, ARCHITECTURE §7.3): would it fit
+    beside the helpers once the other chat model is gone? `fits` is None (go
+    ahead) when the kernel cannot tell."""
+    cfg = cfg or CONFIG
+    unknown = vram.LoadCheck(None, None, None)
+    if not ref.startswith("local:"):
+        return unknown
+    snap = await _snapshot(rt)
+    if snap.gpu is None:
+        return unknown
+    if ref.startswith("local:llamacpp/"):
+        rows = await asyncio.to_thread(llamacpp_rows, cfg.llamacpp)
+    else:
+        rows, _ = await ollama_rows(cfg.llm.base_url, transport=transport)
+    row = next((r for r in rows if r["ref"] == ref), None)
+    # "It": the waking-up card already puts the model's name before the message
+    return unknown if row is None else await asyncio.to_thread(_check, row, snap, cfg, "It")
+
+
 def _cap(value: float) -> float | None:
     """A negative cap means unlimited (BudgetConfig)."""
     return None if value < 0 else value
@@ -192,6 +257,10 @@ async def model_list(
     exclude = frozenset({_bare(cfg.memory.embedding.model)}) if cfg.memory.embedding.model else frozenset()
     local, local_error = await ollama_rows(cfg.llm.base_url, exclude=exclude, transport=transport)
     local = await asyncio.to_thread(llamacpp_rows, cfg.llamacpp) + local  # stats files: off the loop
+    try:
+        local = await with_fits(local, rt, cfg)
+    except Exception as exc:  # noqa: BLE001 -- a hint, never a reason to fail the list
+        log.warning(f"fits hints skipped: {type(exc).__name__}: {exc}")
 
     catalog = getattr(rt, "catalog", None)
     refresh_error = None

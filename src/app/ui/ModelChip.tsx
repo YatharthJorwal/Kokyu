@@ -5,7 +5,7 @@
 // loads the model the chip shows a spinner; a failed load shows a warning.
 // The effort slider sits under the list, with the levels the model offers
 // (FR-M-8..11); while a reply is generating, its glow runs on the chip.
-// The fits hint comes with K1-09.
+// Local rows carry the VRAM manager's fits / won't fit hint (K1-09, FR-M-3).
 
 import { invoke, isTauri } from "@tauri-apps/api/core";
 import {
@@ -172,7 +172,15 @@ function Row({
           </span>
           {meta ? <span className="row-meta">{meta}</span> : null}
         </span>
-        {row.note ? <span className="row-note">{row.note}</span> : null}
+        {row.note ? (
+          <span className="row-note">{row.note}</span>
+        ) : row.fits === false ? (
+          <span className="badge no-fit" title="Not enough free graphics memory beside the helper models">
+            won't fit
+          </span>
+        ) : row.fits ? (
+          <span className="badge fits">fits</span>
+        ) : null}
       </button>
     </li>
   );

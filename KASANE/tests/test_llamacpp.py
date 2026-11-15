@@ -10,6 +10,7 @@ import httpx
 import pytest
 
 import config
+import vram
 from config import LlamaCppConfig, LlamaCppPreset, load_config
 from router import decision as d
 from router import model_ref
@@ -161,6 +162,40 @@ async def test_the_server_starts_once_unloads_ollama_and_restarts_for_another_pr
     assert first.terminated and len(spawned) == 2 and server.preset_id == "other"
     await server.stop()
     assert not server.running()
+
+
+@pytest.mark.asyncio
+async def test_what_the_server_took_is_measured_once_ollama_made_room(tmp_path, monkeypatch):
+    # K1-09 (ARCHITECTURE §7.3): GPU used before the start (Ollama already unloaded) and once ready
+    readings = iter([
+        vram.GpuMemory("GPU", 12288, 1400, 10888, "nvml"),
+        vram.GpuMemory("GPU", 12288, 4500, 7788, "nvml"),
+    ])
+
+    async def gpu():
+        return next(readings)
+
+    monkeypatch.setattr(vram, "gpu_memory", gpu)
+    server_exe = tmp_path / "llama-server.exe"
+    server_exe.write_bytes(b"")
+    health = {"ok": False}
+
+    async def spawn(*cmd, **kw):
+        health["ok"] = True
+        return FakeProcess(on_stop=lambda: health.update(ok=False))
+
+    def handler(request):
+        if request.url.path == "/health":
+            return httpx.Response(200 if health["ok"] else 503)
+        return httpx.Response(200, json={"models": []})
+
+    server = lc.LlamaCppServer(
+        LlamaCppConfig(server_path=str(server_exe)), spawn=spawn, transport=transport(handler),
+        ollama_url="http://ollama", poll_s=0, keep_loaded=frozenset(),
+    )
+    await server.ensure(preset(tmp_path))
+    assert vram.MEASURED.get("local:llamacpp/big") == 3100
+    await server.stop()
 
 
 @pytest.mark.asyncio

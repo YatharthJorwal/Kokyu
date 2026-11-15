@@ -378,8 +378,18 @@ session:
 # ─────────────────────────────────────────────────────────────────────────────
 chat:
   default_model_ref: null
-  default_effort: null      # off | low | medium | high
+  default_effort: null      # off | low | medium | high | max (a level the model lacks: its default)
   load_delay_s: 1.5         # opening a thread with another model loads it after this pause
+
+# ─────────────────────────────────────────────────────────────────────────────
+# VRAM manager (K1-09). Reads the GPU through the NVIDIA driver, remembers what
+# each model really took (data/vram_measured.json) and estimates the rest, for
+# the picker's fits hint and a check before a load. Never refuses on a guess.
+# ─────────────────────────────────────────────────────────────────────────────
+vram:
+  headroom_mb: 512          # kept free for the desktop and the renderer
+  kv_mb_per_1k_ctx: 128     # estimate only, until the model has been measured
+  margin_mb: 512
 
 # ─────────────────────────────────────────────────────────────────────────────
 # llama.cpp (K1-01, D-051): large MoE models with expert weights in system RAM.

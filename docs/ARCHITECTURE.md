@@ -262,10 +262,10 @@ Yuri's roles are kept (`docs/notes/yuri-inventory.md` §6): `reflex`, `vision`, 
 
 ### 7.3 VRAM manager
 
-- Reads total/free VRAM through NVML (`nvidia-ml-py`).
+- Reads total/free VRAM through NVML, straight from the driver's `nvml.dll` (ctypes, no package), else `nvidia-smi` (D-065). `KASANE/vram.py`.
 - Estimates a model's footprint as file size plus KV cache plus a safety margin; **measured** values observed after load replace the estimate and are cached.
 - Tracks residents: chat model, embeddings, TTS backend, renderer allowance.
-- Rule: only **one large LLM** resident across Ollama and llama.cpp. Selecting a model on the other backend unloads the first (`keep_alive: 0` for Ollama; stop `llama-server`) before loading. "Large" means its measured VRAM: a MoE with experts on the CPU (about 3 GB) may stay resident beside the small helpers (classifier, embeddings). Until the VRAM manager exists: starting `llama-server` unloads Ollama's models except the small helpers (D-052), and picking an Ollama chat model stops `llama-server` first (D-054).
+- Rule: only **one large LLM** resident across Ollama and llama.cpp. Selecting a model on the other backend unloads the first (`keep_alive: 0` for Ollama; stop `llama-server`) before loading. "Large" means its measured VRAM: a MoE with experts on the CPU (about 3 GB) may stay resident beside the small helpers (classifier, embeddings). Starting `llama-server` unloads Ollama's models except the small helpers (D-052), and picking an Ollama chat model stops `llama-server` first (D-054). Before either, the load check (`router/listing.py` `load_check`) refuses a model that would not fit beside the helpers once the other chat model is gone (D-065).
 - Produces *fits / won't fit* hints for the switcher and refuses a load that would exceed free VRAM minus headroom, naming the blocker.
 - Large MoE on llama.cpp (Qwen3.6-35B-A3B Q4) keeps every expert in system RAM (`--n-cpu-moe 40`): about 3 GB VRAM, about 19.5 GB working set (memory-mapped, so the OS can page it), about 4.6 GB private. Measured numbers and the settings that won: `docs/STATE.md` (K1-01).
 
