@@ -127,6 +127,15 @@ The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a t
 - [x] C-2 Kernel rebuild in place: split `app.py` into `server.py`, `boot.py`, `session.py` (one class per window, a handler per message type), `turns.py`; `logging` instead of `print("[yuri] …")` (R-13); retire the legacy flat protocol and the shadow-mode API toggle (D-049); lazy imports for STT, camera, OCR, pyttsx3; measure boot and first token before and after (D-062: d5da9f8 split, `app.py` kept as the server; 8e4997b Quit waits for the memory pass; `import app` 750 → 615 ms, camera/OCR/pyttsx3 were not on the import path; first token not re-measured)
 - [x] K1-15a Heart and rotating thinking lines above the input; threads fill from the bottom (FR-C-5, D-063) (fb804a1)
 - [x] K1-15 UI to the reference: frameless window with its own title-bar buttons; top bar (companion chip with avatar, Temp Chat switch); sidebar (logo, New chat, search, groups, Settings gear); composer (attach, mic, round send); model chip under the composer; popover badges (fits, vision, thinking, tools), effort slider, spend footer (b4f17b8, 3d87f72; D-068, D-069 after the user's review; the frameless window itself not seen: needs `npm run tauri dev`)
+### Session 4, part 5: the user's review notes (2026-11-15)
+
+"fix the slider, also only load the model that is selected. when selecting other one, unload rest. fix the colors too. add a theme selector …", "fix the core model persona (these are like c.ai characters …)", and the c.ai references.
+
+- [x] Effort slider thumb flew past the track's end (ea67e85; FR-M-8)
+- [x] One chat model in memory; the helper roles follow the pick; embeddings stay (c3a65a6; FR-M-6, D-072)
+- [x] Settings → Appearance: Kōkyū / Midnight / Light, accent, bubbles with her initial, text size; hard-coded colors follow the theme (89bdb95; D-073)
+- [ ] **Modes** (Chat, Roleplay, Live) and the persona fix: proposal in `docs/notes/modes-plan.md`, **waiting for the user's answers (§9 there)**, then SPEC FR-MODE-*, a decision and a phase (proposed K1c). Includes the c.ai renderer (actions italic and soft, OOC muted) and persona-only pack prompts.
+
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 
 ## Phase K1b: Installer walking skeleton (D-035)

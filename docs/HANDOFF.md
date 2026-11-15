@@ -2,8 +2,8 @@
 
 **Read this at the start of every session. Rewrite it thoroughly at the end.** If the date below is old, trust `git log` over this file and ask the user. Status and numbers are in `STATE.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15, night (session 4 close, after K1-09b)
-- **Session:** 4 (15 November): lazy boot, icon, voice on demand, Yuri only a character and the kernel split (D-060 to D-063); then "push it and finish the rest": K1-04b, K1-07b/K1-11, K1-09, K1-12, K1-13, K1-15 (D-064 to D-069); then, with the user's answer "Settings file wins", K1-13b (D-070); then "yeah finish up": K1-09b (D-071). K1 is code-complete.
+- **Last updated:** 2026-11-15, night (session 4 close, after the review notes: D-072, D-073, the modes plan)
+- **Session:** 4 (15 November): lazy boot, icon, voice on demand, Yuri only a character and the kernel split (D-060 to D-063); then "push it and finish the rest": K1-04b, K1-07b/K1-11, K1-09, K1-12, K1-13, K1-15 (D-064 to D-069); then, with the user's answer "Settings file wins", K1-13b (D-070); then "yeah finish up": K1-09b (D-071). K1 is code-complete. Then the user's review notes: the slider, one model in memory (D-072), Appearance (D-073), and a modes plan for their approval.
 - **Written by:** Claude, with the user (Yatharth)
 
 ## 1. The project in ten lines
@@ -24,6 +24,15 @@
 Solo developer, casual, wants direct commands and no manual file shuffling, phases with gates, honesty about verified vs not. They want a **clean, fast, flexible** codebase and an uncluttered tree. They watch the browser pane and send short UI notes mid-task ("left side looks kinda blank below input, suggestions?", "move the bot's message box closer to heart"); do them, then say what was done and what else could be done. They run other Claude sessions in parallel; relayed answers arrive from them. They sometimes toggle a "ponytail" mode (smallest complete change); it was off this session.
 
 ## 3. What happened
+
+### Session 4, part 5 (15 November 2026, night): the user's review notes
+
+The user sent screenshots (the effort thumb off the track at "No thinking") and c.ai references (grey bubbles, italic actions, avatars) with: "fix the slider, also only load the model that is selected. when selecting other one, unload rest. fix the colors too. add a theme selector …", "fix the core model persona (these are like c.ai characters …)" and "asterisk quoted words are an action so italic. double asterisk means bold. brackets are parenthesis". Answers given: helpers run on **the selected model**; embeddings **stay loaded**; themes get **presets, accent, message style and text size**; and a long note on modes (summarized in `docs/notes/modes-plan.md`).
+
+- **`ea67e85`:** the slider's spring easing overshot by ~50 px with two stops; now a plain ease-out.
+- **`c3a65a6` (D-072):** `llm.ACTIVE_MODEL` holds the picked Ollama model (`""` for llama.cpp/API, `None` before any load). `model_for` gives it to classifier, memory_writer and vision; `keep_alive_for` sends the configured 30m for it and the embedding model, 0 for anything else. `boot.load_chat_model` unloads every other Ollama model (`free_ollama`) and, for an API pick, stops llama-server; the loader runs the warm for instant (API) refs after READY. `helper_models` is now only the embedding model; `can_unload` may offer the classifier. **Trap found:** the first test run reached the user's real Ollama through `boot.unload_ollama` (tests in `test_warm_up.py` call the real `load_chat_model`); the run was stopped and `conftest.py` now stubs `boot.unload_ollama` for every test. Ollama's `/api/ps` was empty afterwards; whether the run unloaded something is not known.
+- **`89bdb95` (D-073):** Settings → Appearance (`src/app/theme.ts`), localStorage `kokyu.theme`, applied in `main.tsx` before render and synced through the `storage` event. Seen in the browser pane (port 1421, kernel offline, messages injected through the store module).
+- **Modes plan** (`docs/notes/modes-plan.md`, not built): mode per thread (Chat or Roleplay) and Live (Stage + voice) per window, three prompt layers (persona, mode, delivery), dialogue-only speech in Roleplay, story memory per roleplay, scenario cards. Six questions in its §9.
 
 ### Session 4, part 4 (15 November 2026, night): K1-09b, "yeah finish up"
 
@@ -55,7 +64,7 @@ K0 (seed from Yuri, packs, invariance) and K1-00 to K1-08b. See `git log`.
 
 ## 4. Where we stopped
 
-All code is committed through `a5fbe72` (K1-09b), plus this docs commit; both are pushed. `npm run check` green after `a5fbe72` (pytest 997, frontend 121). **K1 is code-complete.** Left in K1: **C-1b** (the user deletes `KASANE/vrm/`) and the **K1 gate** (the user, `STATE.md` §6).
+All code is committed through `89bdb95` (Appearance), plus this docs commit; both are pushed. `npm run check` green after `89bdb95` (pytest 1001, frontend 124). **K1 is code-complete.** The modes plan waits for the user's answers. Left in K1: **C-1b** (the user deletes `KASANE/vrm/`) and the **K1 gate** (the user, `STATE.md` §6).
 
 Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `.claude/`; `package-lock.json` has an unrelated change.
 
@@ -63,14 +72,15 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 
 1. `git status`, `git log -5 --oneline`, `git log origin/main..HEAD` (should be empty). Then `npm run check`.
 2. Ask the user to run `npm run tauri dev` and walk the **K1 gate** in `STATE.md` §6 (frameless window drag / resize / buttons, close to tray; a local and an API model; model, effort and companion changed mid-thread; a wrong key for the failure card; the layout vs the reference). Also the open K0 items (voice per companion).
-3. Ask the §6 questions.
-4. Once the user signs the K1 gate, phase K1b (installer walking skeleton). Read its TODO section and PRODUCT.md first; plan before code (R-46).
+3. Ask the §6 questions, first the six in `docs/notes/modes-plan.md` §9. With answers: SPEC FR-MODE-*, a decision, a TODO phase (proposed K1c), then M1 (prompt layers, Chat mode) before anything else in it.
+4. Ask the user to pick a model in the app and check the kernel log says the others were unloaded (D-072 is tested only with fakes).
+5. Once the user signs the K1 gate, phase K1b (installer walking skeleton). Read its TODO section and PRODUCT.md first; plan before code (R-46).
 
 ## 6. Open questions for the user
 
-- **Classifier:** keep `qwen3.5:4b` resident beside the 9B (`models.local.classifier` in `config/config.yaml`)? Together they fill the 12 GB card; the shipped default is one model.
+- **Modes plan** (`docs/notes/modes-plan.md` §9): mode fixed per thread? Chat length? Tools in Roleplay? Voice in Roleplay? Premade scenario cards? May Claude draft persona-only pack prompts?
 - **`KASANE/vrm/`:** delete it (duplicates of the pack VRMs)?
-- **D-055:** relax the persona's "no markdown" rule? Live, Luna answered a request for a bullet list in prose.
+- **D-055:** "no markdown" is answered by the modes plan (Markdown in Chat, the c.ai format in Roleplay, none only while Live) once approved.
 - **D-058:** unpriced models (DeepSeek, and now any custom endpoint from Settings) blocked while a cap is on: keep, or allow with a warning?
 - **D-057:** move the websocket token check earlier?
 - **Premade packs:** commit `assets/premade/` (large VRM/WAV) or keep them local?
@@ -99,7 +109,7 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 ## 8. Deliberately not done
 
 - Real-window, tray, audio, API and visual verification in Tauri (needs the user or a key).
-- *Unload* for the classifier or the embedding model (D-071); the TTS backend as a named resident. Editing the default model and the llama.cpp presets in the app (they stay in config.yaml, D-070); voice settings (K2).
+- *Unload* for the embedding model (D-071); the TTS backend as a named resident. Editing the default model and the llama.cpp presets in the app (they stay in config.yaml, D-070); voice settings (K2).
 - TTS backend and renderer as named VRAM residents (they show as "other programs"); several NVIDIA GPUs read as unknown.
 - Paging in the memory viewer (newest 500 live facts).
 - First-token latency not re-measured after the kernel split.

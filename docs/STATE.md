@@ -2,12 +2,12 @@
 
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15 (night), session 4 close, after K1-09b
-- **Current phase:** **K1 is code-complete; the K1 gate needs the user.** Done: K1-00 to K1-15 with K1-09b and K1-13b, the session 4 cleanup (C-1, C-2: Yuri is only a character, D-062). Left: C-1b (the user deletes `KASANE/vrm/`) and the **K1 gate** (§6). The K0 manual gate (window, voice) is still open.
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `a5fbe72`. This docs commit is pushed with it; if `git log origin/main..HEAD` shows anything, the push did not happen.
+- **Last updated:** 2026-11-15 (night), session 4 close, after the review notes (D-072, D-073)
+- **Current phase:** **K1 is code-complete; the K1 gate needs the user.** Done: K1-00 to K1-15 with K1-09b and K1-13b, the session 4 cleanup (C-1, C-2: Yuri is only a character, D-062). Left: C-1b (the user deletes `KASANE/vrm/`) and the **K1 gate** (§6). The K0 manual gate (window, voice) is still open. **Proposed, not approved:** modes (Chat, Roleplay, Live) in `docs/notes/modes-plan.md`.
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `89bdb95`. This docs commit is pushed with it; if `git log origin/main..HEAD` shows anything, the push did not happen.
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's PC, 2026-11-15, after `a5fbe72`):** `npm run check`: tsc, frontend tests 121, vite build, `cargo check`, pytest 997.
+- **Last green run (the user's PC, 2026-11-15, after `89bdb95`):** `npm run check`: tsc, frontend tests 124, vite build, `cargo check`, pytest 1001.
 
 ## 1. What exists
 
@@ -67,7 +67,10 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 
 | Claim | Status |
 |---|---|
-| Current tree on Windows: `npm run check` green (tsc, frontend 121, vite build, cargo check, pytest 997) | **Verified** (user's PC, after `a5fbe72`) |
+| Current tree on Windows: `npm run check` green (tsc, frontend 124, vite build, cargo check, pytest 1001) | **Verified** (user's PC, after `89bdb95`) |
+| One chat model in memory (D-072): a pick unloads every other Ollama model but embeddings (an API pick also stops llama-server); classifier, memory writer and vision run on the picked Ollama model; `keep_alive` 30m for it, 0 for others | Done and tested with fakes; **not run against the real Ollama** |
+| Appearance (D-073): three themes, accent, bubbles, text size, kept in localStorage | **Verified** in the browser pane with the kernel offline; not seen in the Tauri window |
+| Effort slider: no overshoot past the track | **Verified** (browser pane, measured) |
 | Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; memory and the Doctor never look at a waifu | **Verified** (tests) |
 | Every protocol client message type has a `Session.on_<type>` handler | **Verified** (test) |
 | Effort slider: per-model levels, remembered per model per thread, the chip glows while generating; High on `qwen3.5:9b` answers instead of thinking itself out of room | **Verified** (browser pane) |
@@ -89,12 +92,12 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 ## 4. Known issues and risks
 
 - **Two files set the same keys (D-070):** what Settings saved in `settings.json` (app data folder; `data/` in a checkout) wins over `config/config.yaml`. If a config.yaml edit seems ignored, look there first: Settings shows which values come from it ("Use the default" / Remove drops them). Hand edits to config.yaml still need a restart; Settings changes do not.
-- **The 4B classifier stays resident beside the 9B chat model** (`models.local.classifier` in the user's config): together with embeddings they fill the card (§2). The VRAM manager now reports this instead of silently swapping; whether to keep a separate classifier is the user's call (the shipped default is one model).
+- **Helper roles now run on the picked chat model** (D-072): `models.local.classifier` / `memory_writer` in the user's config (`qwen3.5:4b`) apply only while a llama.cpp or API model is picked, and then load per call (cold). Task Guide's classifier on the 9B is slower per call than the 4B was.
 - **The frameless window is unseen.** If dragging or edge resizing misbehaves in WebView2, `"decorations": true` in `src-tauri/tauri.conf.json` brings the system frame back (the in-page buttons would then be duplicates; `TopBar.tsx` draws them only in the desktop app).
 - **`KASANE/vrm/`** still holds duplicate VRMs (TODO C-1b; the user deletes it).
 - **Luna answered a request for a bullet list in prose** (live, session 4): the persona's "no markdown" rule wins. That is D-055's open question.
 - **The Doctor's GPU row counts an unmeasured llama-server as "other programs"** until it has been measured once.
-- **No *Unload* for the classifier** (D-071): when the 4B classifier is what blocks a load, the card offers only Try again / Switch model, because the kernel loads the classifier again right after the chat model. Freeing it for good is `models.local.classifier: null` (the open classifier question).
+- **The persona is flat everywhere** (short, no Markdown): the pack prompts carry TTS rules meant for voice. The fix is the modes plan (persona-only prompts plus mode layers), waiting for the user.
 - **The mic button is drawn but disabled** until voice input (K2).
 - **No API key on this PC**, so nothing on the API side has run against a real provider. First live check: `npm run tauri dev`, model chip → API → Key, save a key, pick an API model, send; then a wrong key for the failure card.
 - **Open questions waiting for the user:** the classifier, D-058 (unpriced models; a custom endpoint's models are unpriced too), D-055 ("no markdown"), D-057 (websocket token check), premade packs in git. See `HANDOFF.md` §6.
@@ -140,7 +143,7 @@ Tick and date when done.
 |---|---|---|---|
 | K0 (automated) | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
 | K0 (manual, PC) | | | |
-| K1 (automated) | 2026-11-15 | `npm run check` green after `a5fbe72`; browser-pane checks in §3 | Claude |
+| K1 (automated) | 2026-11-15 | `npm run check` green after `89bdb95`; browser-pane checks in §3 | Claude |
 | K1 (manual, PC) | | | |
 
 ## 7. Update checklist (end of every session)
