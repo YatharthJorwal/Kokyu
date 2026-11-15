@@ -112,7 +112,7 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K1-11 Effort slider with animation and reduced-motion fallback (FR-M-8, 9, 11) (f69b1f6; per-model memory in `threads.efforts`; thinking gets `llm.reasoning_tokens` of room; an empty reply is an error, D-064)
 - [x] K1-12 Inline API failure UX with Retry / Switch model (FR-R-5) (77c6c00; D-066: a card under the failed turn, plain words per failure kind, the provider's words under Details)
 - [x] K1-13 Settings (FR-SET-1, 2), Doctor panel (FR-SET-3), Memory viewer (FR-MEM-4) (3e62a27; D-067: Models, Memory, Doctor, About; read-only but memory)
-- [ ] K1-13b Editable settings: `settings.json` applied without restart (FR-SET-2), screen-companion switches (K1-05b), custom API endpoint (K1-08b), Ollama URL. Needs the user: when `settings.json` and `config.yaml` both set a key, which wins? (D-067)
+- [x] K1-13b Editable settings: `settings.json` applied without restart (FR-SET-2), screen-companion switches (K1-05b), custom API endpoint (K1-08b), Ollama URL (0222d2e; D-070: settings.json wins over config.yaml; Ollama on this PC only; screen companions "On now" and "On at start", FR-SC-1)
 - [x] K1-14 Tests, `STATE`/`HANDOFF` update (session 4 close docs commit; tests landed with each item: pytest 971, frontend 120, `npm run check` green after b4f17b8)
 - [x] K1-B1 Lazy boot (user request, D-060): nothing heavy before the window; llama.cpp only when picked; the kernel owns GPT-SoVITS; Vite ignores runtime folders (9a667ba)
 - [x] K1-B2 App icon from the owner's reference, transparent corners (d89c094)

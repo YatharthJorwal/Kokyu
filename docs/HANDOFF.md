@@ -2,8 +2,8 @@
 
 **Read this at the start of every session. Rewrite it thoroughly at the end.** If the date below is old, trust `git log` over this file and ask the user. Status and numbers are in `STATE.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15, evening (session 4 close)
-- **Session:** 4 (15 November): lazy boot, icon, voice on demand, Yuri only a character and the kernel split (D-060 to D-063); then "push it and finish the rest": K1-04b, K1-07b/K1-11, K1-09, K1-12, K1-13, K1-15 (D-064 to D-069)
+- **Last updated:** 2026-11-15, night (session 4, after K1-13b)
+- **Session:** 4 (15 November): lazy boot, icon, voice on demand, Yuri only a character and the kernel split (D-060 to D-063); then "push it and finish the rest": K1-04b, K1-07b/K1-11, K1-09, K1-12, K1-13, K1-15 (D-064 to D-069); then, with the user's answer "Settings file wins", K1-13b (D-070)
 - **Written by:** Claude, with the user (Yatharth)
 
 ## 1. The project in ten lines
@@ -17,13 +17,17 @@
 7. Default chat model on this PC: **`qwen3.5:9b` on Ollama** (D-060). The 35B on llama.cpp starts only when picked (about 2 minutes).
 8. Spec v1.0 is the baseline (D-044); changes go through new decisions, and **every commit and decision cites its FR/D IDs** (the user checks this). SPEC rows changed by a decision carry its ID inline (D-068 amended FR-C-4, FR-C-6, FR-S-1, FR-M-1).
 9. Claude works **directly on the user's Windows PC** (`D:\AI\Kokyu.ai`, Claude desktop app), often while the user is away, and commits item by item after a green `npm run check`. Claude cannot see the Tauri window or hear audio: those stay "not verified" until the user looks.
-10. Plan: `TODO.md`. K1 is code-complete except K1-13b and K1-09b; the K1 gate is the user's (`STATE.md` §6).
+10. Plan: `TODO.md`. K1 is code-complete except K1-09b; the K1 gate is the user's (`STATE.md` §6).
 
 ## 2. How the user works
 
 Solo developer, casual, wants direct commands and no manual file shuffling, phases with gates, honesty about verified vs not. They want a **clean, fast, flexible** codebase and an uncluttered tree. They watch the browser pane and send short UI notes mid-task ("left side looks kinda blank below input, suggestions?", "move the bot's message box closer to heart"); do them, then say what was done and what else could be done. They run other Claude sessions in parallel; relayed answers arrive from them. They sometimes toggle a "ponytail" mode (smallest complete change); it was off this session.
 
 ## 3. What happened
+
+### Session 4, part 3 (15 November 2026, night): K1-13b
+
+The user answered the precedence question: "Settings file wins". **`0222d2e` (D-070):** `settings.json` in the app data folder holds what Settings edits, in config.yaml's layout, and wins key by key; it is laid over config.yaml at kernel start (lifespan, before boot) and after each change, and `config.install` rebinds every module's `CONFIG` so a change applies with no restart (`Router.reconfigure` follows). Settings → Models now edits the Ollama address (this PC only: what the companions see and hear must not leave it), a custom OpenAI-compatible endpoint (https; provider id from its host; never a developer key; listed in the picker's Key form) and the budget caps. A new **Screen** section has "On now" and "On at start" for Task Guide and OCR watch (FR-SC-1's Settings half, left open by D-056); at start a mode passes the same vision check as the ＋ tray. Found while checking live: the form fields stretched 220 px tall (fixed), and a hand-edited plain value for a section would have wiped that section (now dropped with a warning). Live check in the browser pane against a scratch kernel; `npm run check` green (pytest 992, frontend 121).
 
 ### Session 4, part 2 (15 November 2026): "push it and finish the rest"
 
@@ -47,8 +51,7 @@ K0 (seed from Yuri, packs, invariance) and K1-00 to K1-08b. See `git log`.
 
 ## 4. Where we stopped
 
-All code is committed through `3d87f72`, plus this docs commit; the session close pushes `main`. `npm run check` green after `3d87f72` (pytest 971, frontend 120). K1 is code-complete except:
-- **K1-13b** (editable settings, `settings.json`): waits for the user's answer in §6;
+All code is committed through `0222d2e` (K1-13b), plus this docs commit; both are pushed. `npm run check` green after `0222d2e` (pytest 992, frontend 121). K1 is code-complete except:
 - **K1-09b** (*Unload X* on the VRAM refusal card, SPEC §5): small, not started;
 - **C-1b** (the user deletes `KASANE/vrm/`).
 
@@ -58,22 +61,23 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 
 1. `git status`, `git log -5 --oneline`, `git log origin/main..HEAD` (should be empty). Then `npm run check`.
 2. Ask the user to run `npm run tauri dev` and walk the **K1 gate** in `STATE.md` §6 (frameless window drag / resize / buttons, close to tray; a local and an API model; model, effort and companion changed mid-thread; a wrong key for the failure card; the layout vs the reference). Also the open K0 items (voice per companion).
-3. Ask the §6 questions; with the precedence answer, do K1-13b.
+3. Ask the §6 questions.
 4. K1-09b. Then, once the user signs the K1 gate, phase K1b (installer walking skeleton).
 
 ## 6. Open questions for the user
 
-- **K1-13b:** when `settings.json` and `config/config.yaml` both set a key, which wins? (Suggested: `settings.json` holds what the app's Settings edits and wins; `config.yaml` stays for developer and advanced keys.)
 - **Classifier:** keep `qwen3.5:4b` resident beside the 9B (`models.local.classifier` in `config/config.yaml`)? Together they fill the 12 GB card; the shipped default is one model.
 - **`KASANE/vrm/`:** delete it (duplicates of the pack VRMs)?
 - **D-055:** relax the persona's "no markdown" rule? Live, Luna answered a request for a bullet list in prose.
-- **D-058:** unpriced models (DeepSeek) blocked while a cap is on: keep, or allow with a warning?
+- **D-058:** unpriced models (DeepSeek, and now any custom endpoint from Settings) blocked while a cap is on: keep, or allow with a warning?
 - **D-057:** move the websocket token check earlier?
 - **Premade packs:** commit `assets/premade/` (large VRM/WAV) or keep them local?
 - **Reference items left out (D-068):** VR space and the 2D pet switch wait for their phases; say if you want them shown disabled instead.
 
 ## 7. Traps and gotchas
 
+- **Two config files (D-070):** `settings.json` (app data folder; `data/` in a checkout, the scratch dir under `KOKYU_DATA_DIR`) wins over `config/config.yaml`. Code must read `CONFIG` at call time (as all modules do): `config.install` swaps the object live, so a value copied from `CONFIG` at import or in a constructor goes stale (llama.cpp's Ollama address was one; fixed). Tests that install a config must put the old one back (`running_config` fixture in `test_settings_file.py`).
+- **Live tests of a custom endpoint:** use a `.invalid` host (`https://lab.example.invalid/v1`), so nothing can leave the machine.
 - **Where things live (D-062):** a message handler is `Session.on_<type>` in `session.py`; the turn is `turns.run_turn`; who drives is `hub.driver`. Adding a message type = `protocol/` model + `CLIENT_TYPES` entry + `src/net/protocol.ts` + one `on_<type>` (a test checks the handler exists).
 - **Tests patch the module that owns the name** (`turns.send_speak`, `companions.system_message`, `boot.check_chat_model`, `hub.driver`, `doctor._get_json` for every Doctor HTTP call including `/api/ps`, `vram.gpu_memory`). `conftest.py` stubs `vram.gpu_memory` and gives each test a fresh measured cache. To change `CONFIG` for a test use `kernel_fixtures.set_config(monkeypatch, cfg)`.
 - **Call through the module** (`turns.send_speak(...)`, `llm.stream_reply(...)`), never `from x import fn`.
@@ -92,7 +96,7 @@ Nothing is half-done in the tree. Untracked and to stay so: `assets/premade/`, `
 ## 8. Deliberately not done
 
 - Real-window, tray, audio, API and visual verification in Tauri (needs the user or a key).
-- `settings.json` and editing in Settings (K1-13b, needs the user); *Unload X* (K1-09b).
+- *Unload X* (K1-09b). Editing the default model and the llama.cpp presets in the app (they stay in config.yaml, D-070); voice settings (K2).
 - TTS backend and renderer as named VRAM residents (they show as "other programs"); several NVIDIA GPUs read as unknown.
 - Paging in the memory viewer (newest 500 live facts).
 - First-token latency not re-measured after the kernel split.

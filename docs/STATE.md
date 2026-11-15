@@ -2,12 +2,12 @@
 
 **Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
 
-- **Last updated:** 2026-11-15 (evening), session 4 close
-- **Current phase:** **K1 code done except two items; the K1 gate needs the user.** Done: K1-00 to K1-15, the session 4 cleanup (C-1, C-2: Yuri is only a character, D-062). Left: **K1-13b** (editable settings, `settings.json`: blocked on the user's precedence answer, D-067), **K1-09b** (*Unload X* on the VRAM card), C-1b (the user deletes `KASANE/vrm/`), then the **K1 gate** (§6). The K0 manual gate (window, voice) is still open.
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `3d87f72`. The session close pushes `main` (this docs commit included); if `git log origin/main..HEAD` shows anything, the push did not happen.
+- **Last updated:** 2026-11-15 (night), session 4, after K1-13b
+- **Current phase:** **K1 code done except one item; the K1 gate needs the user.** Done: K1-00 to K1-15 and K1-13b, the session 4 cleanup (C-1, C-2: Yuri is only a character, D-062). Left: **K1-09b** (*Unload X* on the VRAM card), C-1b (the user deletes `KASANE/vrm/`), then the **K1 gate** (§6). The K0 manual gate (window, voice) is still open.
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `0222d2e`. This docs commit is pushed with it; if `git log origin/main..HEAD` shows anything, the push did not happen.
 - **License:** proprietary, all rights reserved (D-040). The repository should be private.
 - **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's PC, 2026-11-15, after `3d87f72`):** `npm run check`: tsc, frontend tests 120, vite build, `cargo check`, pytest 971.
+- **Last green run (the user's PC, 2026-11-15, after `0222d2e`):** `npm run check`: tsc, frontend tests 121, vite build, `cargo check`, pytest 992.
 
 ## 1. What exists
 
@@ -27,12 +27,13 @@
 | Effort data in `config/models.yaml` / `models.example.yaml` (D-064); thinking gets `llm.reasoning_tokens` of room; an empty reply is an error | Done and tested; live verified on `qwen3.5:9b` |
 | VRAM manager v1 (K1-09, D-065): NVML from the driver, measured sizes in `data/vram_measured.json`, fits hints, a refusal before any unload that names what holds the memory | Done and tested; live verified (refusal card, fits / won't fit); the llama-server measurement on a real start not seen |
 | Inline turn failures (K1-12, D-066): a card under the failed turn, plain words per kind (key refused, out of credit, rate limit, timeout, provider error), the provider's words under Details | Done and tested; live verified with Ollama unreachable; **no live API failure** (no key) |
-| Settings (K1-13, D-067): Models (read-only), Memory (correct, forget, restore), Doctor (one row per component with a fix hint), About | Done and tested; live verified in the browser pane |
+| Settings (K1-13, D-067): Models, Screen, Memory (correct, forget, restore), Doctor (one row per component with a fix hint), About | Done and tested; live verified in the browser pane |
+| Editable settings (K1-13b, D-070): `settings.json` in the app data folder wins over `config/config.yaml`, applied with no restart: the Ollama address (this PC only), a custom API endpoint, the budget caps, screen companions "On now" / "On at start" | Done and tested; live verified in the browser pane against a scratch kernel (refusals, saves, the API slot and spend line following, the file, a restart); "On at start" with a vision model and the key form's custom entry in the desktop window not seen |
 | Sidebar history (grouped, search, rename, delete), Markdown replies, Copy, Regenerate, Retry, heart and thinking lines, screen companions, companion chip with dividers | Done; live verified (screen companion remarks not seen end to end) |
 | AI Router and one API endpoint at a time; key in the Windows Credential Manager (D-058, D-059) | Done and tested with fakes; **no live API call** (no key on this PC) |
 | App icon | Done; not looked at in the taskbar or tray |
 | Premade packs `assets/premade/{luna,yuri}/` | Built by a peer session, **untracked**; the user decides about committing VRM/WAV (D-041) |
-| Editable settings, `settings.json` (FR-SET-2), *Unload X* button | Not started (K1-13b, K1-09b) |
+| *Unload X* button on the VRAM card | Not started (K1-09b) |
 | TTS backend (Track T) | Not started; development uses the existing install (D-042) |
 
 ## 2. Environment
@@ -66,7 +67,7 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 
 | Claim | Status |
 |---|---|
-| Current tree on Windows: `npm run check` green (tsc, frontend 120, vite build, cargo check, pytest 971) | **Verified** (user's PC, after `3d87f72`) |
+| Current tree on Windows: `npm run check` green (tsc, frontend 121, vite build, cargo check, pytest 992) | **Verified** (user's PC, after `0222d2e`) |
 | Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; memory and the Doctor never look at a waifu | **Verified** (tests) |
 | Every protocol client message type has a `Session.on_<type>` handler | **Verified** (test) |
 | Effort slider: per-model levels, remembered per model per thread, the chip glows while generating; High on `qwen3.5:9b` answers instead of thinking itself out of room | **Verified** (browser pane) |
@@ -74,6 +75,8 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 | A failed turn shows the card under the turn with Retry / Switch model | **Verified** (browser pane, Ollama URL pointed at a dead port) |
 | Settings → Memory: correct (a new fact supersedes the old), forget, restore; Settings → Doctor rows on this PC | **Verified** (browser pane, scratch data dir) |
 | K1-15 layout, popovers, tray, Temp Chat switch (saved by the kernel, shown in the sidebar), status line, replies right above the heart | **Verified** (browser pane) |
+| Settings → Models: a LAN Ollama address and a plain-http endpoint refused with the reason beside Save; a localhost address, a custom endpoint (the API heading switched to it) and caps (the spend line followed) saved to `settings.json` and back after a kernel restart; Settings → Screen "On at start" saved | **Verified** (browser pane, scratch data dir) |
+| A screen companion turned on at start through the vision check | **Verified** with fakes only (test); not run live, it would capture the screen |
 | Anything inside the Tauri window (`npm run tauri dev`): the frameless window (drag, resize, the three buttons, close to tray), the tray menu, voice playback in WebView2, drag-drop, the native file dialog, the Key form | **Not verified** (Claude cannot see the window) |
 | Credential Manager and the kernel's stdin key pipe | **Verified** (`cargo test -- --ignored`, live vault) |
 | A live API model call; an API failure card from a real provider | **Not verified** (no key on this PC) |
@@ -84,7 +87,7 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 
 ## 4. Known issues and risks
 
-- **K1-13b is blocked on the user:** when `settings.json` (FR-SET-2) and `config/config.yaml` both set a key, which wins? Until then Settings edits only memory; models, budgets and endpoints are edited in `config/config.yaml`.
+- **Two files set the same keys (D-070):** what Settings saved in `settings.json` (app data folder; `data/` in a checkout) wins over `config/config.yaml`. If a config.yaml edit seems ignored, look there first: Settings shows which values come from it ("Use the default" / Remove drops them). Hand edits to config.yaml still need a restart; Settings changes do not.
 - **The 4B classifier stays resident beside the 9B chat model** (`models.local.classifier` in the user's config): together with embeddings they fill the card (§2). The VRAM manager now reports this instead of silently swapping; whether to keep a separate classifier is the user's call (the shipped default is one model).
 - **The frameless window is unseen.** If dragging or edge resizing misbehaves in WebView2, `"decorations": true` in `src-tauri/tauri.conf.json` brings the system frame back (the in-page buttons would then be duplicates; `TopBar.tsx` draws them only in the desktop app).
 - **`KASANE/vrm/`** still holds duplicate VRMs (TODO C-1b; the user deletes it).
@@ -92,7 +95,7 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 - **The Doctor's GPU row counts an unmeasured llama-server as "other programs"** until it has been measured once.
 - **The mic button is drawn but disabled** until voice input (K2).
 - **No API key on this PC**, so nothing on the API side has run against a real provider. First live check: `npm run tauri dev`, model chip → API → Key, save a key, pick an API model, send; then a wrong key for the failure card.
-- **Open questions waiting for the user:** K1-13b precedence, the classifier, D-058 (unpriced models), D-055 ("no markdown"), D-057 (websocket token check), premade packs in git. See `HANDOFF.md` §6.
+- **Open questions waiting for the user:** the classifier, D-058 (unpriced models; a custom endpoint's models are unpriced too), D-055 ("no markdown"), D-057 (websocket token check), premade packs in git. See `HANDOFF.md` §6.
 - **Untracked in the tree:** `assets/premade/` (VRM/WAV), `.claude/`, and an unrelated `package-lock.json` change. Always stage explicit paths.
 - **Tests read the user's `config/config.yaml`** when it exists; the suite passes, but it is not isolated from local config.
 - **Inherited:** faster-whisper on CUDA failed on this machine (CPU STT); port 1420 is shared by `dev:ui` and `tauri dev`; killing the process instead of tray Quit loses that session's memory pass until the next start; the 35B needs about 2 minutes to load and maps ~19.5 GB of RAM.
@@ -101,6 +104,8 @@ Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.1
 
 | Date | Area | Issue | Status |
 |---|---|---|---|
+| 2026-11-15 | Settings | The Settings form fields stretched 220 px tall (a flex basis in a column) | Fixed before commit (`0222d2e`) |
+| 2026-11-15 | Settings | A hand-edited `settings.json` with a plain value for a section would have replaced that whole section with the defaults | Fixed before commit (`0222d2e`): such a value is dropped with a warning |
 | 2026-11-15 | UI | Replies ended about 66 px above the heart (an invisible actions row); blank space left of the model chip | Fixed (`3d87f72`, D-069, the user's review) |
 | 2026-11-15 | Doctor | The GPU row warned whenever Kōkyū's own models filled the card | Fixed before commit (`3e62a27`) |
 | 2026-11-15 | VRAM | A load started without room and swapped models in and out (104.6 s) | Fixed (`d7180b8`): refused before any unload, blockers named |
@@ -126,12 +131,13 @@ Tick and date when done.
 - [ ] Change model, effort and companion mid-thread, each without changing the others
 - [ ] A forced API error (for example a wrong key) shows the failure card with Retry / Switch model
 - [ ] Layout signed off against `docs/reference-images/chat-ui.webp`
+- [ ] Settings → Models: a custom endpoint saved, its key saved with Key in the model picker (it is listed there), one of its models answers with the budget off
 
 | Gate | Date | Evidence | Signed by |
 |---|---|---|---|
 | K0 (automated) | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
 | K0 (manual, PC) | | | |
-| K1 (automated) | 2026-11-15 | `npm run check` green after `3d87f72`; browser-pane checks in §3 | Claude |
+| K1 (automated) | 2026-11-15 | `npm run check` green after `0222d2e`; browser-pane checks in §3 | Claude |
 | K1 (manual, PC) | | | |
 
 ## 7. Update checklist (end of every session)
