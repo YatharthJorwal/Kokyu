@@ -103,15 +103,17 @@ Goal: a running kernel and shell seeded from Yuri where **a waifu is a pack** an
 - [x] K1-05b Screen companions: Task Guide and OCR watch toggles in the `＋` tray and Settings, status chip with one-click stop, refuse to start without a local vision model (FR-SC-1..5, D-048) (9d7ee4d; the Settings switches land with K1-13)
 - [x] K1-06 Waifu switcher chip and divider behaviour (FR-S-1, 2) (5097f37)
 - [x] K1-07a Ollama/llama.cpp/API discovery for the picker (FR-M-3; D-054) (c2b1832)
-- [ ] K1-07b Capability registry (FR-M-10): the user answered (2026-11-15, relayed): per-model capability and effort data in `config/models.yaml` as SPEC says; llama.cpp presets stay in `config.yaml` (D-054). Record a DECISIONS entry superseding D-054's "Proposed" bullet; lands with the effort slider (K1-11)
+- [x] K1-07b Capability registry (FR-M-10): per-model effort data in `config/models.yaml` (user) and `config/models.example.yaml` (shipped); llama.cpp presets stay in `config.yaml` (f69b1f6; D-064 settles D-054's open bullet)
 - [x] K1-08 AI Router provider: catalog fetch/cache, SSE streaming, spend ledger, audit, budget cap, redaction (FR-M-4, FR-R-2, 6) (c54a938; D-058)
 - [x] K1-08b Generic `openai_compat` provider (base URL plus key; AI Router, OpenRouter, DeepSeek presets); end-user keys in the Windows Credential Manager through the shell (D-037, FR-R-6) (5b04a30; D-059: one endpoint at a time, the user's choice; a custom endpoint is config-only until K1-13)
-- [ ] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-6, ARCHITECTURE §7.3). Input from session 4: a cold `qwen3.5:9b` load took 104.6 s while the `qwen3.5:4b` classifier and the 9B swapped each other out of VRAM (about 6.6 GB already in use before the load). A peer's `KASANE/vram.py` + `tests/test_vram.py` wait untracked
+- [x] K1-09 VRAM manager v1 (NVML), exclusivity across backends, fits hints, load errors (FR-M-3, FR-M-6, ARCHITECTURE §7.3) (d7180b8; D-065; the peer's `vram.py` wired in; TTS and renderer not named residents yet; no *Unload X* button)
+- [ ] K1-09b *Unload X* on the VRAM refusal card (SPEC §5 "Model fails to load"): the card names the blockers (D-065) but offers only Try again / Switch model; unloading a named Ollama model is `keep_alive: 0`
 - [x] K1-10 Model chip + popover (search, Local/API sections, badges, footer meters) (FR-M-1, 2, 5, 7); a "loading model" state while the kernel warms or switches models (D-052, D-054) (c2b1832)
-- [ ] K1-11 Effort slider with animation and reduced-motion fallback (FR-M-8, 9, 11)
-- [ ] K1-12 Inline API failure UX with Retry / Switch model (FR-R-5)
-- [ ] K1-13 Settings (FR-SET-1, 2), Doctor panel (FR-SET-3), Memory viewer (FR-MEM-4)
-- [ ] K1-14 Tests, `STATE`/`HANDOFF` update
+- [x] K1-11 Effort slider with animation and reduced-motion fallback (FR-M-8, 9, 11) (f69b1f6; per-model memory in `threads.efforts`; thinking gets `llm.reasoning_tokens` of room; an empty reply is an error, D-064)
+- [x] K1-12 Inline API failure UX with Retry / Switch model (FR-R-5) (77c6c00; D-066: a card under the failed turn, plain words per failure kind, the provider's words under Details)
+- [x] K1-13 Settings (FR-SET-1, 2), Doctor panel (FR-SET-3), Memory viewer (FR-MEM-4) (3e62a27; D-067: Models, Memory, Doctor, About; read-only but memory)
+- [ ] K1-13b Editable settings: `settings.json` applied without restart (FR-SET-2), screen-companion switches (K1-05b), custom API endpoint (K1-08b), Ollama URL. Needs the user: when `settings.json` and `config.yaml` both set a key, which wins? (D-067)
+- [x] K1-14 Tests, `STATE`/`HANDOFF` update (session 4 close docs commit; tests landed with each item: pytest 971, frontend 120, `npm run check` green after b4f17b8)
 - [x] K1-B1 Lazy boot (user request, D-060): nothing heavy before the window; llama.cpp only when picked; the kernel owns GPT-SoVITS; Vite ignores runtime folders (9a667ba)
 - [x] K1-B2 App icon from the owner's reference, transparent corners (d89c094)
 - [x] K1-B3 Voice starts only when it is used: a voice mode switch in the `＋` tray starts GPT-SoVITS and faster-whisper; nothing voice-related at launch (D-061) (2a31515)
@@ -124,7 +126,7 @@ The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a t
 - [ ] C-1b Delete `KASANE/vrm/` (user): byte-identical copies of `assets/premade/*/model.vrm` (SHA-256 checked), gitignored, read by nothing; Claude's delete was refused by auto mode
 - [x] C-2 Kernel rebuild in place: split `app.py` into `server.py`, `boot.py`, `session.py` (one class per window, a handler per message type), `turns.py`; `logging` instead of `print("[yuri] …")` (R-13); retire the legacy flat protocol and the shadow-mode API toggle (D-049); lazy imports for STT, camera, OCR, pyttsx3; measure boot and first token before and after (D-062: d5da9f8 split, `app.py` kept as the server; 8e4997b Quit waits for the memory pass; `import app` 750 → 615 ms, camera/OCR/pyttsx3 were not on the import path; first token not re-measured)
 - [x] K1-15a Heart and rotating thinking lines above the input; threads fill from the bottom (FR-C-5, D-063) (fb804a1)
-- [ ] K1-15 UI to the reference: frameless window with its own title-bar buttons; top bar (companion chip with avatar, Temp Chat switch); sidebar (logo, New chat, search, groups, Settings gear); composer (attach, mic, round send); model chip under the composer; popover badges (fits, vision, thinking, tools), effort slider, spend footer
+- [x] K1-15 UI to the reference: frameless window with its own title-bar buttons; top bar (companion chip with avatar, Temp Chat switch); sidebar (logo, New chat, search, groups, Settings gear); composer (attach, mic, round send); model chip under the composer; popover badges (fits, vision, thinking, tools), effort slider, spend footer (b4f17b8, 3d87f72; D-068, D-069 after the user's review; the frameless window itself not seen: needs `npm run tauri dev`)
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 
 ## Phase K1b: Installer walking skeleton (D-035)

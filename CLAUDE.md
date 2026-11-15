@@ -70,6 +70,8 @@ KASANE/               Python kernel (flat modules, folder on sys.path: `import l
                         ambient.py    screen companions (Task Guide, OCR watch)
                         companions.py the active companion's persona and voice, nothing more
                         boot.py       start-up order (D-060, D-061); hub.py open windows and the driver
+                        vram.py       GPU memory, measured sizes, the check before a load (D-065)
+                        doctor.py     the Settings → Doctor checks (D-067)
                         router/ memory/ audio/ senses/ tools/ waifus/ threads/ protocol/ paths.py config.py llm.py
                         voice_files/  build_premade.py's input (voice clips; .wav gitignored)
 src/                  frontend: app/ React window · engine/ three.js avatar code (K2 Stage) · net/ typed socket
