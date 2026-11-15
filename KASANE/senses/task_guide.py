@@ -3,16 +3,16 @@ Phase 4 Round 2 -- Task Guide Mode's other half (docs/ARCHITECTURE.md's
 "Task Guide Mode" section): tracking whether a task is currently active,
 and checking a screenshot against it. The actual scheduling (waking up
 on an interval, deciding when to run a check, speaking the chide) lives
-in app.py's `_task_guide_loop`/`_run_task_guide_check` -- this module is
+in session.py's `_task_guide_loop` and ambient.py's `run_task_guide_check` -- this module is
 just the state and the one LLM call that turns a screenshot + task
 description into an on-task/off-task verdict, kept separate so both
 halves stay independently testable (same split as vision.py's
 capture_screen/describe_screen).
 
 Single active task at a time, tracked as plain module-level state --
-same pattern as app.py's `_driver`/`_scene_state` globals. This is a
-single-user, single-driver-connection app (see app.py's driver/observer
-comment), so there's never a real need for more than one "what am I
+same pattern as hub.py's `driver`. This is a
+single-user, single-driver-connection app (see hub.py's driver/observer
+note), so there's never a real need for more than one "what am I
 tracking right now" slot; a second concurrent task genuinely doesn't
 make sense for one person at one screen.
 """
@@ -40,8 +40,8 @@ class TaskState:
     # for idle detection (that's last_interaction_at below), just useful
     # for debugging/logging.
     updated_at: float = 0.0
-    # Bumped by mark_interaction() on every real user turn (see app.py's
-    # _run_turn), regardless of whether that turn was about the tracked
+    # Bumped by mark_interaction() on every real user turn (see turns.py's
+    # run_turn), regardless of whether that turn was about the tracked
     # task at all -- any real interaction means the user is still there.
     # is_idle() compares against this, not updated_at, so a task that's
     # been tracked a long time but the user keeps actively talking never
@@ -109,7 +109,7 @@ def set_enabled(on: bool) -> None:
 
 
 def clear_active_task() -> None:
-    """Same effect as set_active_task(False), but for app.py's own
+    """Same effect as set_active_task(False), but for the session's own
     internal idle-timeout path (_task_guide_loop) rather than a model
     tool call -- no confirmation string needed there, nothing reads it."""
     global _state
@@ -117,7 +117,7 @@ def clear_active_task() -> None:
 
 
 def mark_interaction() -> None:
-    """Called from app.py's _run_turn on every real user turn. A no-op
+    """Called from turns.run_turn on every real user turn. A no-op
     if no task is active -- nothing to reset the idle clock on."""
     global _state
     if _state.active:
@@ -180,7 +180,7 @@ async def check_task_progress(task_description: str, image_b64: str) -> dict | N
     describe_screen uses) with a different, comparison-focused prompt.
     Returns {"on_task": bool, "note": str} or None if the call failed or
     came back unparseable -- both treated the same by the caller
-    (app.py's _run_task_guide_check): skip this check, try again next
+    (ambient.run_task_guide_check): skip this check, try again next
     interval, never crash the loop or chide on a guess.
 
     **Not verified against a real server** -- same caveat as every other
@@ -306,7 +306,7 @@ falsely ending a real one that's still in progress.\
 async def maybe_update_task(user_text: str) -> str | None:
     """Runs every turn (see this section's own comment above for why
     there's no cheap keyword gate first, unlike forget.maybe_forget).
-    Returns an instruction fragment for app.py to inject into the same
+    Returns an instruction fragment for turns.py to inject into the same
     ephemeral memory-block message forget.py's hint goes into, or None
     if nothing changed this turn -- covers "classified as none,"
     "classified as stop but nothing was actually active," and any

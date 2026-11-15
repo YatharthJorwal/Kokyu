@@ -1,9 +1,9 @@
 """
-Phase 4's tool registry -- what app.py's main conversation loop hands to
+Phase 4's tool registry -- what turns.py's conversation loop hands to
 llm.stream_reply_with_tools() as available tools, and how it dispatches
 a tool_calls event it gets back. One place so adding a new tool later
 (Phase 4 Round 2's ocr_region, Phase 11's browser-automation tool, etc.)
-means adding one schema + one handler here, not touching app.py's
+means adding one schema + one handler here, not touching turns.py's
 turn-handling loop itself.
 """
 

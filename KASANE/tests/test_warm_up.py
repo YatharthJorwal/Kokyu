@@ -4,12 +4,22 @@ from __future__ import annotations
 
 import asyncio
 import dataclasses
+import os
 
 import pytest
 
 import app
+import boot
+import companions
+import conversation
+import hub
+import llm
+import model_loader
 import router
-from config import ChatConfig
+import tools
+from config import CONFIG, ChatConfig
+from kernel_fixtures import set_config
+from memory import embeddings
 from router.decision import LOCAL_PROVIDER, model_for
 from router.types import ModelChunk
 
@@ -42,56 +52,56 @@ def calls(monkeypatch, tmp_path):
         seen["status"].append((status["state"], status["model_ref"]))
 
     monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setattr(app, "_conversation_manager", None)
-    monkeypatch.setattr(app.llm, "warm_up_model", helper_warm)
-    monkeypatch.setattr(app.llm, "load_model", load)
-    monkeypatch.setattr(app.embeddings, "embed", embed)
-    monkeypatch.setattr(app.router, "get_router", lambda: FakeRouter())
-    monkeypatch.setattr(app.model_loader.LOADER, "enabled", True)
-    unsubscribe = app.model_loader.LOADER.subscribe(listener)
+    monkeypatch.setattr(conversation, "_manager", None)
+    monkeypatch.setattr(llm, "warm_up_model", helper_warm)
+    monkeypatch.setattr(llm, "load_model", load)
+    monkeypatch.setattr(embeddings, "embed", embed)
+    monkeypatch.setattr(router, "get_router", lambda: FakeRouter())
+    monkeypatch.setattr(model_loader.LOADER, "enabled", True)
+    unsubscribe = model_loader.LOADER.subscribe(listener)
     yield seen
     unsubscribe()
 
 
 def use(monkeypatch, ref, *, warm=True):
-    cfg = app.CONFIG
-    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
+    cfg = CONFIG
+    set_config(monkeypatch, dataclasses.replace(
         cfg, chat=ChatConfig(default_model_ref=ref), llm=dataclasses.replace(cfg.llm, warm_up_on_start=warm),
     ))
 
 
-CLASSIFIER = model_for(LOCAL_PROVIDER, "classifier", app.CONFIG.models)
+CLASSIFIER = model_for(LOCAL_PROVIDER, "classifier", CONFIG.models)
 
 
 @pytest.mark.asyncio
 async def test_boot_never_starts_a_llamacpp_model(monkeypatch, calls):
     # D-060: a 21 GB file and every CPU core; it starts when the user picks it
     use(monkeypatch, "local:llamacpp/big")
-    await app._warm_default_chat_model()
+    await boot.warm_default_chat_model()
     assert calls["warm"] == calls["load"] == calls["helpers"] == calls["status"] == []
-    assert not app._loads_without_asking("local:llamacpp/big")
-    assert app._loads_without_asking("local:ollama/qwen3.5:9b") and app._loads_without_asking("api:airouter/x")
+    assert not boot.loads_without_asking("local:llamacpp/big")
+    assert boot.loads_without_asking("local:ollama/qwen3.5:9b") and boot.loads_without_asking("api:airouter/x")
 
 
 @pytest.mark.asyncio
 async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_then_the_helpers(monkeypatch, calls):
     use(monkeypatch, "local:llamacpp/big")
-    monkeypatch.setattr(app, "_system_message", lambda waifu: "PERSONA")
-    await app.model_loader.LOADER.request("local:llamacpp/big")   # what a pick in the chip does
+    monkeypatch.setattr(companions, "system_message", lambda waifu: "PERSONA")
+    await model_loader.LOADER.request("local:llamacpp/big")   # what a pick in the chip does
     # not the 9B: only the small helpers that run before every reply (classifier, embeddings)
     assert calls["helpers"] == [CLASSIFIER] and calls["embed"] == ["warm-up"]
     assert calls["load"] == [] and calls["stopped"] == []
-    [(ref, messages, tools)] = calls["warm"]
+    [(ref, messages, offered)] = calls["warm"]
     assert ref == "local:llamacpp/big"
     assert messages[0] == {"role": "system", "content": "PERSONA"}   # the same first message a turn sends
-    assert tools == app.tools.offered_schemas(already_looked=False)  # same tool list, so the prefix matches
+    assert offered == tools.offered_schemas(already_looked=False)  # same tool list, so the prefix matches
     # every window saw it load, then become ready (the "waking up" card, K1-10)
     assert calls["status"] == [("loading", "local:llamacpp/big"), ("ready", "local:llamacpp/big")]
 
 
 @pytest.mark.parametrize(("ref", "loaded", "stopped", "states"), [
     # no selection: the configured local chat model, as an explicit Ollama ref
-    (None, [model_for(LOCAL_PROVIDER, "chat", app.CONFIG.models)], [True], ["loading", "ready"]),
+    (None, [model_for(LOCAL_PROVIDER, "chat", CONFIG.models)], [True], ["loading", "ready"]),
     # an Ollama pick stops llama-server first: one large local model at a time (FR-M-6)
     ("local:ollama/qwen3.5:4b", ["qwen3.5:4b"], [True], ["loading", "ready"]),
     # nothing to load for an API model: ready at once, no "waking up"
@@ -100,7 +110,7 @@ async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_the
 @pytest.mark.asyncio
 async def test_other_defaults(monkeypatch, calls, ref, loaded, stopped, states):
     use(monkeypatch, ref)
-    await app._warm_default_chat_model()
+    await boot.warm_default_chat_model()
     assert calls["load"] == loaded and calls["warm"] == [] and calls["stopped"] == stopped
     if loaded:
         assert calls["order"] == ["stop", "load"]          # llama-server gone before Ollama loads (FR-M-6)
@@ -111,30 +121,30 @@ async def test_other_defaults(monkeypatch, calls, ref, loaded, stopped, states):
 async def test_boot_loads_the_model_the_last_thread_used(monkeypatch, calls):
     # FR-M-5: the last pick, not always the configured default (the 35B is slow)
     use(monkeypatch, "local:llamacpp/big")
-    manager = app._conversations()
+    manager = conversation.get_manager()
     await manager.new_thread(waifu_id=None, model_ref="local:ollama/qwen3.5:9b")
-    await app._warm_default_chat_model()
+    await boot.warm_default_chat_model()
     assert calls["load"] == ["qwen3.5:9b"] and calls["warm"] == []
 
 
 @pytest.mark.asyncio
 async def test_switched_off_or_failing_warm_ups_never_raise(monkeypatch, calls):
     use(monkeypatch, "local:llamacpp/big", warm=False)
-    await app._warm_default_chat_model()
+    await boot.warm_default_chat_model()
     assert calls["warm"] == calls["load"] == calls["status"] == []
 
     use(monkeypatch, "local:vllm/x")                     # invalid ref: logged, skipped
-    await app._warm_default_chat_model()
+    await boot.warm_default_chat_model()
     assert calls["status"] == []
 
     async def broken_load(model=None):
         raise RuntimeError("model file missing")
 
     use(monkeypatch, "local:ollama/qwen3.5:9b")
-    monkeypatch.setattr(app.llm, "load_model", broken_load)
-    await app._warm_default_chat_model()                 # shown in the window, with Try again
+    monkeypatch.setattr(llm, "load_model", broken_load)
+    await boot.warm_default_chat_model()                 # shown in the window, with Try again
     assert calls["status"][-1] == ("failed", "local:ollama/qwen3.5:9b")
-    assert app.model_loader.LOADER.status()["message"] == "model file missing"
+    assert model_loader.LOADER.status()["message"] == "model file missing"
 
 
 @pytest.mark.asyncio
@@ -161,9 +171,9 @@ async def test_tray_quit_stops_the_model_server_before_exiting(monkeypatch):
         async def shutdown(self):
             stopped.append(True)
 
-    monkeypatch.setattr(app.router, "get_router", lambda: Rt())
-    monkeypatch.setattr(app, "_shutdown_event", asyncio.Event())
-    monkeypatch.setattr(app.os, "_exit", lambda code: exits.append(code))
+    monkeypatch.setattr(router, "get_router", lambda: Rt())
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
+    monkeypatch.setattr(os, "_exit", lambda code: exits.append(code))
     assert (await app.shutdown_endpoint())["status"] == "shutting down"
     assert stopped == [True]                      # before os._exit, which skips the lifespan teardown
     await asyncio.sleep(0.2)

@@ -6,10 +6,12 @@ from types import SimpleNamespace
 
 import pytest
 
-import app
-from audio import voice_mode
+import companions
 import prompting
 import router
+import turns
+from audio import tts
+from audio import voice_mode
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
 
@@ -45,12 +47,12 @@ async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day."):
     async def no_log(*_a, **_k):
         return None
 
-    monkeypatch.setattr(app.router, "stream_with_tools", fake_stream)
-    monkeypatch.setattr(app.tts, "synthesize", fake_synth)
-    monkeypatch.setattr(app, "_log_transcript_turn_safely", no_log)
+    monkeypatch.setattr(router, "stream_with_tools", fake_stream)
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
+    monkeypatch.setattr(turns, "log_transcript_turn", no_log)
     ws = FakeWebSocket(waifu)
-    history = [{"role": "system", "content": app._system_message(waifu)}]
-    await app._run_turn(ws, history, user_text, True, [])   # Temp Chat: no memory reads or writes
+    history = [{"role": "system", "content": companions.system_message(waifu)}]
+    await turns.run_turn(ws, history, user_text, True, [])   # Temp Chat: no memory reads or writes
     return calls, voices, history
 
 
@@ -85,7 +87,7 @@ async def test_switching_mid_conversation_keeps_history_model_and_tools(registry
 
     ws = FakeWebSocket(waifu_a)
     monkeypatch.setenv("KOKYU_DATA_DIR", str(registry._user_dir.parent / "data"))
-    await app._apply_waifu_switch(ws, history, registry, "beta")
+    await companions.apply_switch(ws, history, registry, "beta")
     assert history[0]["content"] != first_system
     assert [m["content"] for m in history[1:]][0] == "First question."   # the conversation survived
 
@@ -95,15 +97,15 @@ async def test_switching_mid_conversation_keeps_history_model_and_tools(registry
         calls2.append({"role": role, "tools": list(tools), "kwargs": dict(kwargs)})
         yield {"type": "content", "text": "Sure. [neutral]"}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", fake_stream)
+    monkeypatch.setattr(router, "stream_with_tools", fake_stream)
     ws2 = FakeWebSocket(waifu_b)
-    await app._run_turn(ws2, history, "Second question.", True, [])
+    await turns.run_turn(ws2, history, "Second question.", True, [])
     assert calls2[0]["role"] == calls[0]["role"] and calls2[0]["tools"] == calls[0]["tools"] and calls2[0]["kwargs"] == calls[0]["kwargs"]
 
 
 def test_the_turn_runner_never_branches_on_a_waifu():
     """Structural guard: persona and voice enter through _system_message/_synthesize_for only."""
-    source = inspect.getsource(app._run_turn).lower()
+    source = inspect.getsource(turns.run_turn).lower()
     assert "waifu" not in source
 
 

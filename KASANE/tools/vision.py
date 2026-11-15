@@ -10,7 +10,7 @@ built yet, see docs/ROADMAP.md.
 describe_screen() does its own small internal VLM call (llm.describe_image)
 to turn a screenshot into a text description before returning -- so from
 the main tool-calling loop's point of view, this is just another
-text-in/text-out tool, same as read_clipboard(). Keeps app.py's dispatch
+text-in/text-out tool, same as read_clipboard(). Keeps turns.py's dispatch
 loop uniform regardless of which tool got called, and matches
 ARCHITECTURE.md's "returns a textual analysis (not raw pixels) to the
 reasoning pass" line directly -- raw screenshot bytes never leave this

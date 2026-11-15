@@ -85,7 +85,7 @@ def explain_length_stop(prompt_tokens: int | None, gen_tokens: int | None) -> st
 class LLMUnreachableError(Exception):
     """The configured LLM server couldn't be reached or returned an error
     response -- most likely it just isn't running yet. Kept distinct from
-    other exceptions so app.py can give an in-character, specific reply
+    other exceptions so turns.py can give an in-character, specific reply
     instead of the connection crashing silently.
 
     The two subclasses below say what actually happened, because "I can't
@@ -110,7 +110,7 @@ def fold_system_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]
     """Returns `messages` with every system message after the first folded
     into a user message, so the only system message is the one at index 0.
 
-    Why: app.py splices the per-turn context (memory recall, the screen
+    Why: turns.py splices the per-turn context (memory recall, the screen
     description from a look, task / forget hints, her room) in as a system
     message just before the user's latest message. Ollama's own template for
     the stock qwen3.5 tolerates that, but a GGUF pulled from Hugging Face
@@ -121,7 +121,7 @@ def fold_system_messages(messages: list[dict[str, Any]]) -> list[dict[str, Any]]
     being sent, never `history`.
 
     A late system message joins the next user message after it (that is where
-    app.py puts it: right before the user's turn), else the nearest earlier
+    turns.py puts it: right before the user's turn), else the nearest earlier
     one; with no user message at all it is appended to the leading system
     message. Input is not mutated; a conversation that is already valid is
     returned as an equal copy.
@@ -190,7 +190,7 @@ async def stream_reply_with_tools(
     think: bool | None = None,
 ) -> AsyncIterator[dict[str, Any]]:
     """Like stream_reply() above, but for turns that have tools available
-    -- currently only app.py's main conversation loop. consolidation.py
+    -- currently only turns.py's conversation loop. consolidation.py
     and forget.py's internal background calls don't need tools and keep
     using the original stream_reply() completely unchanged, so this is a
     new function rather than a change to that one's signature -- no risk
@@ -202,7 +202,7 @@ async def stream_reply_with_tools(
     {"type": "tool_calls", "calls": [{"name": str, "arguments": dict}]}
     -- at which point the generator ends (the caller is expected to run
     the tools and start a fresh call with the results appended, see
-    app.py's _run_turn).
+    turns.run_turn).
 
     ollama_native only -- tool-calling isn't wired for the openai-
     compatible path (Phase 4 was built and tested against Ollama; add
@@ -523,7 +523,7 @@ def _normalize_tool_calls(raw_calls: Any) -> list[dict[str, Any]]:
     with only malformed entries just yields no tool call at all, and the
     caller falls through to treating it as ordinary content (there won't
     be any text either in that case, so it's effectively a no-op round --
-    covered by app.py's MAX_TOOL_ROUNDS cap). Expected shape per entry,
+    covered by turns.py's MAX_TOOL_ROUNDS cap). Expected shape per entry,
     per Ollama's/OpenAI's tool-calling convention both converged on:
     {"function": {"name": str, "arguments": dict}}."""
     if not isinstance(raw_calls, list):
@@ -553,7 +553,7 @@ async def describe_image(
     text description ARCHITECTURE.md's vision-tools section calls for
     ("returns a textual analysis (not raw pixels) to the reasoning
     pass"). Not part of the main conversation's own streamed reply, and
-    not visible to app.py's tool-calling loop at all -- from that loop's
+    not visible to turns.py's tool-calling loop at all -- from that loop's
     point of view, capture_screen is just a tool that returns a string,
     same as read_clipboard.
 

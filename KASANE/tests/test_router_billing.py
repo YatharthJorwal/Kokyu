@@ -78,7 +78,7 @@ async def test_a_tool_round_is_billed_though_the_caller_stops_at_the_tool_call(t
     stream = router.complete(ask())
     async for chunk in stream:
         if chunk.kind == "tool_calls":
-            break                                           # what app.py does
+            break                                           # what turns.py does
     await stream.aclose()
     assert ledger_rows(tmp_path) == [(pytest.approx((1000 * 0.5 + 50 * 1.5) / 1e6), 1000, 50, 0)]
     assert finished(tmp_path)[0]["error"] is None           # putting the stream down is not a failure
@@ -255,7 +255,7 @@ async def test_a_fresh_model_list_is_never_replaced_by_the_cache(tmp_path):
 
 @pytest.mark.asyncio
 async def test_a_tool_round_frees_its_reservation_before_the_next_round_is_routed(tmp_path):
-    # app.py breaks out at the tool call and asks again at once; the stream is only
+    # turns.py breaks out at the tool call and asks again at once; the stream is only
     # finalized later. The next round must see this call's real cost, not its worst case.
     used = Usage(prompt_tokens=1000, completion_tokens=50)
     cloud = Scripted(ModelChunk(kind="usage", usage=used), ModelChunk.tool_calls([{"name": "x", "arguments": {}}]), ModelChunk.done(used))
@@ -263,7 +263,7 @@ async def test_a_tool_round_frees_its_reservation_before_the_next_round_is_route
     messages = [{"role": "user", "content": "hi"}]
     async for event in router.stream_with_tools("chat", messages, [{"name": "x"}], model_ref=API):
         if event["type"] == "tool_calls":
-            break                                               # no aclose: what app.py does
+            break                                               # no aclose: what turns.py does
     assert router._reserved_usd == pytest.approx(0.0) and len(ledger_rows(tmp_path)) == 1
     await drain(router, ask())                                  # worst case 0.0018 + real 0.000575 fits 0.003
     assert len(cloud.requests) == 2 and len(ledger_rows(tmp_path)) == 2

@@ -2,9 +2,8 @@
 
 import pytest
 
-import app
-from audio import voice_mode
-from audio import speech
+import turns
+from audio import speech, tts, voice_mode
 
 
 class FakeWebSocket:
@@ -24,11 +23,11 @@ async def test_send_speak_normalizes_only_the_voice(monkeypatch):
         heard["text"] = text
         return b"RIFF"
 
-    monkeypatch.setattr(app.tts, "synthesize", fake_synth)
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
     ws = FakeWebSocket()
     raw = "Wait\u2014what? \u201cReally\u201d \U0001F600"
 
-    await app._send_speak(ws, raw)
+    await turns.send_speak(ws, raw)
 
     assert speech.banned_chars_in(heard["text"]) == set()
     assert ws.payloads[0]["data"]["text"] == raw          # caption keeps the original
@@ -44,10 +43,10 @@ async def test_send_speak_skips_empty_text(monkeypatch):
         called["n"] += 1
         return b""
 
-    monkeypatch.setattr(app.tts, "synthesize", fake_synth)
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
     ws = FakeWebSocket()
 
-    await app._send_speak(ws, "   ")
+    await turns.send_speak(ws, "   ")
 
     assert called["n"] == 0
     assert ws.payloads == []
@@ -56,7 +55,7 @@ async def test_send_speak_skips_empty_text(monkeypatch):
 @pytest.mark.asyncio
 async def test_send_audio_payload_shape():
     ws = FakeWebSocket()
-    await app._send_audio(ws, "hello", b"abc")
+    await turns.send_audio(ws, "hello", b"abc")
     payload = ws.payloads[0]
     assert payload["type"] == "speak"
     assert payload["data"]["text"] == "hello"

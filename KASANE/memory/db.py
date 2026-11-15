@@ -24,8 +24,6 @@ import threading
 import time
 from collections.abc import Iterator
 
-import sqlite_vec
-
 import paths
 from config import CONFIG
 
@@ -115,6 +113,8 @@ def _open_connection(path: str | pathlib.Path | None = None, dimension: int | No
     dim = dimension if dimension is not None else CONFIG.memory.embedding.dimension
 
     db_path.parent.mkdir(parents=True, exist_ok=True)
+    import sqlite_vec  # pulls in numpy (~50 ms): paid when memory opens, not at boot (D-060)
+
     conn = sqlite3.connect(str(db_path), check_same_thread=False)
     try:
         conn.enable_load_extension(True)

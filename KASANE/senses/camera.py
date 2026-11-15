@@ -17,7 +17,7 @@ another text-in/text-out tool.
 
 Single-slot, module-level pending-frame state -- same reasoning as
 task_guide.py's single-active-task state: this is a single-driver-
-connection app (see app.py's driver/observer comment), so there's never a
+connection app (see hub.py's driver/observer note), so there's never a
 genuine need for more than one in-flight camera request at a time.
 """
 
@@ -44,7 +44,7 @@ _pending_frame: asyncio.Future | None = None
 async def request_frame(websocket: WebSocket) -> str:
     """Round-trips to the frontend for one camera frame: sends
     request_camera_frame, then waits (bounded) for the matching
-    camera_frame response app.py's message dispatch resolves via
+    camera_frame response session.py's on_camera_frame resolves via
     resolve_pending_frame() below.
 
     Raises ToolUnavailableError -- the same exception capture_screen()
@@ -88,7 +88,7 @@ async def request_frame(websocket: WebSocket) -> str:
 
 
 def resolve_pending_frame(image_b64: str | None) -> None:
-    """Called from app.py's message dispatch when a camera_frame message
+    """Called from session.py's on_camera_frame when a camera_frame message
     arrives. image_b64 is None for an explicit frontend-reported error
     (not armed, permission denied, capture failed) and a real base64 JPEG
     string otherwise -- request_frame() above turns a None into the

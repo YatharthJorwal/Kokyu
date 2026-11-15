@@ -1,6 +1,6 @@
 """
 Speech-to-text via faster-whisper. `transcribe(audio_bytes) -> str` is the
-only thing app.py calls -- mirrors tts.py's `synthesize()` shape: one
+only thing the kernel calls -- mirrors tts.py's `synthesize()` shape: one
 function, config-driven, doesn't leak the underlying library upward.
 
 API shape (model_size/device/compute_type, `.transcribe()` returning
@@ -21,14 +21,17 @@ import io
 import logging
 import threading
 import time
-
-from faster_whisper import WhisperModel
+from typing import Any
 
 from config import CONFIG
 
 log = logging.getLogger(__name__)
 
-_model: WhisperModel | None = None
+# faster-whisper (with av and numpy) costs ~130 ms to import, so it loads with the
+# model, when voice is first used (D-060, D-061). Tests replace this attribute.
+WhisperModel: Any = None
+
+_model: Any = None
 _model_lock = threading.Lock()
 
 # Ceiling on how long a single transcription attempt (including a
@@ -48,16 +51,16 @@ class STTError(Exception):
     """Wraps any failure from model construction or transcription -- a
     missing CUDA DLL (cuBLAS/cuDNN), a corrupted/incomplete first-time
     model download, or anything else faster-whisper/CTranslate2 can throw.
-    One exception type for app.py to catch, same pattern llm.py's
+    One exception type for the caller to catch, same pattern llm.py's
     LLMUnreachableError and tts.py's TTSUnreachableError already use.
     Without this, an exception here was propagating all the way up through
-    the websocket's receive loop in app.py and killing the connection
+    the websocket's receive loop in session.py and killing the connection
     outright -- silently, from the user's side: the mic would record fine,
     nothing would come back, and there was no error anywhere they'd
     actually see it."""
 
 
-def _get_model() -> WhisperModel:
+def _get_model() -> Any:
     global _model
     if _model is None:
         with _model_lock:
@@ -67,14 +70,13 @@ def _get_model() -> WhisperModel:
 
 
 def _load_model() -> None:
-    global _model
+    global _model, WhisperModel
     cfg = CONFIG.stt
     # Prints unconditionally (not just on error) so a slow first load
     # is visible in the log as it's happening, not just inferred after
     # the fact from a timeout. If this line never appears despite
     # actually recording something, the problem is upstream of stt.py
-    # entirely (audio never reached the backend) -- see app.py's own
-    # "received N bytes" log line right before this gets called.
+    # entirely (audio never reached the backend).
     log.info(
         f"loading faster-whisper model '{cfg.model_size}' on "
         f"{cfg.device} ({cfg.compute_type}) -- once per run. Downloads "
@@ -82,6 +84,8 @@ def _load_model() -> None:
         "a while depending on your connection.",
     )
     start = time.monotonic()
+    if WhisperModel is None:
+        from faster_whisper import WhisperModel
     _model = WhisperModel(cfg.model_size, device=cfg.device, compute_type=cfg.compute_type)
     log.info(
         f"faster-whisper model loaded in {time.monotonic() - start:.1f}s",

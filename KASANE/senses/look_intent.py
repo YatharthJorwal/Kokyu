@@ -18,7 +18,7 @@ from the model for the cases where the user's intent is unambiguous. A
 regex gate (no extra LLM call, so no per-turn latency cost on ordinary
 turns) detects an explicit look-request, this module does the capture
 itself in Python via the same describe_screen()/describe_camera() the
-tools already wrap, and app.py's _run_turn splices the result in as
+tools already wrap, and turns.run_turn splices the result in as
 ephemeral context -- exactly how forget/task/recall hints already work.
 Phrasings the patterns don't catch still fall through to the model's native
 tool-calling, which does work some of the time; this only adds a reliable
@@ -160,7 +160,7 @@ def detect_look_target(user_text: str, now: float | None = None) -> str | None:
 
 async def maybe_look(user_text: str, websocket) -> str | None:
     """If user_text is an explicit look-request, does the capture and
-    returns an instruction fragment for _run_turn's ephemeral context
+    returns an instruction fragment for turns.run_turn's ephemeral context
     block; None if nothing was asked for. Never raises for an expected
     failure (capture failed, camera not armed, vision model unreachable) --
     those become a hint telling her to say so plainly instead of guessing,

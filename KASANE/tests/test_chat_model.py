@@ -9,16 +9,28 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app
+import boot
 import config
+import conversation
+import hub
 import llm
+import model_loader
 import protocol
+import router
+import turns
 import waifus
+from audio import tts
+from config import CONFIG
+from kernel_fixtures import set_config
+from memory import writer
+from router import listing as model_listing
 from router import decision as d
 from router import model_ref
 from router.errors import ProviderError, RouteBlockedError
 from router.providers import OllamaNativeProvider
 from router.providers.airouter import AirouterProvider
 from router.types import ModelRequest, SECRET, UNTRUSTED
+from senses import look_intent
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
 
@@ -227,7 +239,7 @@ def kernel(tmp_path, monkeypatch):
     premade = tmp_path / "premade"
     make_pack(premade, "alpha", name="Alpha", ref_text="alpha transcript")
     monkeypatch.setattr(waifus.registry, "_registry", WaifuRegistry(premade, tmp_path / "user"))
-    monkeypatch.setattr(app, "_conversation_manager", None)
+    monkeypatch.setattr(conversation, "_manager", None)
     calls = []
 
     async def fake_stream(role, messages, tools, **kwargs):
@@ -249,14 +261,14 @@ def kernel(tmp_path, monkeypatch):
         def preempt(self):
             return None
 
-    monkeypatch.setattr(app.router, "stream_with_tools", fake_stream)
-    monkeypatch.setattr(app.tts, "synthesize", silent)
-    monkeypatch.setattr(app.tts, "prewarm", nothing)
-    monkeypatch.setattr(app.look_intent, "maybe_look", nothing)
-    monkeypatch.setattr(app, "_log_transcript_turn_safely", nothing)
-    monkeypatch.setattr(app.writer, "WRITER", NoWriter())
-    monkeypatch.setattr(app, "_driver", None)
-    monkeypatch.setattr(app, "_shutdown_event", asyncio.Event())
+    monkeypatch.setattr(router, "stream_with_tools", fake_stream)
+    monkeypatch.setattr(tts, "synthesize", silent)
+    monkeypatch.setattr(tts, "prewarm", nothing)
+    monkeypatch.setattr(look_intent, "maybe_look", nothing)
+    monkeypatch.setattr(turns, "log_transcript_turn", nothing)
+    monkeypatch.setattr(writer, "WRITER", NoWriter())
+    monkeypatch.setattr(hub, "driver", None)
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
     return TestClient(app.app), calls
 
 
@@ -328,7 +340,7 @@ def test_an_api_model_is_never_offered_the_screen_or_camera_tools(kernel, monkey
         offered.append({t["function"]["name"] for t in tools})
         yield {"type": "content", "text": "ok [happy]"}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", recording)
+    monkeypatch.setattr(router, "stream_with_tools", recording)
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         _temp_on(ws)
@@ -350,7 +362,7 @@ def test_an_attachment_sent_to_an_api_model_is_badged_and_an_empty_one_refused(k
     async def answering(role, messages, tools, **kwargs):
         yield {"type": "content", "text": "nice [happy]"}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", answering)
+    monkeypatch.setattr(router, "stream_with_tools", answering)
     upload = {"filename": "notes.txt", "kind": "text", "content": "milk, eggs"}
     with client.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
@@ -383,9 +395,9 @@ def test_an_image_the_vision_model_cannot_see_ends_the_turn_without_a_line(kerne
     client, _ = kernel
 
     async def blind(*_a, **_k):
-        raise app.llm.LLMUnreachableError("vision server down")
+        raise llm.LLMUnreachableError("vision server down")
 
-    monkeypatch.setattr(app.router, "describe_image", blind)
+    monkeypatch.setattr(router, "describe_image", blind)
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         _temp_on(ws)
@@ -421,14 +433,14 @@ async def test_screen_remarks_stay_out_of_an_api_models_context(tmp_path, monkey
         async def send_json(self, payload):
             pass
 
-    monkeypatch.setattr(app.router, "stream_with_tools", recording)
-    monkeypatch.setattr(app.tts, "synthesize", silent)
-    monkeypatch.setattr(app.look_intent, "maybe_look", nothing)
-    monkeypatch.setattr(app, "_log_transcript_turn_safely", nothing)
+    monkeypatch.setattr(router, "stream_with_tools", recording)
+    monkeypatch.setattr(tts, "synthesize", silent)
+    monkeypatch.setattr(look_intent, "maybe_look", nothing)
+    monkeypatch.setattr(turns, "log_transcript_turn", nothing)
     for ref in (LOCAL, API):
         history, unprompted = [{"role": "system", "content": "sys"}], []
-        app._record_unprompted(history, "Whoa, $4,210 in checking?", True, [], unprompted)
-        await app._run_turn(Socket(), history, "hm?", True, [], model_ref=ref, unprompted=unprompted)
+        turns.record_unprompted(history, "Whoa, $4,210 in checking?", True, [], unprompted)
+        await turns.run_turn(Socket(), history, "hm?", True, [], model_ref=ref, unprompted=unprompted)
     assert "$4,210" in seen[0] and "$4,210" not in seen[1]
 
 
@@ -449,11 +461,11 @@ def loads(kernel, monkeypatch):
     async def fake_load(ref):
         seen.append(ref)
 
-    monkeypatch.setattr(app, "_load_chat_model", fake_load)
-    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
-        app.CONFIG, chat=dataclasses.replace(app.CONFIG.chat, default_model_ref=DEFAULT, load_delay_s=0)
+    monkeypatch.setattr(boot, "load_chat_model", fake_load)
+    set_config(monkeypatch, dataclasses.replace(
+        CONFIG, chat=dataclasses.replace(CONFIG.chat, default_model_ref=DEFAULT, load_delay_s=0)
     ))
-    monkeypatch.setattr(app.model_loader.LOADER, "enabled", True)
+    monkeypatch.setattr(model_loader.LOADER, "enabled", True)
     return kernel[0], seen
 
 
@@ -503,8 +515,8 @@ def test_a_new_thread_keeps_the_pick_and_does_not_load_again(loads):
 def test_a_llamacpp_thread_starts_its_server_only_when_picked(loads, monkeypatch):
     # D-060: opening a thread whose model is the 35B loads nothing; picking it does
     client, seen = loads
-    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
-        app.CONFIG, chat=dataclasses.replace(app.CONFIG.chat, default_model_ref=BIG, load_delay_s=0)
+    set_config(monkeypatch, dataclasses.replace(
+        CONFIG, chat=dataclasses.replace(CONFIG.chat, default_model_ref=BIG, load_delay_s=0)
     ))
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
@@ -528,15 +540,15 @@ def test_the_model_list_reaches_the_window(kernel, monkeypatch):
         state = None                      # what the connect-time settings message reads
         use_api_model_override = None
 
-    monkeypatch.setattr(app.model_listing, "ollama_rows", no_ollama)
-    monkeypatch.setattr(app.router, "get_router", lambda: Rt())
+    monkeypatch.setattr(model_listing, "ollama_rows", no_ollama)
+    monkeypatch.setattr(router, "get_router", lambda: Rt())
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         ws.send_json({"v": 1, "type": "model_list", "data": {"refresh": True}})
         listed, _ = _until(ws, "model_list")
     data = listed["data"]
     assert data["local_error"] == "Ollama is not running" and data["api"] == [] and data["api_key"] is False
-    assert data["default_ref"] == app.model_listing.default_ref(app.CONFIG)
+    assert data["default_ref"] == model_listing.default_ref(CONFIG)
 
 
 def test_switching_models_waits_for_the_reply(kernel, monkeypatch):
@@ -546,7 +558,7 @@ def test_switching_models_waits_for_the_reply(kernel, monkeypatch):
         await asyncio.sleep(0.4)
         yield {"type": "content", "text": "done [happy]"}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
+    monkeypatch.setattr(router, "stream_with_tools", slow_stream)
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         _temp_on(ws)
@@ -565,7 +577,7 @@ def test_only_the_main_window_loads_models(loads, monkeypatch):
     # Review finding: a second window opening an Ollama thread used to stop
     # llama-server under the main window's streaming reply. Observers only watch.
     client, seen = loads
-    manager = app._conversations()
+    manager = conversation.get_manager()
     other = manager.store.create_thread(model_ref=LOCAL)
     manager.store.create_thread(model_ref=None)                             # newest: the one that opens
     with client.websocket_connect("/ws") as ws:
@@ -573,7 +585,7 @@ def test_only_the_main_window_loads_models(loads, monkeypatch):
         _status_until(ws, "ready", DEFAULT)
         # shortcut: demote this window instead of opening a second one (each TestClient
         # socket gets its own event loop, which the kernel's shared objects reject)
-        monkeypatch.setattr(app, "_driver", object())
+        monkeypatch.setattr(hub, "driver", object())
         ws.send_json({"v": 1, "type": "thread_open", "data": {"id": other.id}})
         opened, _ = _until(ws, "thread_opened")
         assert opened["data"]["thread"]["model_ref"] == LOCAL
@@ -588,8 +600,8 @@ def test_hello_tells_the_window_the_defaults(kernel):
     with client.websocket_connect("/ws") as ws:
         ws.send_json({"v": 1, "type": "hello", "id": "h1", "data": {"client": "main", "protocol": 1}})
         hello, _ = _until(ws, "hello")
-    assert hello["data"]["default_model_ref"] == app.model_listing.default_ref(app.CONFIG)
-    assert hello["data"]["default_effort"] == app.CONFIG.chat.default_effort
+    assert hello["data"]["default_model_ref"] == model_listing.default_ref(CONFIG)
+    assert hello["data"]["default_effort"] == CONFIG.chat.default_effort
 
 
 def test_a_turn_waits_for_its_model_and_warm_up_off_loads_on_the_first_message(loads, monkeypatch):
@@ -597,11 +609,11 @@ def test_a_turn_waits_for_its_model_and_warm_up_off_loads_on_the_first_message(l
     # Ollama while llama-server still held the memory; and warm_up_on_start: false
     # still loaded the model as soon as the window opened.
     client, seen = loads
-    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
-        app.CONFIG,
-        llm=dataclasses.replace(app.CONFIG.llm, warm_up_on_start=False),
+    set_config(monkeypatch, dataclasses.replace(
+        CONFIG,
+        llm=dataclasses.replace(CONFIG.llm, warm_up_on_start=False),
         # a load that would start much later; and a llama.cpp model: a message is a pick (D-060)
-        chat=dataclasses.replace(app.CONFIG.chat, load_delay_s=30, default_model_ref=BIG),
+        chat=dataclasses.replace(CONFIG.chat, load_delay_s=30, default_model_ref=BIG),
     ))
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")

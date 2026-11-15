@@ -8,9 +8,17 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app
+import conversation
+import hub
 import paths
 import protocol
+import router
+import session
+import turns
 import waifus
+from audio import tts
+from memory import writer
+from senses import look_intent
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
 
@@ -32,6 +40,12 @@ def test_only_v1_frames_are_accepted():
             protocol.parse_client(raw)
         assert info.value.code == "bad_message"
     assert protocol.parse_client({"v": 1, "type": "send", "data": {"text": "hi"}}).data.text == "hi"
+
+
+def test_every_client_message_has_a_session_handler():
+    # A new message type is a CLIENT_TYPES entry plus one Session.on_<type> (D-062).
+    missing = [t for t in protocol.CLIENT_TYPES if not callable(getattr(session.Session, f"on_{t}", None))]
+    assert missing == []
 
 
 def test_a_valid_frame_is_parsed_and_trimmed():
@@ -96,7 +110,7 @@ def kernel(tmp_path, monkeypatch):
     premade = tmp_path / "premade"
     make_pack(premade, "alpha", name="Alpha", ref_text="alpha transcript")
     monkeypatch.setattr(waifus.registry, "_registry", WaifuRegistry(premade, tmp_path / "user"))
-    monkeypatch.setattr(app, "_conversation_manager", None)
+    monkeypatch.setattr(conversation, "_manager", None)
 
     async def fake_stream(role, messages, tools, **kwargs):
         for piece in ("Hel", "lo ", "there. ", "[hap", "py]"):
@@ -115,14 +129,14 @@ def kernel(tmp_path, monkeypatch):
         def preempt(self):
             return None
 
-    monkeypatch.setattr(app.router, "stream_with_tools", fake_stream)
-    monkeypatch.setattr(app.tts, "synthesize", silent)
-    monkeypatch.setattr(app.tts, "prewarm", nothing)
-    monkeypatch.setattr(app.look_intent, "maybe_look", nothing)
-    monkeypatch.setattr(app, "_log_transcript_turn_safely", nothing)
-    monkeypatch.setattr(app.writer, "WRITER", NoWriter())
-    monkeypatch.setattr(app, "_driver", None)
-    monkeypatch.setattr(app, "_shutdown_event", asyncio.Event())
+    monkeypatch.setattr(router, "stream_with_tools", fake_stream)
+    monkeypatch.setattr(tts, "synthesize", silent)
+    monkeypatch.setattr(tts, "prewarm", nothing)
+    monkeypatch.setattr(look_intent, "maybe_look", nothing)
+    monkeypatch.setattr(turns, "log_transcript_turn", nothing)
+    monkeypatch.setattr(writer, "WRITER", NoWriter())
+    monkeypatch.setattr(hub, "driver", None)
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
     return TestClient(app.app)
 
 

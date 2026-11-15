@@ -10,8 +10,14 @@ from fastapi.testclient import TestClient
 
 import app
 import conversation
+import hub
+import router
+import turns
 import waifus
+from audio import tts
 from conversation import ConversationManager, Speaker, history_from
+from memory import writer
+from senses import look_intent
 from threads import ThreadStore
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
@@ -139,7 +145,7 @@ def kernel(tmp_path, monkeypatch):
     make_pack(premade, "alpha", name="Alpha", ref_text="alpha transcript")
     make_pack(premade, "beta", name="Beta", ref_text="beta transcript")
     monkeypatch.setattr(waifus.registry, "_registry", WaifuRegistry(premade, tmp_path / "user"))
-    monkeypatch.setattr(app, "_conversation_manager", None)
+    monkeypatch.setattr(conversation, "_manager", None)
 
     async def fake_stream(role, messages, tools, **kwargs):
         last_user = [m["content"] for m in messages if m["role"] == "user"][-1]
@@ -158,14 +164,14 @@ def kernel(tmp_path, monkeypatch):
         def preempt(self):
             return None
 
-    monkeypatch.setattr(app.router, "stream_with_tools", fake_stream)
-    monkeypatch.setattr(app.tts, "synthesize", fake_synth)
-    monkeypatch.setattr(app.tts, "prewarm", nothing)
-    monkeypatch.setattr(app.look_intent, "maybe_look", nothing)
-    monkeypatch.setattr(app, "_log_transcript_turn_safely", nothing)
-    monkeypatch.setattr(app.writer, "WRITER", NoWriter())
-    monkeypatch.setattr(app, "_driver", None)
-    monkeypatch.setattr(app, "_shutdown_event", asyncio.Event())   # binds to this test's loop
+    monkeypatch.setattr(router, "stream_with_tools", fake_stream)
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
+    monkeypatch.setattr(tts, "prewarm", nothing)
+    monkeypatch.setattr(look_intent, "maybe_look", nothing)
+    monkeypatch.setattr(turns, "log_transcript_turn", nothing)
+    monkeypatch.setattr(writer, "WRITER", NoWriter())
+    monkeypatch.setattr(hub, "driver", None)
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())   # binds to this test's loop
     return TestClient(app.app)
 
 
@@ -228,7 +234,7 @@ def test_the_model_sees_only_the_open_threads_history(kernel, monkeypatch):
         seen.append([m["content"] for m in messages if m["role"] in ("user", "assistant")])
         yield {"type": "content", "text": "ok [neutral]"}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", recording_stream)
+    monkeypatch.setattr(router, "stream_with_tools", recording_stream)
     with kernel.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         _temp_on(ws)
@@ -263,7 +269,7 @@ def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
         await asyncio.sleep(0.3)
         yield {"type": "content", "text": f"{messages[0]['content'][:5]} [happy]"}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
+    monkeypatch.setattr(router, "stream_with_tools", slow_stream)
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
         _temp_on(ws)
@@ -276,7 +282,7 @@ def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
         divider, _ = _until(ws, "thread_message")             # as the reply ends, not at the next message
         assert divider["data"]["message"]["content"] == "Switched to Beta"
         _chat(ws, "second")
-    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
     assert [(m.role, m.speaker_name) for m in stored] == [
         ("user", None), ("assistant", "Alpha"), ("divider", "Beta"), ("user", None), ("assistant", "Beta"),
     ]
@@ -298,8 +304,8 @@ def test_closing_mid_reply_with_a_switch_pending_still_ends_the_session(kernel, 
         def preempt(self):
             return None
 
-    monkeypatch.setattr(app.router, "stream_with_tools", slow_stream)
-    monkeypatch.setattr(app.writer, "WRITER", Writer())
+    monkeypatch.setattr(router, "stream_with_tools", slow_stream)
+    monkeypatch.setattr(writer, "WRITER", Writer())
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
         _temp_on(ws)
@@ -314,7 +320,7 @@ def test_closing_mid_reply_with_a_switch_pending_still_ends_the_session(kernel, 
                 break
             time.sleep(0.01)
     assert "session_end" in passes
-    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
     assert "divider" not in [m.role for m in stored]                    # nobody was there to switch for
 
 
@@ -359,7 +365,7 @@ def test_regenerate_replaces_the_last_reply_without_repeating_the_line(kernel, m
         seen.append([m["content"] for m in messages if m["role"] in ("user", "assistant")])
         yield {"type": "content", "text": next(replies)}
 
-    monkeypatch.setattr(app.router, "stream_with_tools", recording_stream)
+    monkeypatch.setattr(router, "stream_with_tools", recording_stream)
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")
         _temp_on(ws)
@@ -371,7 +377,7 @@ def test_regenerate_replaces_the_last_reply_without_repeating_the_line(kernel, m
         assert done["data"]["text"] == "second try"
     # the model saw the line once and not the replaced reply; the thread keeps one copy
     assert seen[1] == ["tell me something"]
-    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
     assert [(m.role, m.content) for m in stored] == [("user", "tell me something"), ("assistant", "second try")]
 
 
@@ -385,7 +391,7 @@ def test_regenerate_after_a_companion_switch_still_replaces_the_reply(kernel):
         _until(ws, "thread_message")
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         done, _ = _until(ws, "turn_done")
-    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
     assert [m.role for m in stored] == ["divider", "user", "assistant"]
     assert stored[-1].speaker_name == "Beta" and done["data"]["text"] == stored[-1].content
 
@@ -401,7 +407,7 @@ def test_a_failed_regenerate_keeps_the_old_reply(kernel, monkeypatch):
             return
             yield  # an async generator that says nothing
 
-        monkeypatch.setattr(app.router, "stream_with_tools", silent)
+        monkeypatch.setattr(router, "stream_with_tools", silent)
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         _until(ws, "turn_done")
 
@@ -411,9 +417,9 @@ def test_a_failed_regenerate_keeps_the_old_reply(kernel, monkeypatch):
             seen.append([m["content"] for m in messages if m["role"] in ("user", "assistant")])
             yield {"type": "content", "text": "sure [happy]"}
 
-        monkeypatch.setattr(app.router, "stream_with_tools", recording)
+        monkeypatch.setattr(router, "stream_with_tools", recording)
         _chat(ws, "and then?")
-    stored = app._conversations().store.messages(opened["data"]["thread"]["id"])
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
     assert [(m.role, m.content) for m in stored][:2] == [("user", "hello"), ("assistant", "You said: hello.")]
     # the model's context got the old exchange back too (review finding)
     assert seen[0] == ["hello", "You said: hello.", "and then?"]

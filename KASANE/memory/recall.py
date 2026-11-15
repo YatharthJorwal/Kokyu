@@ -1,5 +1,5 @@
 """
-Turns the current user message into a memory block app.py injects into the LLM
+Turns the current user message into a memory block turns.py injects into the LLM
 call for that turn, as a separate ephemeral system message that is never written
 into the session `history` (so it cannot be fed back into the writer as if
 someone had said it).

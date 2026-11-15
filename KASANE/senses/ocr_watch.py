@@ -36,7 +36,7 @@ log = logging.getLogger(__name__)
 # Polled far less often than Task Guide Mode's own loop (15s) -- ambient
 # commentary should be rare by design, not prompt-timely the way noticing
 # task drift is. The actual real-world cadence is controlled by
-# CONFIG.ocr_watch.comment_interval_seconds (app.py reads it), this is
+# CONFIG.ocr_watch.comment_interval_seconds (ambient.py reads it), this is
 # just how granular the "is a check due yet" polling is.
 WATCH_POLL_SECONDS = 30
 
@@ -66,7 +66,7 @@ def get_state() -> WatchState:
 
 
 def set_active(active: bool) -> None:
-    """The set_ocr_watch message's actual implementation (see app.py).
+    """The set_ocr_watch message's actual implementation (see session.py).
     Starting fresh always clears last_seen_summary and resets the check
     clock -- a freshly enabled watch shouldn't immediately fire using a
     stale summary from a previous session, and shouldn't be treated as
@@ -213,7 +213,7 @@ async def check_for_comment(previous_summary: str, image_b64: str) -> dict | Non
     unprompted remark, given a brief note on what was there last time.
     Returns {"comment_worthy": bool, "summary": str, "note": str} or None
     if the call failed or came back unparseable -- both treated the same
-    by the caller (app.py's _run_ocr_watch_check): skip this check, try
+    by the caller (ambient.run_ocr_watch_check): skip this check, try
     again next interval, never crash the loop or comment on a guess.
     """
     # Plain string replacement, not str.format() -- the template above

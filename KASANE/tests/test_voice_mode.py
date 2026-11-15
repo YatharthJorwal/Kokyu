@@ -9,7 +9,11 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app
+import companions
 import config
+import conversation
+import hub
+import turns
 from audio import stt, tts, voice_mode
 
 
@@ -114,11 +118,11 @@ async def test_replies_are_not_synthesized_while_voice_is_off(voice, monkeypatch
         return b"WAV"
 
     monkeypatch.setattr(tts, "synthesize", synth)
-    monkeypatch.setattr(app, "_voice_of", lambda ws: None)
-    assert await app._synthesize_for(object(), "hello") == b""
+    monkeypatch.setattr(companions, "voice_of", lambda ws: None)
+    assert await turns.synthesize_for(object(), "hello") == b""
     await mode.set(True)
     await settle(mode)
-    assert await app._synthesize_for(object(), "hello") == b"WAV"
+    assert await turns.synthesize_for(object(), "hello") == b"WAV"
 
 
 def _until(ws, type_):
@@ -130,9 +134,9 @@ def _until(ws, type_):
 
 def test_a_window_sees_voice_off_and_turns_it_on(voice, monkeypatch, tmp_path):
     mode, seen, _ = voice
-    monkeypatch.setattr(app, "_shutdown_event", asyncio.Event())
-    monkeypatch.setattr(app, "_driver", None)
-    monkeypatch.setattr(app, "_conversation_manager", None)
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
+    monkeypatch.setattr(hub, "driver", None)
+    monkeypatch.setattr(conversation, "_manager", None)
     with TestClient(app.app) as client, client.websocket_connect("/ws") as ws:
         first = _until(ws, "voice_status")
         assert first["data"] == {"on": False, "state": "idle", "message": None, "elapsed_s": None}

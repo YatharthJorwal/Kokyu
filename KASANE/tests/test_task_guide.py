@@ -23,8 +23,8 @@ from senses import task_guide
 def _reset_state():
     """task_guide's TaskState is module-level (see its own docstring on
     why) -- reset it before and after every test so tests don't leak
-    state into each other, same reasoning app.py's globals would need if
-    they were ever tested directly."""
+    state into each other, same reasoning any kernel module state would need if
+    it were tested directly."""
     task_guide.clear_active_task()
     task_guide.set_enabled(True)   # the classifier only acts while Task Guide is on (FR-SC-1)
     yield

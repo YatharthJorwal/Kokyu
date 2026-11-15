@@ -1,6 +1,6 @@
 """
 Splits a growing text buffer into sentence-ish chunks as soon as they're
-ready, so app.py can start TTS on the first sentence instead of waiting for
+ready, so turns.py can start TTS on the first sentence instead of waiting for
 the whole LLM reply -- this is the "streamed text" half of
 docs/ARCHITECTURE.md's "streamed text -> TTS -> lip-sync" pipeline (token-
 level audio streaming isn't practical with pyttsx3, so chunking at

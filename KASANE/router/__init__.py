@@ -257,7 +257,7 @@ class Router:
                 )
         self.state.cloud_available = cloud_ok
         await self._refresh_spend()
-        self._started = True   # app.py calls this directly: the first turn must not run it again
+        self._started = True   # boot.py calls this directly: the first turn must not run it again
         return cloud_ok
 
     async def _refresh_spend(self) -> None:
@@ -466,7 +466,7 @@ class Router:
                             cloud_call[2] += len(chunk.text) + sum(len(json.dumps(c, default=str)) for c in chunk.calls)
                         last_kind = chunk.kind
                         if chunk.kind == "tool_calls" and cloud_call is not None:
-                            # app.py stops reading here and routes the next round at once, long
+                            # turns.py stops reading here and routes the next round at once, long
                             # before this generator is finalized: book the call and free its
                             # reservation now, so the cap sees its real cost (FR-R-2).
                             bills.append(self._bill(cloud_call, decision.est_prompt_tokens, catalog))
@@ -496,7 +496,7 @@ class Router:
         except BaseException as exc:
             # GeneratorExit right after a tool call (or the end) is the caller done
             # reading, not a failure. Anywhere else the reply was abandoned midway:
-            # app.py's Stop usually lands while it awaits between chunks.
+            # A Stop (session.py) usually lands while it awaits between chunks.
             early_close = isinstance(exc, GeneratorExit) and last_kind not in ("tool_calls", "done")
             interrupted = early_close or not isinstance(exc, GeneratorExit)
             if error is None and interrupted:
@@ -767,7 +767,7 @@ class Router:
 
 # -- module-level singleton + functions ---------------------------------------
 # Importing this module must not hit the network; Router.startup() is called on
-# the first complete()/describe_image(), i.e. from the app's own lifespan.
+# the first complete()/describe_image(), i.e. from boot.check_router once a window is up.
 
 _router: Router | None = None
 

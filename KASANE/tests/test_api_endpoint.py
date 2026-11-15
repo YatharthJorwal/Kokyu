@@ -373,6 +373,7 @@ async def test_the_model_list_names_the_active_endpoint_but_never_its_key(tmp_pa
 @pytest.mark.asyncio
 async def test_a_key_change_reaches_every_window(monkeypatch):
     import app
+    import hub
 
     class Rt:
         def __init__(self):
@@ -401,8 +402,8 @@ async def test_a_key_change_reaches_every_window(monkeypatch):
 
     monkeypatch.setattr(app.router, "get_router", lambda: rt)
     monkeypatch.setattr(app.model_listing, "model_list", listed)
-    monkeypatch.setattr(app, "_active_connections", set(windows))
-    await app._apply_shell_key("openrouter", "sk-or-1234567890")
+    monkeypatch.setattr(hub, "connections", set(windows))
+    await app.apply_shell_key("openrouter", "sk-or-1234567890")
     assert rt.changes == [("openrouter", "sk-or-1234567890")]
     for ws in windows:
         assert [f["type"] for f in ws.sent] == ["model_list"]

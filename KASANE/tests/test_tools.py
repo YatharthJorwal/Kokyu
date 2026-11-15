@@ -227,7 +227,7 @@ async def test_dispatch_capture_camera_passes_websocket_through(monkeypatch):
 @pytest.mark.asyncio
 async def test_dispatch_capture_camera_no_websocket_returns_safe_string():
     # dispatch_tool_call's websocket param defaults to None -- every real
-    # call site (app.py's tool-calling loop) always passes one, but a
+    # call site (turns.py's tool-calling loop) always passes one, but a
     # missing one shouldn't crash, just degrade to a message the model
     # can react to.
     result = await tools.dispatch_tool_call("capture_camera", {})

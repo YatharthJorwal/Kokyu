@@ -1,5 +1,5 @@
 """
-TTS backends. `synthesize(text) -> bytes` (WAV) is the only thing app.py
+TTS backends. `synthesize(text) -> bytes` (WAV) is the only thing turns.py
 calls, regardless of which engine is active -- picked by config.yaml's
 tts.engine, same pattern as the LLM's config-driven backend choice.
 
@@ -44,7 +44,7 @@ class TTSUnreachableError(Exception):
     """The configured TTS backend's server couldn't be reached or errored
     out. synthesize() catches this itself for the gpt_sovits engine and
     falls back to pyttsx3 rather than letting a turn go silent -- callers
-    in app.py don't need to handle this directly."""
+    in turns.py don't need to handle this directly."""
 
 
 @dataclass(frozen=True)
@@ -173,7 +173,7 @@ async def synthesize(text: str, voice: VoiceParams | None = None) -> bytes:
 
 # ─── server lifecycle ────────────────────────────────────────────────────────
 # The kernel owns the GPT-SoVITS server (D-060). It is started once, after the
-# first window is up and the chat model has loaded (app._boot_sequence), so the
+# first window is up and the chat model has loaded (boot.boot_sequence), so the
 # two never load at the same time; the Tauri shell's Job Object still ends it
 # with the app. Port-first: a server already answering is used, never a second.
 

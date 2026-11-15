@@ -507,7 +507,7 @@ async def test_load_model_raises_so_the_picker_can_show_why(monkeypatch):
 
 # --- strict chat templates: only ONE system message, at the start ------------
 # Real failure (hf.co/Abiray/Qwen3.5-9B-abliterated-GGUF, whose Jinja template
-# says "System message must be at the beginning"): app.py splices the per-turn
+# says "System message must be at the beginning"): turns.py splices the per-turn
 # context in as a system message before the user's turn, so EVERY turn with
 # any context came back HTTP 500 and she said "my brain answered, but with an
 # error". The stock qwen3.5's Go template tolerated it.

@@ -10,7 +10,7 @@ of state is pushed to every connected window as a `model_status` frame, which th
 chat view turns into the "waking up" card and the chip's loading state.
 
 What "loading" means per backend lives in the `warm` function the kernel
-configures (`app._load_chat_model`): llama.cpp starts `llama-server` and reads
+configures (`boot.load_chat_model`): llama.cpp starts `llama-server` and reads
 the persona once, Ollama loads the weights, an API model needs nothing.
 
 States: `idle` (nothing asked yet), `loading`, `ready`, `failed` (with a
@@ -204,5 +204,5 @@ class ModelLoader:
             await asyncio.wait({task}, timeout=10)
 
 
-# One loader for the kernel; app.py configures its `warm` function at import.
+# One loader for the kernel; boot.py configures its `warm` function at import.
 LOADER = ModelLoader()

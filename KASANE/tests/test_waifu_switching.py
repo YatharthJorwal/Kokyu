@@ -7,10 +7,13 @@ import pytest
 from fastapi.testclient import TestClient
 
 import app
-from audio import voice_mode
+import companions
 import persona
 import prompting
+import turns
 import waifus
+from audio import tts
+from audio import voice_mode
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
 
@@ -37,7 +40,7 @@ def registry(tmp_path, monkeypatch):
 
 def _history(waifu):
     return [
-        {"role": "system", "content": app._system_message(waifu)},
+        {"role": "system", "content": companions.system_message(waifu)},
         {"role": "user", "content": "earlier question"},
         {"role": "assistant", "content": "earlier answer [happy]"},
     ]
@@ -52,13 +55,13 @@ async def test_switch_replaces_only_the_system_prompt_and_the_voice(registry, mo
         prewarmed.append(voice)
         return True
 
-    monkeypatch.setattr(app.tts, "prewarm", fake_prewarm)
+    monkeypatch.setattr(tts, "prewarm", fake_prewarm)
     ws = FakeWebSocket()
     ws.state.waifu = registry.get("alpha")
     history = _history(registry.get("alpha"))
     before_tail = [dict(m) for m in history[1:]]
 
-    result = await app._apply_waifu_switch(ws, history, registry, "beta")
+    result = await companions.apply_switch(ws, history, registry, "beta")
 
     assert result.id == "beta" and ws.state.waifu.id == "beta"
     assert history[0]["content"] == prompting.build_system_prompt(registry.get("beta").prompt)
@@ -66,7 +69,7 @@ async def test_switch_replaces_only_the_system_prompt_and_the_voice(registry, mo
     state = ws.payloads[-1]
     assert state["type"] == "waifu_state" and state["data"]["active"] == "beta"
     assert {w["id"] for w in state["data"]["waifus"]} == {"alpha", "beta"}
-    assert app._load_active_id() == "beta"                  # remembered for the next launch
+    assert companions.load_active_id() == "beta"                  # remembered for the next launch
     import asyncio
     await asyncio.sleep(0)                                  # let the pre-warm task run
     assert prewarmed and prewarmed[0].prompt_text == "beta transcript"
@@ -78,7 +81,7 @@ async def test_unknown_waifu_changes_nothing(registry):
     ws.state.waifu = registry.get("alpha")
     history = _history(registry.get("alpha"))
     snapshot = [dict(m) for m in history]
-    assert await app._apply_waifu_switch(ws, history, registry, "nobody") is None
+    assert await companions.apply_switch(ws, history, registry, "nobody") is None
     assert history == snapshot and ws.state.waifu.id == "alpha" and ws.payloads == []
 
 
@@ -91,12 +94,12 @@ async def test_speech_uses_the_active_waifus_clip_and_transcript(registry, monke
         heard.append((text, voice))
         return b"RIFF"
 
-    monkeypatch.setattr(app.tts, "synthesize", fake_synth)
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
     ws = FakeWebSocket()
     ws.state.waifu = registry.get("alpha")
-    await app._send_speak(ws, "Same sentence.")
+    await turns.send_speak(ws, "Same sentence.")
     ws.state.waifu = registry.get("beta")
-    await app._send_speak(ws, "Same sentence.")
+    await turns.send_speak(ws, "Same sentence.")
 
     (t1, v1), (t2, v2) = heard
     assert t1 == t2
@@ -114,26 +117,26 @@ async def test_no_waifu_means_the_config_voice_call(monkeypatch):
         calls.append(text)
         return b"RIFF"
 
-    monkeypatch.setattr(app.tts, "synthesize", fake_synth)
-    await app._send_speak(FakeWebSocket(), "Hello.")
+    monkeypatch.setattr(tts, "synthesize", fake_synth)
+    await turns.send_speak(FakeWebSocket(), "Hello.")
     assert calls == ["Hello."]
 
 
 @pytest.mark.asyncio
 async def test_dead_voice_backend_leaves_a_text_only_reply(registry, monkeypatch):
     async def down(text, voice=None):
-        raise app.tts.TTSUnreachableError("backend down")
+        raise tts.TTSUnreachableError("backend down")
 
-    monkeypatch.setattr(app.tts, "synthesize", down)
+    monkeypatch.setattr(tts, "synthesize", down)
     ws = FakeWebSocket()
     ws.state.waifu = registry.get("alpha")
-    await app._send_speak(ws, "Still here.")
+    await turns.send_speak(ws, "Still here.")
     payload = ws.payloads[0]
     assert payload["type"] == "speak" and payload["data"]["text"] == "Still here." and payload["data"]["audio_b64"] == ""
 
 
 def test_system_message_is_the_fallback_persona_without_a_waifu():
-    assert app._system_message(None) == prompting.build_system_prompt(persona.FALLBACK_PERSONA)
+    assert companions.system_message(None) == prompting.build_system_prompt(persona.FALLBACK_PERSONA)
 
 
 def test_vrm_endpoint_serves_a_known_waifu_and_only_a_known_waifu(registry):

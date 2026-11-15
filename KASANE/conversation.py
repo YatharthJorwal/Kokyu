@@ -21,6 +21,8 @@ from dataclasses import dataclass
 from collections.abc import Collection
 from typing import Any
 
+import paths
+from config import CONFIG
 from threads import Message, Thread, ThreadStore
 
 log = logging.getLogger("kokyu.conversation")
@@ -229,3 +231,15 @@ class ConversationManager:
 def thread_summary(thread: Thread) -> dict[str, Any]:
     """What the sidebar needs for one history row."""
     return thread.to_dict()
+
+
+_manager: ConversationManager | None = None
+
+
+def get_manager() -> ConversationManager:
+    """The threads store for the current data dir (rebuilt if tests redirect it)."""
+    global _manager
+    db_path = paths.app_data_dir() / "threads.db"
+    if _manager is None or _manager.store.db_path != db_path:
+        _manager = ConversationManager(ThreadStore(db_path), history_messages=CONFIG.session.max_history_turns * 2)
+    return _manager

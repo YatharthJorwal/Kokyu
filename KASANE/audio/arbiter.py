@@ -74,3 +74,8 @@ class Arbiter:
 
     def snapshot(self) -> dict[str, str | None]:
         return {"state": self.state, "blocked_reason": self.blocked_reason}
+
+
+# One mouth for the process: a turn, an ambient remark and a Task Guide nudge all
+# ask it before making sound, and the memory writer waits while it is busy.
+ARBITER = Arbiter()

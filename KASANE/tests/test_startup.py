@@ -10,13 +10,13 @@ import time
 
 import pytest
 
-import app
+import boot
 import config
-from audio import stt
+from audio import stt, tts
 
 
 @pytest.fixture
-def boot(monkeypatch):
+def boot_steps(monkeypatch):
     """Records the boot steps; each waits for its own release."""
     seen: list[str] = []
 
@@ -29,36 +29,36 @@ def boot(monkeypatch):
     async def no_voice():
         raise AssertionError("voice must not start at launch (D-061)")
 
-    monkeypatch.setattr(app, "_first_window", None)
-    monkeypatch.setattr(app, "_check_router", step("router"))
-    monkeypatch.setattr(app, "_check_chat_model", step("chat"))
-    monkeypatch.setattr(app, "_startup_memory_pass", step("memory"))
-    monkeypatch.setattr(app.tts, "ensure_server", no_voice)
+    monkeypatch.setattr(boot, "_first_window", None)
+    monkeypatch.setattr(boot, "check_router", step("router"))
+    monkeypatch.setattr(boot, "check_chat_model", step("chat"))
+    monkeypatch.setattr(boot, "startup_memory_pass", step("memory"))
+    monkeypatch.setattr(tts, "ensure_server", no_voice)
     monkeypatch.setattr(stt, "preload", no_voice)
     return seen
 
 
 @pytest.mark.asyncio
-async def test_nothing_heavy_loads_before_a_window_is_up(boot):
+async def test_nothing_heavy_loads_before_a_window_is_up(boot_steps):
     # D-060: the window paints on an idle PC; only the cached catalog is read
-    task = asyncio.create_task(app._boot_sequence())
+    task = asyncio.create_task(boot.boot_sequence())
     await asyncio.sleep(0.05)
-    assert boot == ["router"]
-    app._first_window_event().set()
+    assert boot_steps == ["router"]
+    boot.first_window_event().set()
     await task
     # then one heavy thing at a time, the chat model first; voice never (D-061)
-    assert boot == ["router", "chat", "memory"]
+    assert boot_steps == ["router", "chat", "memory"]
 
 
 @pytest.mark.asyncio
-async def test_one_failing_boot_step_does_not_stop_the_others(monkeypatch, boot):
+async def test_one_failing_boot_step_does_not_stop_the_others(monkeypatch, boot_steps):
     async def boom():
         raise RuntimeError("ollama exploded")
 
-    monkeypatch.setattr(app, "_check_chat_model", boom)
-    app._first_window_event().set()
-    await app._boot_sequence()  # must not raise
-    assert boot == ["router", "memory"]
+    monkeypatch.setattr(boot, "check_chat_model", boom)
+    boot.first_window_event().set()
+    await boot.boot_sequence()  # must not raise
+    assert boot_steps == ["router", "memory"]
 
 
 def _with_stt(**overrides):

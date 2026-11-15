@@ -7,22 +7,26 @@ import asyncio
 import pytest
 from fastapi.testclient import TestClient
 
+import ambient
 import app
+import conversation
+import hub
+import llm
 from senses import ocr_watch, task_guide
 
 
 @pytest.fixture
 def kernel(tmp_path, monkeypatch):
     monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path / "data"))
-    monkeypatch.setattr(app, "_conversation_manager", None)
-    monkeypatch.setattr(app, "_driver", None)
-    monkeypatch.setattr(app, "_shutdown_event", asyncio.Event())
+    monkeypatch.setattr(conversation, "_manager", None)
+    monkeypatch.setattr(hub, "driver", None)
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
     caps = {"value": ["completion", "vision"]}
 
     async def capabilities(model):
         return caps["value"]
 
-    monkeypatch.setattr(app.llm, "model_capabilities", capabilities)
+    monkeypatch.setattr(llm, "model_capabilities", capabilities)
     task_guide.set_enabled(False)
     ocr_watch.set_active(False)
     yield TestClient(app.app), caps
@@ -75,7 +79,7 @@ def test_an_observer_window_cannot_switch_them(kernel, monkeypatch):
     client, _ = kernel
     with client.websocket_connect("/ws") as ws:
         _until(ws, "screen_companions")
-        monkeypatch.setattr(app, "_driver", object())   # this window is now an observer
+        monkeypatch.setattr(hub, "driver", object())   # this window is now an observer
         _switch(ws, mode="ocr_watch", on=True)
         ws.send_json({"v": 1, "type": "thread_list", "data": {}})
         _until(ws, "thread_list")
@@ -86,12 +90,12 @@ def test_an_observer_window_cannot_switch_them(kernel, monkeypatch):
 def test_typing_keeps_ocr_watch_quiet_for_a_while(kernel, monkeypatch):
     # FR-SC-5: no remark while the user is typing.
     client, _ = kernel
-    monkeypatch.setattr(app, "_last_typed_at", 0.0)
+    monkeypatch.setattr(ambient, "_last_typed_at", 0.0)
     with client.websocket_connect("/ws") as ws:
         _until(ws, "screen_companions")
         ws.send_json({"v": 1, "type": "typing", "data": {}})
         ws.send_json({"v": 1, "type": "thread_list", "data": {}})
         _until(ws, "thread_list")
-    typed = app._last_typed_at
-    assert typed > 0 and app._typing_recently(typed + 1)
-    assert not app._typing_recently(typed + app.TYPING_QUIET_SECONDS + 0.1)
+    typed = ambient._last_typed_at
+    assert typed > 0 and ambient.typing_recently(typed + 1)
+    assert not ambient.typing_recently(typed + ambient.TYPING_QUIET_SECONDS + 0.1)

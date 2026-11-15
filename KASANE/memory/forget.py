@@ -19,7 +19,7 @@ philosophy:
    in store.py's exact-id deletion.
 
 Returns a short instruction fragment (not literal text to speak) for
-app.py to fold into the same ephemeral system message recall.py's block
+turns.py to fold into the same ephemeral system message recall.py's block
 goes into -- so the main chat model (already carrying full persona
 context) is the one that actually acknowledges the removal in character,
 rather than this module's own small classification call also trying to
@@ -73,7 +73,7 @@ list is the safe default, do not guess.\
 
 
 async def maybe_forget(user_text: str) -> str | None:
-    """Returns an instruction fragment for app.py to inject if something
+    """Returns an instruction fragment for turns.py to inject if something
     was actually removed this turn, or None if nothing was (no
     forget-intent detected, no matching facts, or the classification call
     failed/was unreachable -- all treated the same: nothing removed, turn
