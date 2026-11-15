@@ -439,3 +439,23 @@ Accepted · User (one endpoint at a time) · Implements FR-R-6, D-037; deviates 
   - The shell writes the new key before it deletes the old one.
   - The stdin reader uses its own unbuffered handle, so a normal exit does not crash.
 **Consequences:** Switching provider means entering that provider's key again. DeepSeek publishes no prices, so its models stay blocked while a cap is on until the user answers D-058's open question. The picker has no per-provider headings (one provider). Custom endpoints and the Settings page are K1-13; error classes are K1-12. Until then, keys are entered in a small form behind the Key button in the model menu's API heading (with a hint to use .env outside the desktop app).
+
+## D-060 Lazy boot: nothing heavy before the window, one load at a time, llama.cpp only when picked
+Accepted · User ("make llama server start only after app is loaded and model is selected. default is an ollama model which is faster for the cold start"; "an app must not take that long to start") · Supersedes D-027's parallel start and D-052's boot warm-up of a llama.cpp default · 2026-11-15
+**Context:** `npm run tauri dev` showed a blank window for a long time, lagged the PC and sometimes crashed File Explorer. The logs showed why. At kernel start, all of these loaded at once:
+- the 35B on llama.cpp (21 GB file mapped, about 19.5 GB working set; 43 to 48 s to load, then a 1,003-token warm prompt at 34 tok/s on all 10 cores);
+- GPT-SoVITS (torch and CUDA), spawned by the shell in parallel;
+- faster-whisper on the CPU;
+- the Ollama classifier and embedding models;
+- a memory pass 20 s in.
+
+Three launches between 11:56 and 11:58 each restarted the 35B load. Vite also watched `.venv` (8,160 files) and the `data/` and `logs/` folders the kernel writes all the time. The shell ran `netstat` and `tasklist` on the thread that creates the window. The PC's page file is 3.5 GB (commit limit 35.4 GB on 32 GB of RAM), so the simultaneous loads pushed the commit charge towards the limit, the likely cause of the Explorer crashes (**not verified**: no crash was reproduced). Nothing was wrong with a package: the kernel imports in about 1 s.
+**Decision:**
+- **The kernel opens its port at once and loads nothing heavy until the first window connects.** Then one step at a time: the thread's chat model, the GPT-SoVITS server, the speech model (only if `voice.stt.warm_up_on_start`), the memory catch-up pass. The router reads its cached catalog at once (cheap). A failed step does not stop the next.
+- **llama.cpp starts only when the user picks a llama.cpp model in the chip, sends a message in a thread that uses one, or presses Try again.** Boot and opening a thread never start it. Ollama and API models still load on their own (D-054's loader, unchanged otherwise).
+- **The default chat model on this PC is `local:ollama/qwen3.5:9b`** (the user's `config.yaml`). The example config stays `null` (= `llm.model`, an Ollama model).
+- **The kernel owns GPT-SoVITS.** The folder moves from `src-tauri/launcher.local.txt` (deleted) to `tts.gpt_sovits.launch` in `config.yaml`. The kernel starts the server once (concurrent callers share the start), logs its output to `logs/gpt_sovits.log` (it went to DEVNULL), and stops it at shutdown. A server already answering on the port is used, never a second one. The kernel runs inside the shell's Job Object, so the server still ends with the app. `KOKYU_SHELL_STARTS_TTS` is gone. A line spoken while our server is still loading waits up to 8 s.
+- **The shell starts only the kernel**, with the stale-port sweep and the spawn on a background thread, so window creation never waits for them.
+- **`voice.stt.warm_up_on_start` defaults to false:** the mic arrives with K2.
+- **Vite ignores** `.venv`, `data`, `logs`, `assets`, `docs` and `dist`.
+**Consequences:** The window should paint while the PC is idle, and the 9B is ready seconds later. A user whose last thread used the 35B sees that thread with its model not loaded; the first message, or picking it, starts it with the "waking up" card. Voice arrives after the chat model is ready, not at the same time. Advice outside the repo, for the user: a system-managed page file (or at least 16 GB) gives the 35B headroom. **Not verified:** the Tauri window itself; voice playback after the change.

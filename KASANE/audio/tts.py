@@ -28,13 +28,13 @@ import socket
 import subprocess
 import sys
 import tempfile
-import time
 from dataclasses import dataclass
 from urllib.parse import urlparse
 
 import httpx
 import pyttsx3
 
+import paths
 from config import CONFIG
 
 
@@ -149,14 +149,9 @@ async def synthesize(text: str, voice: VoiceParams | None = None) -> bytes:
     not enabled (the reply then stays text-only, FR-V-7). Runs pyttsx3's blocking
     engine in a thread so it doesn't stall the websocket event loop."""
     if CONFIG.tts.engine == "gpt_sovits":
-        if (
-            _shell_manages_server()
-            and time.monotonic() - _PROCESS_STARTED < _STARTUP_GRACE_WINDOW_S
-            and not await health()
-        ):
-            # The shell's GPT-SoVITS is still loading. Give the first lines a few
-            # seconds rather than speaking them in the placeholder voice.
-            await _wait_for_health(_STARTUP_GRACE_PER_LINE_S, interval=0.25)
+        if starting() and not await health():
+            # Our GPT-SoVITS is still loading: give the line a few seconds.
+            await _wait_for_health(_PER_LINE_WAIT_S, interval=0.25)
         try:
             if voice is None:
                 return await _synthesize_gpt_sovits(text)
@@ -176,29 +171,15 @@ async def synthesize(text: str, voice: VoiceParams | None = None) -> bytes:
 
 
 # ─── server lifecycle ────────────────────────────────────────────────────────
-# The Tauri shell also tries to start GPT-SoVITS (src-tauri/launcher.local.txt).
-# This is the same check done from the Python side, for two reasons: running the
-# orchestrator standalone should still get a voice, and a launch that lost a race
-# must not start a second server on the same port. Port-first means "already
-# running" is always the answer that wins.
-#
-# Shell-managed mode: the Tauri shell starts GPT-SoVITS and this process at the
-# same time (GPT-SoVITS takes tens of seconds to load models; nothing else should
-# wait for it) and sets KOKYU_SHELL_STARTS_TTS=1. In that mode this module never
-# launches a server, because a port that is closed *right now* just means the
-# shell's copy is still loading, and a second launch would fight it for the port
-# and the GPU. It waits for the shell's server instead.
+# The kernel owns the GPT-SoVITS server (D-060). It is started once, after the
+# first window is up and the chat model has loaded (app._boot_sequence), so the
+# two never load at the same time; the Tauri shell's Job Object still ends it
+# with the app. Port-first: a server already answering is used, never a second.
 
-SHELL_MANAGED_ENV = "KOKYU_SHELL_STARTS_TTS"
-_STARTUP_GRACE_WINDOW_S = 90.0  # only this long after process start...
-_STARTUP_GRACE_PER_LINE_S = 8.0  # ...a spoken line waits up to this for the server
-_PROCESS_STARTED = time.monotonic()
-
-
-def _shell_manages_server() -> bool:
-    return os.environ.get(SHELL_MANAGED_ENV) == "1"
-
+_PER_LINE_WAIT_S = 8.0   # a line spoken while our server is still loading waits this long
 _CREATE_NO_WINDOW = 0x08000000
+_process: subprocess.Popen | None = None
+_starting: asyncio.Task[bool] | None = None
 
 
 def _service_address(api_url: str) -> tuple[str, int]:
@@ -238,18 +219,29 @@ def _launch_gpt_sovits() -> subprocess.Popen | None:
         )
         return None
     args = [str(part) for part in (launch.get("args") or [])]
+    env = {**os.environ, "PYTHONIOENCODING": "utf-8", "PYTHONUTF8": "1", "PYTHONUNBUFFERED": "1"}
+    env.pop("KOKYU_API_KEYS", None)
+    try:
+        paths.logs_dir().mkdir(parents=True, exist_ok=True)
+        log = open(paths.logs_dir() / "gpt_sovits.log", "wb")  # noqa: SIM115 -- the child keeps it
+    except OSError:
+        log = subprocess.DEVNULL
     try:
         return subprocess.Popen(  # noqa: S603 -- local, configured executable
             [python, script, *args],
             cwd=cwd or None,
+            env=env,
             stdin=subprocess.DEVNULL,   # the kernel's stdin carries API keys from the shell (D-059)
-            stdout=subprocess.DEVNULL,
-            stderr=subprocess.DEVNULL,
+            stdout=log,
+            stderr=subprocess.STDOUT,
             creationflags=_CREATE_NO_WINDOW if os.name == "nt" else 0,
         )
     except OSError as exc:
-        print(f"[yuri] gpt_sovits: could not start the server: {exc}", file=sys.stderr)
+        print(f"[kokyu] gpt_sovits: could not start the server: {exc}", file=sys.stderr)
         return None
+    finally:
+        if log is not subprocess.DEVNULL:
+            log.close()
 
 
 async def _wait_for_health(timeout: float, interval: float = 0.5) -> bool:
@@ -264,30 +256,29 @@ async def _wait_for_health(timeout: float, interval: float = 0.5) -> bool:
 
 async def ensure_server() -> bool:
     """Make the TTS server available if it can be. Returns whether it is up.
-
-    Never raises: a missing server means the existing pyttsx3 fallback in
-    `synthesize()` takes over, and the log line says why."""
+    Concurrent callers share one start. Never raises: without a server a reply
+    stays text-only (FR-V-7), or uses pyttsx3 when that fallback is on."""
+    global _starting
     if CONFIG.tts.engine != "gpt_sovits":
         return False
+    if _starting is None or (_starting.done() and not await health()):
+        _starting = asyncio.create_task(_start_server())
+    return await asyncio.shield(_starting)
+
+
+def starting() -> bool:
+    """True while the kernel's own server is still loading."""
+    return _starting is not None and not _starting.done()
+
+
+async def _start_server() -> bool:
+    global _process
     if await health():
         return True
-
     launch = dict(CONFIG.tts.gpt_sovits.launch or {})
-    if _shell_manages_server():
-        timeout = float(launch.get("startup_timeout_s", 120))
-        up = await _wait_for_health(timeout, interval=1.0)
-        print(
-            "[yuri] gpt_sovits: the shell's server is up"
-            if up
-            else f"[yuri] gpt_sovits: the shell's server still isn't listening after {timeout:.0f}s -- using pyttsx3",
-            file=sys.stdout if up else sys.stderr,
-            flush=True,
-        )
-        return up
     if not launch.get("enabled", False):
         print(
-            "[yuri] gpt_sovits: not running and launch is disabled -- voice falls "
-            "back to pyttsx3",
+            "[kokyu] gpt_sovits: not running and tts.gpt_sovits.launch is off -- replies stay text-only",
             file=sys.stderr,
         )
         return False
@@ -295,22 +286,28 @@ async def ensure_server() -> bool:
     process = await asyncio.to_thread(_launch_gpt_sovits)
     if process is None:
         return False
+    _process = process
 
     timeout = float(launch.get("startup_timeout_s", 120))
     deadline = asyncio.get_running_loop().time() + timeout
     while asyncio.get_running_loop().time() < deadline:
         if await health():
-            print("[yuri] gpt_sovits: server is up", flush=True)
+            print("[kokyu] gpt_sovits: server is up", file=sys.stderr, flush=True)
             return True
         if process.poll() is not None:
             print(
-                f"[yuri] gpt_sovits: exited during startup (code {process.returncode})",
+                f"[kokyu] gpt_sovits: exited during startup (code {process.returncode}); see logs/gpt_sovits.log",
                 file=sys.stderr,
             )
             return False
         await asyncio.sleep(1.0)
-    print(
-        f"[yuri] gpt_sovits: still not listening after {timeout:.0f}s -- using pyttsx3",
-        file=sys.stderr,
-    )
+    print(f"[kokyu] gpt_sovits: still not listening after {timeout:.0f}s", file=sys.stderr)
     return False
+
+
+def stop_server() -> None:
+    """End the server this kernel started (kernel shutdown). One we did not start is left alone."""
+    global _process
+    process, _process = _process, None
+    if process is not None and process.poll() is None:
+        process.kill()

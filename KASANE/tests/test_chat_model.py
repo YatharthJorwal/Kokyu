@@ -427,10 +427,14 @@ def loads(kernel, monkeypatch):
 
     monkeypatch.setattr(app, "_load_chat_model", fake_load)
     monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
-        app.CONFIG, chat=dataclasses.replace(app.CONFIG.chat, default_model_ref="local:llamacpp/big", load_delay_s=0)
+        app.CONFIG, chat=dataclasses.replace(app.CONFIG.chat, default_model_ref=DEFAULT, load_delay_s=0)
     ))
     monkeypatch.setattr(app.model_loader.LOADER, "enabled", True)
     return kernel[0], seen
+
+
+DEFAULT = "local:ollama/qwen3.5:9b"   # D-060: an Ollama default wakes up on its own
+BIG = "local:llamacpp/big"
 
 
 def _status_until(ws, state, ref):
@@ -446,7 +450,7 @@ def test_a_window_sees_the_model_load_and_a_pick_loads_the_new_model(loads):
         _until(ws, "thread_opened")
         first, _ = _until(ws, "model_status")                     # the current state, right away
         assert first["data"]["state"] in ("idle", "loading", "ready")
-        _status_until(ws, "ready", "local:llamacpp/big")          # the thread's (default) model woke up
+        _status_until(ws, "ready", DEFAULT)                       # the thread's (default) model woke up
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         _until(ws, "thread_updated")
         loading = _status_until(ws, "loading", LOCAL)
@@ -454,14 +458,14 @@ def test_a_window_sees_the_model_load_and_a_pick_loads_the_new_model(loads):
         _status_until(ws, "ready", LOCAL)
         ws.send_json({"v": 1, "type": "model_load", "data": {}})  # Try again: loads even though it is up
         _status_until(ws, "ready", LOCAL)
-    assert seen == ["local:llamacpp/big", LOCAL, LOCAL]
+    assert seen == [DEFAULT, LOCAL, LOCAL]
 
 
 def test_a_new_thread_keeps_the_pick_and_does_not_load_again(loads):
     client, seen = loads
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        _status_until(ws, "ready", "local:llamacpp/big")
+        _status_until(ws, "ready", DEFAULT)
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         _status_until(ws, "ready", LOCAL)
         ws.send_json({"v": 1, "type": "thread_new", "data": {}})
@@ -469,7 +473,22 @@ def test_a_new_thread_keeps_the_pick_and_does_not_load_again(loads):
         assert opened["data"]["thread"]["model_ref"] == LOCAL       # FR-M-5: inherits the last selection
         ws.send_json({"v": 1, "type": "thread_list", "data": {}})
         _until(ws, "thread_list")
-    assert seen == ["local:llamacpp/big", LOCAL]
+    assert seen == [DEFAULT, LOCAL]
+
+
+def test_a_llamacpp_thread_starts_its_server_only_when_picked(loads, monkeypatch):
+    # D-060: opening a thread whose model is the 35B loads nothing; picking it does
+    client, seen = loads
+    monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
+        app.CONFIG, chat=dataclasses.replace(app.CONFIG.chat, default_model_ref=BIG, load_delay_s=0)
+    ))
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        first, _ = _until(ws, "model_status")
+        assert first["data"]["state"] == "idle"
+        ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": BIG}})
+        _status_until(ws, "ready", BIG)
+    assert seen == [BIG]
 
 
 def test_the_model_list_reaches_the_window(kernel, monkeypatch):
@@ -527,7 +546,7 @@ def test_only_the_main_window_loads_models(loads, monkeypatch):
     manager.store.create_thread(model_ref=None)                             # newest: the one that opens
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
-        _status_until(ws, "ready", "local:llamacpp/big")
+        _status_until(ws, "ready", DEFAULT)
         # shortcut: demote this window instead of opening a second one (each TestClient
         # socket gets its own event loop, which the kernel's shared objects reject)
         monkeypatch.setattr(app, "_driver", object())
@@ -537,7 +556,7 @@ def test_only_the_main_window_loads_models(loads, monkeypatch):
         ws.send_json({"v": 1, "type": "model_load", "data": {}})
         ws.send_json({"v": 1, "type": "thread_list", "data": {}})
         _until(ws, "thread_list")
-    assert seen == ["local:llamacpp/big"]
+    assert seen == [DEFAULT]
 
 
 def test_hello_tells_the_window_the_defaults(kernel):
@@ -557,7 +576,8 @@ def test_a_turn_waits_for_its_model_and_warm_up_off_loads_on_the_first_message(l
     monkeypatch.setattr(app, "CONFIG", dataclasses.replace(
         app.CONFIG,
         llm=dataclasses.replace(app.CONFIG.llm, warm_up_on_start=False),
-        chat=dataclasses.replace(app.CONFIG.chat, load_delay_s=30),          # a load that would start much later
+        # a load that would start much later; and a llama.cpp model: a message is a pick (D-060)
+        chat=dataclasses.replace(app.CONFIG.chat, load_delay_s=30, default_model_ref=BIG),
     ))
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")

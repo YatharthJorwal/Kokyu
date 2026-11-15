@@ -64,10 +64,20 @@ CLASSIFIER = model_for(LOCAL_PROVIDER, "classifier", app.CONFIG.models)
 
 
 @pytest.mark.asyncio
-async def test_a_llamacpp_default_is_started_with_the_persona_and_tools_then_the_helpers(monkeypatch, calls):
+async def test_boot_never_starts_a_llamacpp_model(monkeypatch, calls):
+    # D-060: a 21 GB file and every CPU core; it starts when the user picks it
+    use(monkeypatch, "local:llamacpp/big")
+    await app._warm_default_chat_model()
+    assert calls["warm"] == calls["load"] == calls["helpers"] == calls["status"] == []
+    assert not app._loads_without_asking("local:llamacpp/big")
+    assert app._loads_without_asking("local:ollama/qwen3.5:9b") and app._loads_without_asking("api:airouter/x")
+
+
+@pytest.mark.asyncio
+async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_then_the_helpers(monkeypatch, calls):
     use(monkeypatch, "local:llamacpp/big")
     monkeypatch.setattr(app, "_system_message", lambda waifu: "PERSONA")
-    await app._warm_default_chat_model()
+    await app.model_loader.LOADER.request("local:llamacpp/big")   # what a pick in the chip does
     # not the 9B: only the small helpers that run before every reply (classifier, embeddings)
     assert calls["helpers"] == [CLASSIFIER] and calls["embed"] == ["warm-up"]
     assert calls["load"] == [] and calls["stopped"] == []
@@ -117,14 +127,13 @@ async def test_switched_off_or_failing_warm_ups_never_raise(monkeypatch, calls):
     await app._warm_default_chat_model()
     assert calls["status"] == []
 
-    class Broken:
-        async def warm(self, *a):
-            raise RuntimeError("model file missing")
+    async def broken_load(model=None):
+        raise RuntimeError("model file missing")
 
-    use(monkeypatch, "local:llamacpp/big")
-    monkeypatch.setattr(app.router, "get_router", lambda: Broken())
+    use(monkeypatch, "local:ollama/qwen3.5:9b")
+    monkeypatch.setattr(app.llm, "load_model", broken_load)
     await app._warm_default_chat_model()                 # shown in the window, with Try again
-    assert calls["status"][-1] == ("failed", "local:llamacpp/big")
+    assert calls["status"][-1] == ("failed", "local:ollama/qwen3.5:9b")
     assert app.model_loader.LOADER.status()["message"] == "model file missing"
 
 

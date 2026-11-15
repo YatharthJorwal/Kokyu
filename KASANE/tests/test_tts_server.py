@@ -1,5 +1,6 @@
 """GPT-SoVITS server lifecycle: health check and managed launch."""
 
+import asyncio
 import dataclasses
 
 import pytest
@@ -95,41 +96,46 @@ def test_service_address_parsing():
     assert tts._service_address("http://localhost/tts") == ("localhost", 9880)
 
 
-# ---- shell-managed mode: the shell starts GPT-SoVITS in parallel ---------------
+# ---- the kernel owns the server (D-060) ----------------------------------------
+
+
+@pytest.fixture(autouse=True)
+def _no_server_state(monkeypatch):
+    monkeypatch.setattr(tts, "_starting", None)
+    monkeypatch.setattr(tts, "_process", None)
+
+
+class _Alive:
+    returncode = None
+
+    def __init__(self):
+        self.killed = False
+
+    def poll(self):
+        return 1 if self.killed else None
+
+    def kill(self):
+        self.killed = True
 
 
 @pytest.mark.asyncio
-async def test_shell_managed_never_launches_and_waits_for_the_shells_server(monkeypatch):
-    monkeypatch.setenv(tts.SHELL_MANAGED_ENV, "1")
-    ticks = {"n": 0}
+async def test_concurrent_callers_share_one_launch(monkeypatch):
+    launches, up = [], {"value": False}
 
-    def port_open(*a, **k):
-        ticks["n"] += 1
-        return ticks["n"] > 3  # closed for the first few polls, then the shell's copy is up
+    def launch():
+        launches.append(1)
+        up["value"] = True
+        return _Alive()
 
-    def must_not_launch():
-        raise AssertionError("the shell owns GPT-SoVITS; Python must not start a second one")
-
-    monkeypatch.setattr(tts, "_port_open", port_open)
-    monkeypatch.setattr(tts, "_launch_gpt_sovits", must_not_launch)
-    monkeypatch.setattr(tts, "CONFIG", with_launch(enabled=True, startup_timeout_s=30))
-    monkeypatch.setattr(tts.asyncio, "sleep", lambda _s: _instant())
-
-    assert await tts.ensure_server() is True
+    monkeypatch.setattr(tts, "_port_open", lambda *a, **k: up["value"])
+    monkeypatch.setattr(tts, "_launch_gpt_sovits", launch)
+    monkeypatch.setattr(tts, "CONFIG", with_launch(enabled=True, startup_timeout_s=5))
+    assert await asyncio.gather(tts.ensure_server(), tts.ensure_server()) == [True, True]
+    assert launches == [1]
 
 
 @pytest.mark.asyncio
-async def test_shell_managed_gives_up_after_the_timeout_without_launching(monkeypatch):
-    monkeypatch.setenv(tts.SHELL_MANAGED_ENV, "1")
-    monkeypatch.setattr(tts, "_port_open", lambda *a, **k: False)
-    monkeypatch.setattr(tts, "_launch_gpt_sovits", lambda: pytest.fail("must not launch"))
-    monkeypatch.setattr(tts, "CONFIG", with_launch(enabled=True, startup_timeout_s=0))
-    assert await tts.ensure_server() is False
-
-
-@pytest.mark.asyncio
-async def test_first_lines_wait_briefly_for_the_shells_server_instead_of_the_placeholder_voice(monkeypatch):
-    monkeypatch.setenv(tts.SHELL_MANAGED_ENV, "1")
+async def test_a_line_waits_briefly_while_our_server_is_still_loading(monkeypatch):
     polls = {"n": 0}
 
     def port_open(*a, **k):
@@ -139,19 +145,17 @@ async def test_first_lines_wait_briefly_for_the_shells_server_instead_of_the_pla
     async def sovits(text):
         return b"WAV-FROM-SOVITS"
 
-    async def never_pyttsx3(text):  # pragma: no cover
-        raise AssertionError("fell back to pyttsx3")
-
+    gate = asyncio.Event()
+    monkeypatch.setattr(tts, "_starting", asyncio.ensure_future(gate.wait()))
     monkeypatch.setattr(tts, "_port_open", port_open)
     monkeypatch.setattr(tts, "_synthesize_gpt_sovits", sovits)
     monkeypatch.setattr(tts, "_synthesize_pyttsx3_sync", lambda t: pytest.fail("fell back to pyttsx3"))
-    monkeypatch.setattr(tts.asyncio, "sleep", lambda _s: _instant())
-
     assert await tts.synthesize("hello") == b"WAV-FROM-SOVITS"
+    gate.set()
 
 
 @pytest.mark.asyncio
-async def test_no_grace_wait_outside_shell_managed_mode_or_after_startup(monkeypatch):
+async def test_no_wait_when_nothing_is_starting(monkeypatch):
     waited = {"n": 0}
 
     async def fake_wait(*a, **k):
@@ -166,14 +170,31 @@ async def test_no_grace_wait_outside_shell_managed_mode_or_after_startup(monkeyp
     monkeypatch.setattr(tts, "_synthesize_pyttsx3_sync", lambda t: b"PYTTSX3")
     monkeypatch.setattr(tts, "_port_open", lambda *a, **k: False)
     monkeypatch.setattr(tts, "CONFIG", with_fallback("pyttsx3"))  # the opt-in placeholder voice
-
-    monkeypatch.delenv(tts.SHELL_MANAGED_ENV, raising=False)
     assert await tts.synthesize("a") == b"PYTTSX3" and waited["n"] == 0
 
-    monkeypatch.setenv(tts.SHELL_MANAGED_ENV, "1")
-    monkeypatch.setattr(tts, "_PROCESS_STARTED", tts.time.monotonic() - 1000)  # long after startup
-    assert await tts.synthesize("b") == b"PYTTSX3" and waited["n"] == 0
+
+@pytest.mark.asyncio
+async def test_stop_server_ends_only_the_server_we_started(monkeypatch):
+    tts.stop_server()                       # nothing started: nothing to do
+    process = _Alive()
+    up = {"value": False}
+
+    def launch():
+        up["value"] = True
+        return process
+
+    monkeypatch.setattr(tts, "_port_open", lambda *a, **k: up["value"])
+    monkeypatch.setattr(tts, "_launch_gpt_sovits", launch)
+    monkeypatch.setattr(tts, "CONFIG", with_launch(enabled=True, startup_timeout_s=5))
+    assert await tts.ensure_server() is True
+    tts.stop_server()
+    assert process.killed
 
 
-async def _instant():
-    return None
+@pytest.mark.asyncio
+async def test_a_server_already_running_is_used_not_launched(monkeypatch):
+    monkeypatch.setattr(tts, "_port_open", lambda *a, **k: True)
+    monkeypatch.setattr(tts, "_launch_gpt_sovits", lambda: pytest.fail("must not launch a second server"))
+    monkeypatch.setattr(tts, "CONFIG", with_launch(enabled=True))
+    assert await tts.ensure_server() is True
+    tts.stop_server()                       # not ours: left alone (no process recorded)

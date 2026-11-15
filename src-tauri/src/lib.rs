@@ -12,11 +12,10 @@
 
 mod credentials;
 
-use std::collections::HashMap;
 use std::io::Write;
 use std::net::{SocketAddr, TcpStream};
 use std::os::windows::process::CommandExt;
-use std::path::{Path, PathBuf};
+use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
 use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
@@ -330,142 +329,38 @@ fn register_push_to_talk_hotkey(app: &tauri::App) -> Result<(), Box<dyn std::err
     Ok(())
 }
 
-/// Reads src-tauri/launcher.local.txt (gitignored -- see
-/// launcher.local.txt.example next to it) for machine-specific paths this
-/// repo can't hardcode, the same reason launcher .bat itself stayed
-/// gitignored -- one "KEY=value" per line, "#" comments and blank lines
-/// ignored. Returns an empty map, not an error, if the file doesn't exist
-/// yet -- GPT-SoVITS auto-start is just skipped in that case (tts.py's
-/// existing pyttsx3 fallback still covers voice output either way), same
-/// non-fatal spirit as the old .bat file simply not being filled in.
-fn read_launcher_config() -> HashMap<String, String> {
-    let mut map = HashMap::new();
-    let Ok(contents) = std::fs::read_to_string("launcher.local.txt") else {
-        return map;
-    };
-    for line in contents.lines() {
-        let line = line.trim();
-        if line.is_empty() || line.starts_with('#') {
-            continue;
-        }
-        if let Some((key, value)) = line.split_once('=') {
-            map.insert(key.trim().to_string(), value.trim().to_string());
-        }
-    }
-    map
-}
-
-/// Spawns GPT-SoVITS's API server and Yuri's own orchestrator as hidden
-/// background processes -- `npm run tauri dev` (or the packaged .exe
-/// later) becomes the one thing you run, replacing the old
-/// launcher .bat's three separate visible terminal windows. Output goes
-/// to logs/*.log instead of a console, since a hidden process obviously
-/// can't show one -- open those files if something's not responding, same
-/// information the old terminals gave you, just not in a popup window.
+/// Starts the kernel as a hidden child, logging to logs/orchestrator.log (D-060).
+/// Everything runs on its own thread so window creation never waits on it: the
+/// stale-port sweep (netstat, tasklist) and the spawn. The kernel itself starts the
+/// voice server later, after the window is up and the chat model has loaded, so
+/// the two never load at the same time; this process's Job Object still ends it.
 ///
-/// Working directories below are relative to src-tauri/ (this binary's
-/// cwd in `cargo run`/`tauri dev`) -- ../orchestrator and ../logs both
-/// resolve to the repo root's KASANE/ and logs/ as intended from
-/// there. Not verified for a packaged release build, where the cwd may
-/// differ -- worth rechecking when packaging is actually on the table.
+/// Working directories are relative to src-tauri/ (this binary's cwd under
+/// `tauri dev`). Not verified for a packaged build (K1b).
 fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>, kernel_pipe: KernelPipe) {
-    let logs_dir = PathBuf::from("../logs");
-    let _ = std::fs::create_dir_all(&logs_dir);
-
-    let config = read_launcher_config();
-
-    // Startup sweep -- see kill_stale_listeners' own doc comment. Must run
-    // before anything below spawns, so the fresh processes bind cleanly.
-    if config.contains_key("GPT_SOVITS_DIR") {
-        kill_stale_listeners(9880, "GPT-SoVITS");
-    }
-    kill_stale_listeners(8780, "orchestrator");
-
-    if let Some(sovits_dir) = config.get("GPT_SOVITS_DIR") {
-        // Spawning runtime\python.exe directly, not through `cmd /C`, is
-        // deliberate -- see the quit handler's comment on why that matters
-        // for being able to actually kill it later.
-        let python_exe = Path::new(sovits_dir.as_str()).join("runtime").join("python.exe");
-        let mut cmd = Command::new(&python_exe);
-        cmd.arg("api_v2.py")
-            .current_dir(sovits_dir)
-            // Windows' default console codepage (cp1252) doesn't cover
-            // whatever non-ASCII output api_v2.py produces, which raised
-            // UnicodeEncodeError and killed the process outright once its
-            // stdout/stderr were redirected to a log file instead of a
-            // real console (spawn_logged() below) -- found on the user's
-            // actual machine, not predicted in advance.
-            .env("PYTHONIOENCODING", "utf-8")
-            .env("PYTHONUTF8", "1")
-            // Without this, Python fully buffers stdout/stderr once
-            // they're not attached to a real terminal (exactly what
-            // spawn_logged()'s file redirection below does) -- meaning
-            // every print() call, including the diagnostic ones tts.py
-            // relies on for "check the log to see what actually
-            // happened," can sit unwritten for a long time instead of
-            // showing up when it actually occurred. Found by a real
-            // debugging session where gpt_sovits.log clearly showed a
-            // completed request but the corresponding print in the log
-            // that should have accompanied it never appeared -- not
-            // theoretical.
-            .env("PYTHONUNBUFFERED", "1");
-        spawn_logged("GPT-SoVITS", &mut cmd, &logs_dir.join("gpt_sovits.log"), &children);
-    } else {
-        eprintln!(
-            "[yuri] GPT_SOVITS_DIR not set in src-tauri/launcher.local.txt -- \
-             skipping GPT-SoVITS auto-start, voice will fall back to pyttsx3 \
-             (see launcher.local.txt.example)."
-        );
-    }
-
-    // The orchestrator starts immediately, in parallel with GPT-SoVITS. It used
-    // to wait here (up to 60 s) for GPT-SoVITS's port, which meant the window
-    // sat on "connecting" for as long as GPT-SoVITS took to load its models even
-    // though chat and the UI do not need it. Voice does: tts.py is told (via
-    // KOKYU_SHELL_STARTS_TTS) that this shell owns that server, so it waits for it
-    // instead of launching a second copy, and gives the first spoken lines a few
-    // seconds of grace before falling back to the placeholder voice. Runs on its
-    // own thread so it never holds up window creation; the frontend's WebSocket
-    // reconnect loop covers the short time before the orchestrator is listening.
-    let orchestrator_children = children;
     std::thread::spawn(move || {
-        // The virtualenv lives at the repo root (.venv), not inside
-        // KASANE/ -- one environment for the whole repo.
+        let logs_dir = PathBuf::from("../logs");
+        let _ = std::fs::create_dir_all(&logs_dir);
+        // Must run before the spawn, so the fresh kernel binds cleanly.
+        kill_stale_listeners(8780, "kernel");
+
+        // The virtualenv lives at the repo root (.venv): one environment for the repo.
         let python = PathBuf::from("../.venv/Scripts/python.exe");
         if !python.exists() {
             eprintln!(
-                "[yuri] {} not found -- the Python venv is not set up yet. \
-                 Run `python -m venv .venv` and `pip install -r \
-                 KASANE/requirements-dev.txt` from the repo root \
-                 first (see README).",
+                "[kokyu] {} not found -- the Python venv is not set up yet. Run \
+                 `python -m venv .venv` and `.venv\\Scripts\\python.exe -m pip install -r \
+                 KASANE/requirements-dev.txt` from the repo root first (see README).",
                 python.display()
             );
             return;
         }
 
-        // True only if GPT-SoVITS really started (spawn_logged records a child only on
-        // success). If its spawn failed, tts.py must be free to try launching it itself.
-        let shell_starts_tts = orchestrator_children
-            .lock()
-            .unwrap()
-            .iter()
-            .any(|entry| entry.0 == "GPT-SoVITS");
-
         let mut cmd = Command::new(&python);
         cmd.arg("app.py")
             .current_dir("../KASANE")
-            // Same reasoning as GPT-SoVITS's spawn above -- app.py's own
-            // print() calls (including ones with flush=True already, but
-            // no reason to depend on every call site remembering that)
-            // need this to reliably show up in orchestrator.log in real
-            // time rather than whenever Python's internal buffer happens
-            // to fill.
+            // Without this, Python buffers its log lines once stdout is a file.
             .env("PYTHONUNBUFFERED", "1");
-        if shell_starts_tts {
-            // Tells tts.py that this shell owns GPT-SoVITS: never launch a second
-            // copy, wait for ours (it is still loading models, in parallel).
-            cmd.env("KOKYU_SHELL_STARTS_TTS", "1");
-        }
         // FR-R-6, D-059: the saved API key goes to the kernel at spawn, in the
         // environment (the kernel removes it at import, before it starts any child),
         // never on the command line. Later changes go down the stdin pipe.
@@ -479,61 +374,11 @@ fn spawn_backend_processes(children: Arc<Mutex<Vec<(String, Child)>>>, kernel_pi
             Err(err) => eprintln!("[kokyu] keys: could not read the saved API key ({err})"),
         }
         cmd.env("KOKYU_KEY_PIPE", "1").stdin(Stdio::piped());
-        spawn_logged(
-            "orchestrator",
-            &mut cmd,
-            &logs_dir.join("orchestrator.log"),
-            &orchestrator_children,
-        );
-        if let (Ok(mut children), Ok(mut pipe)) = (orchestrator_children.lock(), kernel_pipe.0.lock()) {
+        spawn_logged("orchestrator", &mut cmd, &logs_dir.join("orchestrator.log"), &children);
+        if let (Ok(mut children), Ok(mut pipe)) = (children.lock(), kernel_pipe.0.lock()) {
             if let Some((_, child)) = children.iter_mut().find(|(label, _)| label == "orchestrator") {
                 *pipe = child.stdin.take();
             }
-        }
-
-        // From here on this is diagnostics only. GPT-SoVITS is not needed for
-        // the orchestrator to start, but if something else is squatting its
-        // port the user should be told why their voice sounds wrong.
-        if !shell_starts_tts {
-            return;
-        }
-        wait_for_port(9880, Duration::from_secs(60));
-
-        // Something answered on 9880 -- but is it actually the GPT-SoVITS
-        // process this launch just spawned, or a stale leftover from a
-        // previous session that was already squatting the port before
-        // this one even tried to bind (the exact scenario found on the
-        // user's real machine: a fresh spawn attempt failing with
-        // WinError 10048/"only one usage of each socket address" while
-        // an old orphaned instance keeps answering requests)? Checked
-        // against the real Child handle's own exit status, not just
-        // trusting the port -- `children` already holds it, no new
-        // dependency or PID-lookup shelling-out needed.
-        let gpt_sovits_still_alive = {
-            let mut guard = orchestrator_children.lock().unwrap();
-            match guard.iter_mut().find(|entry| entry.0 == "GPT-SoVITS") {
-                Some(entry) => matches!(entry.1.try_wait(), Ok(None)),
-                // GPT_SOVITS_DIR wasn't set, so nothing was ever spawned
-                // -- not this warning's problem, the "skipping GPT-SoVITS
-                // auto-start" message above already covers that case.
-                None => true,
-            }
-        };
-        if !gpt_sovits_still_alive {
-            eprintln!(
-                "[yuri] WARNING: port 9880 answered, but the GPT-SoVITS \
-                 process this launch just started has already exited -- \
-                 something ELSE is squatting that port, almost certainly \
-                 a leftover process from a previous session that never \
-                 shut down cleanly. Voice will likely come from that \
-                 stale process instead of this launch's own instance, \
-                 which may be fine or may be broken/outdated -- not \
-                 predictable either way. Fix: run `netstat -ano | findstr \
-                 :9880` in PowerShell, find the PID in the last column, \
-                 `taskkill /PID <pid> /F` it, then relaunch Yuri for a \
-                 clean start. See README.md's troubleshooting section for \
-                 the same steps."
-            );
         }
     });
 }
@@ -635,31 +480,6 @@ fn kill_stale_listeners(port: u16, what: &str) {
         // process's bind doesn't race the dying one's.
         std::thread::sleep(Duration::from_millis(500));
     }
-}
-
-/// Polls 127.0.0.1:<port> until something's listening, or gives up after
-/// `max_wait`. A bare TCP connect, not an HTTP-level readiness check --
-/// GPT-SoVITS's api_v2.py might bind the port slightly before it's
-/// actually finished loading the model onto the GPU, so this is a
-/// reasonable proxy for "probably ready," not a guarantee. Better than a
-/// blind fixed timeout either way; upgrade to an actual HTTP health check
-/// later if this proves too eager in practice.
-fn wait_for_port(port: u16, max_wait: Duration) {
-    let addr: SocketAddr = format!("127.0.0.1:{port}")
-        .parse()
-        .expect("hardcoded loopback address is always valid");
-    let start = Instant::now();
-    while start.elapsed() < max_wait {
-        if TcpStream::connect_timeout(&addr, Duration::from_millis(500)).is_ok() {
-            return;
-        }
-        std::thread::sleep(Duration::from_millis(500));
-    }
-    eprintln!(
-        "[yuri] nothing answered on port {port} within {}s -- starting the \
-         orchestrator anyway.",
-        max_wait.as_secs()
-    );
 }
 
 /// Spawns `command` hidden (no console window), with both stdout and

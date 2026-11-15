@@ -55,12 +55,12 @@ flowchart LR
 |---|---|---|---|
 | Tauri main window | user | on launch | Chat, Stage, 3D views (K0 keeps Yuri's small widget window; K1 builds the new one) |
 | Pet overlay window | Tauri | when a pet is brought out | One per monitor (D-014) |
-| Kernel (`KASANE/`, Python) | **Tauri** (child, Windows Job Object) | at launch, **in parallel with the TTS backend** | `127.0.0.1:8780` (D-027) |
-| TTS backend (GPT-SoVITS API) | **Tauri** (child) | at launch, in parallel | Folder configured once (`launcher.local.txt`, later Settings); outside this repo; default port 9880 |
-| `llama-server` | kernel (child) | when a llama.cpp model is selected | Unloaded before an Ollama large model loads |
+| Kernel (`KASANE/`, Python) | **Tauri** (child, Windows Job Object) | at launch, off the window's thread | `127.0.0.1:8780` (D-027) |
+| TTS backend (GPT-SoVITS API) | kernel (child, inside the Job Object) | after the first window connects and the chat model has loaded (D-060) | Folder in `config.yaml` `tts.gpt_sovits.launch` (later Settings); outside this repo; default port 9880; log `logs/gpt_sovits.log` |
+| `llama-server` | kernel (child) | only when the user picks a llama.cpp model or messages a thread that uses one (D-060) | Unloaded before an Ollama large model loads |
 | Ollama | external service | by the user | The kernel only talks HTTP to it |
 
-**Startup (carried from Yuri, D-027):** Tauri starts the kernel and the TTS backend at the same time and waits for their ports; it sets `KOKYU_SHELL_STARTS_TTS=1` so the kernel never launches TTS itself. Run by hand without the shell, the kernel launches TTS itself, as Yuri's `tts.ensure_server()` does. Stale listeners on the two ports are cleared first. Models load on first use.
+**Startup (D-060, superseding D-027's parallel start):** Tauri creates the window and, on another thread, clears a stale kernel listener and starts the kernel. The kernel opens its port at once and loads nothing heavy until the first window connects. Then, one at a time: the thread's chat model (Ollama or API only; a llama.cpp model waits to be picked), the TTS backend, the speech model (only if `voice.stt.warm_up_on_start`), the memory catch-up pass. The router reads its cached catalog at once.
 
 **Shutdown:** tray Quit → `POST /shutdown` to the kernel → memory consolidation → kernel stops its children → hard kill after about 5 s. The Job Object (kill-on-close) guarantees no orphans if Tauri is killed.
 

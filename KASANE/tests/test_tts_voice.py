@@ -126,6 +126,11 @@ def test_install_dir_shorthand_derives_python_script_and_cwd(monkeypatch):
 
 
 def test_no_machine_paths_in_default_config():
-    launch = dict(config.CONFIG.tts.gpt_sovits.launch)
+    # The shipped example and the code defaults, not the developer's own config.yaml
+    # (which now holds the GPT-SoVITS folder, D-060).
+    import paths
+
+    assert dict(config.TTSConfig().gpt_sovits.launch)["enabled"] is False
+    launch = dict(config.load_config(paths.config_example_path()).tts.gpt_sovits.launch)
     assert launch["enabled"] is False
     assert not any(str(launch.get(k, "")) for k in ("dir", "python", "script", "cwd"))

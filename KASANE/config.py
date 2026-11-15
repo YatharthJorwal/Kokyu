@@ -336,8 +336,8 @@ class GPTSoVITSConfig:
     launch: Mapping[str, Any] = field(
         default_factory=lambda: {
             # Off by default and no machine paths in code (R-40). Point `dir` at the
-            # GPT-SoVITS install in config/config.yaml (gitignored), or let the Tauri
-            # shell start it from src-tauri/launcher.local.txt.
+            # GPT-SoVITS install in config/config.yaml (gitignored); the kernel starts
+            # it after the window is up and the chat model has loaded (D-060).
             "enabled": False,
             "dir": "",
             "python": "",
@@ -370,9 +370,9 @@ class STTConfig:
     compute_type: str = "int8"
     language: str | None = "en"
     timeout_s: int = 20
-    # Load the model in the background at startup so the first voice turn doesn't
-    # pay for it. Turn off if you rarely use the mic and want the RAM back.
-    warm_up_on_start: bool = True
+    # Load the model at boot (after the chat model and the voice server) so the first
+    # voice turn doesn't pay for it. Off by default: the mic arrives with K2 (D-060).
+    warm_up_on_start: bool = False
 
 
 @dataclass(frozen=True)

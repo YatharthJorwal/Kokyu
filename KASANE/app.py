@@ -112,10 +112,21 @@ async def _boot_model_ref() -> str:
     return model_listing.effective_ref(thread.model_ref if thread else None, CONFIG)
 
 
+def _loads_without_asking(ref_text: str) -> bool:
+    """D-060: llama.cpp models (a 21 GB file, two minutes, every CPU core) start
+    only when the user picks one or sends a message to one, never at boot or on
+    opening a thread. Ollama and API models load on their own."""
+    try:
+        return model_refs.parse(ref_text).provider != "llamacpp"
+    except model_refs.ModelRefError:
+        return False
+
+
 async def _warm_default_chat_model() -> None:
     """K1-01b (D-052), K1-10 (D-054): load the model the first message will use,
     through the model loader so every window sees "waking up" while it loads and
-    a pick in the chip can cancel it. Never raises."""
+    a pick in the chip can cancel it. A llama.cpp model waits to be picked (D-060).
+    Never raises."""
     if not CONFIG.llm.warm_up_on_start:
         return
     ref_text = await _boot_model_ref()
@@ -123,6 +134,9 @@ async def _warm_default_chat_model() -> None:
         model_refs.parse(ref_text)
     except model_refs.ModelRefError as exc:
         print(f"[kokyu] warm-up skipped: {ref_text!r} is not a usable model ({exc})", file=sys.stderr)
+        return
+    if not _loads_without_asking(ref_text):
+        print(f"[kokyu] {ref_text} starts when it is picked or messaged (D-060)", file=sys.stderr)
         return
     task = model_loader.LOADER.request(ref_text)
     if task is not None:
@@ -182,12 +196,9 @@ async def _warm_helpers() -> None:
 async def _check_tts() -> None:
     try:
         up = await tts.ensure_server()
-        print(
-            f"[yuri] tts: gpt_sovits {'up' if up else 'unavailable (pyttsx3 fallback)'}",
-            flush=True,
-        )
+        print(f"[kokyu] tts: gpt_sovits {'up' if up else 'unavailable'}", file=sys.stderr, flush=True)
     except Exception as exc:  # noqa: BLE001 -- voice diagnostics must not stop startup
-        print(f"[yuri] tts startup check skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
+        print(f"[kokyu] tts startup check skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 async def _check_router() -> None:
@@ -207,22 +218,36 @@ async def _check_router() -> None:
         print(f"[yuri] router startup skipped: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
-async def _startup_model_checks() -> None:
-    """Everything that can be slow at boot, run side by side instead of one after
-    another: the chat model's load into VRAM, the speech model, the TTS server and
-    the router's catalog are independent, so none of them should wait for a
-    multi-GB model load. Each one logs its own result and never raises."""
-    await asyncio.gather(
-        _check_chat_model(),
-        stt.warm_up(),
-        _check_tts(),
-        _check_router(),
-        return_exceptions=True,
-    )
+# Set by the first window that connects (D-060).
+_first_window: asyncio.Event | None = None
+
+
+def _first_window_event() -> asyncio.Event:
+    global _first_window
+    if _first_window is None:
+        _first_window = asyncio.Event()
+    return _first_window
+
+
+async def _boot_sequence() -> None:
+    """D-060: the kernel opens its port at once and loads nothing heavy until a
+    window is up, so the window paints on an idle PC. Then one heavy thing at a
+    time (the chat model, then the voice server, then the speech model, then the
+    memory catch-up pass): loading them together pegged every core and filled RAM.
+    The router reads its cached catalog straight away (cheap). Never raises."""
+    await asyncio.gather(_check_router(), _after_first_window(), return_exceptions=True)
+
+
+async def _after_first_window() -> None:
+    await _first_window_event().wait()
+    for step in (_check_chat_model, _check_tts, stt.warm_up, _startup_memory_pass):
+        try:
+            await step()
+        except Exception as exc:  # noqa: BLE001 -- one failed step must not stop the rest
+            print(f"[kokyu] boot step {step.__name__} failed: {type(exc).__name__}: {exc}", file=sys.stderr)
 
 
 async def _startup_memory_pass() -> None:
-    await asyncio.sleep(20)  # let the model checks and the first connection settle
     try:
         await writer.WRITER.run_pass("startup")
     except Exception as exc:  # noqa: BLE001 -- memory work must never affect startup
@@ -235,7 +260,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     models can do, with a plain warning when e.g. the model has no vision.
     Runs as a background task so a slow or absent Ollama never delays
     startup; never raises."""
-    asyncio.create_task(_startup_model_checks())
+    boot = asyncio.create_task(_boot_sequence())
     if shell_keys.PIPE_ENABLED:
         # FR-R-6, D-059: a key saved or removed in the app arrives on stdin, live.
         shell_keys.start_reader(asyncio.get_running_loop(), _apply_shell_key)
@@ -244,10 +269,10 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     # forced exit left unprocessed -- the transcript buffer is durable.
     writer.WRITER.configure(is_busy=lambda: ARBITER.state != arbiter.IDLE)
     writer.WRITER.start()
-    startup_pass = asyncio.create_task(_startup_memory_pass())
     yield
-    startup_pass.cancel()
+    boot.cancel()
     await writer.WRITER.stop(final_pass=True)
+    tts.stop_server()
     # K1-01: a llama-server the router started must not outlive the kernel. A load
     # in progress is cancelled first, or it could start one after this.
     with contextlib.suppress(Exception):
@@ -1392,6 +1417,8 @@ async def shutdown_endpoint() -> dict:
         await model_loader.LOADER.stop()
     with contextlib.suppress(Exception):
         await asyncio.wait_for(router.get_router().shutdown(), timeout=8)
+    with contextlib.suppress(Exception):
+        tts.stop_server()
 
     sys.stdout.flush()
     sys.stderr.flush()
@@ -1427,6 +1454,7 @@ async def ws_endpoint(websocket: WebSocket) -> None:
     if is_driver:
         _driver = websocket
     await websocket.send_json({"type": "surface_status", "role": "driver" if is_driver else "observer"})
+    _first_window_event().set()   # D-060: the boot sequence may start loading now
     # The tray/quick-action "Use API model" switch is server state, not a
     # frontend preference: a second window (or a reconnect) must see the same
     # value, and the router is the thing that actually obeys it.
@@ -1494,10 +1522,9 @@ async def ws_endpoint(websocket: WebSocket) -> None:
         # how the current load is going.
         # Only the driver loads: an observer opening a thread must not swap the
         # model out from under the driver's streaming reply (review finding).
-        if load and websocket is _driver:
-            model_loader.LOADER.request(
-                model_listing.effective_ref(thread.model_ref, CONFIG), delay_s=CONFIG.chat.load_delay_s
-            )
+        wanted_ref = model_listing.effective_ref(thread.model_ref, CONFIG)
+        if load and websocket is _driver and _loads_without_asking(wanted_ref):
+            model_loader.LOADER.request(wanted_ref, delay_s=CONFIG.chat.load_delay_s)
         await websocket.send_json(protocol.frame("model_status", model_loader.LOADER.status()))
 
     async def _switch_companion(target_id: str) -> None:

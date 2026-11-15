@@ -204,7 +204,7 @@ voice:
     compute_type: 'int8'
     language: 'en'
     timeout_s: 20
-    warm_up_on_start: true      # load the speech model at boot so the first voice turn is fast
+    warm_up_on_start: false     # true: load the speech model at boot (after the chat model and voice, D-060)
 
   vad:
     engine: 'silero_onnx'       # fallback chain: webrtcvad, then energy gate
@@ -239,10 +239,10 @@ tts:
   gpt_sovits:
     api_url: 'http://127.0.0.1:9880/tts'
 
-    # Only used when the Tauri shell is NOT starting the server (e.g. running the kernel by
-    # hand). Put your install folder in config/config.yaml (gitignored), single-quoted:
+    # The kernel starts the server after the window is up and the chat model has
+    # loaded (D-060). Put your install folder in config/config.yaml (gitignored),
+    # single-quoted, and set enabled: true:
     #   dir: 'D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228'
-    # The shell reads the same folder from src-tauri/launcher.local.txt instead.
     launch:
       enabled: false
       dir: ''

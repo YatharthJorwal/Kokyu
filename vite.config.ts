@@ -14,7 +14,9 @@ export default defineConfig({
     port: 1420,
     strictPort: true,
     watch: {
-      ignored: ["**/src-tauri/**", "**/KASANE/**"],
+      // Only src/ and the pages matter. .venv alone is ~8,000 files, and the kernel
+      // writes to data/ and logs/ all the time (D-060).
+      ignored: ["**/src-tauri/**", "**/KASANE/**", "**/.venv/**", "**/data/**", "**/logs/**", "**/assets/**", "**/docs/**", "**/dist/**"],
     },
   },
   build: {
