@@ -40,7 +40,7 @@ A solo developer who wants direct commands, no manual file shuffling, phases wit
 
 ## 3. Where we stopped
 
-Everything is committed; pushed through `0a6cdb8`. `a9ab16d`, the UI1-03 commits, D-091 (`8ca5b1d`) and UI1-06 (`04e0296`, `e62374f`) wait for the user's word to push. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
+Everything is committed and pushed (the user asked). Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
 
 ## 4. Next session: start here
 

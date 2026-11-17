@@ -4,7 +4,7 @@
 
 - **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models, UI1-06 her face and profile)
 - **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done. **Next: UI1-07**, the message list. The design standard is its own phase, UI-2, planned from references before it is built (D-086).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `0a6cdb8`; `a9ab16d` (the age research, 18+), the UI1-03 and UI1-06 commits and their docs are not pushed yet.
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Everything through this session's docs is pushed (the user asked).
 - **Last green run (the user's PC, 2026-11-17, at `e62374f`):** `npm run check`: tsc, frontend tests 145, vite build, cargo check, pytest 1259.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
