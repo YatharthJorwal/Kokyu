@@ -355,6 +355,39 @@ test("the saved scenario cards arrive as one frame (FR-MODE-6)", () => {
   assert.deepEqual(reduce(s, frame("scenarios", { cards: [] }, null)).scenarios, []);
 });
 
+test("a card save waits for its own answer, never for another list (FR-MODE-6)", () => {
+  const cards = [{ id: "c1", title: "Rainy café", card: { title: "Rainy café" }, updated_at: 2 }];
+  let s = reduce(run(online), { kind: "roleplay", open: true });
+  assert.equal(s.scenarioSave, null);
+  s = reduce(s, { kind: "scenario_saving" });
+  assert.equal(s.scenarioSave, "pending");
+  // the dialog's first list, or a delete's answer, is not the save's answer
+  s = reduce(s, frame("scenarios", { cards }, null));
+  assert.equal(s.scenarioSave, "pending");
+  assert.deepEqual(s.scenarios, cards);
+  // the save's answer names the saved card, whichever card is newest
+  const saved = [cards[0], { id: "mine", title: "Mine", card: {}, updated_at: 1 }];
+  s = reduce(s, frame("scenarios", { cards: saved, saved_id: "mine" }, null));
+  assert.deepEqual(s.scenarioSave, { saved: "mine" });
+  // a later list does not change it
+  assert.deepEqual(reduce(s, frame("scenarios", { cards }, null)).scenarioSave, { saved: "mine" });
+  // reopening starts clean
+  assert.equal(reduce(reduce(s, { kind: "roleplay", open: false }), { kind: "roleplay", open: true }).scenarioSave, null);
+});
+
+test("a store failure ends a pending card save; other errors and idle saves are left alone (FR-MODE-6)", () => {
+  const unavailable = frame("error", { code: "threads_unavailable", message: "Saved scenarios are unavailable right now." }, null);
+  let s = reduce(reduce(run(online), { kind: "roleplay", open: true }), { kind: "scenario_saving" });
+  assert.equal(reduce(s, frame("error", { code: "turn_running", message: "busy" }, null)).scenarioSave, "pending");
+  s = reduce(s, unavailable);
+  assert.equal(s.scenarioSave, "failed");
+  assert.equal(s.notice.code, "threads_unavailable");
+  // a failure arriving later does not count for a save that was already answered
+  const done = reduce(reduce(s, { kind: "scenario_saving" }), frame("scenarios", { cards: [], saved_id: "c9" }, null));
+  assert.deepEqual(reduce(done, unavailable).scenarioSave, { saved: "c9" });
+  assert.equal(reduce(run(online), unavailable).scenarioSave, null);
+});
+
 test("New roleplay opens only when a new thread could start, and always closes (FR-MODE-6)", () => {
   const open = { kind: "roleplay", open: true };
   const close = { kind: "roleplay", open: false };

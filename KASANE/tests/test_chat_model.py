@@ -192,6 +192,25 @@ async def test_ollama_gets_the_routed_model_always_and_effort_only_when_set(monk
 
 
 @pytest.mark.asyncio
+async def test_ollama_gets_the_callers_reply_cap(monkeypatch):
+    """FR-MODE-5: a story fold asks for more than llm.max_tokens; the local call must
+    send it as num_predict (with the thinking room on top when thinking)."""
+    seen = []
+
+    async def fake_reply(messages, **kwargs):
+        seen.append(kwargs)
+        yield "ok"
+
+    monkeypatch.setattr(llm, "stream_reply", fake_reply)
+    provider = OllamaNativeProvider()
+    base = dict(role="memory_writer", messages=({"role": "user", "content": "hi"},), max_tokens=928)
+    [c async for c in provider.complete(ModelRequest(**base, model_ref=LOCAL, effort="off"), model="qwen3.5:4b")]
+    [c async for c in provider.complete(ModelRequest(**base, model_ref=LOCAL, effort="high"), model="qwen3.5:4b")]
+    assert seen[0] == {"model": "qwen3.5:4b", "think": False, "num_predict": 928}
+    assert seen[1]["num_predict"] == 928 + llm.CONFIG.llm.reasoning_tokens
+
+
+@pytest.mark.asyncio
 async def test_ollamas_token_counts_reach_the_router_as_usage(monkeypatch):
     # FR-C-10: Ollama reports the counts on its last chunk; the stored reply records them.
     async def fake_tools(messages, tools, **kwargs):

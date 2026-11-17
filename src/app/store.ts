@@ -129,7 +129,9 @@ export const actions = {
 
   /** Saves a card (with `id`, replaces that saved card); the kernel answers with the fresh list. */
   saveScenario(card: Scenario, id?: string): boolean {
-    return socket.send("scenario_save", id ? { id, card } : { card });
+    if (!socket.send("scenario_save", id ? { id, card } : { card })) return false;
+    dispatch({ kind: "scenario_saving" });
+    return true;
   },
 
   /** Threads started from the card stay as they are. */

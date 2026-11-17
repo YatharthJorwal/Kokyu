@@ -33,10 +33,15 @@ class OllamaNativeProvider:
         think = capabilities.think_for(f"local:ollama/{model}", request.effort)   # FR-M-10
         if think is not None:
             overrides["think"] = think
+        # A caller's own reply cap (a story fold needs more than llm.max_tokens,
+        # FR-MODE-5) replaces the default one; none was sent here before.
+        cap = request.max_tokens or llm.CONFIG.llm.max_tokens
         if think if think is not None else llm.CONFIG.llm.think:
             # Thinking counts against num_predict: without room a thinking model
             # spends the whole 512-token cap thinking and says nothing (D-064).
-            overrides["num_predict"] = llm.CONFIG.llm.max_tokens + llm.CONFIG.llm.reasoning_tokens
+            overrides["num_predict"] = cap + llm.CONFIG.llm.reasoning_tokens
+        elif request.max_tokens:
+            overrides["num_predict"] = cap
         if request.tools:
             async for event in llm.stream_reply_with_tools(messages, list(request.tools), **overrides):
                 if event["type"] == "content":

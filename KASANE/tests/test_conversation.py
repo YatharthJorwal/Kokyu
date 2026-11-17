@@ -729,6 +729,26 @@ def test_scenario_cards_are_listed_saved_edited_and_deleted_over_the_socket(kern
     assert [c.title for c in saved] == ["Untitled scenario", "A library at dusk."]
 
 
+def test_only_a_saves_answer_names_the_saved_card(kernel):
+    """FR-MODE-6: the dialog ties its pending save to the answer naming the card, so a
+    list or delete answer can never be taken for it (and Update cannot be pointed at
+    another card). A new card and a replaced one are both named."""
+
+    def answer(ws, type_, data=None):
+        ws.send_json({"v": 1, "type": type_, "data": data or {}})
+        return _until(ws, "scenarios")[0]["data"]
+
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        first = answer(ws, "scenario_save", {"card": CARD})
+        assert first["saved_id"] == first["cards"][0]["id"]
+        other = answer(ws, "scenario_save", {"card": {"setting": "A library at dusk."}})
+        again = answer(ws, "scenario_save", {"id": first["saved_id"], "card": {"title": "Rain, later"}})
+        assert again["saved_id"] == first["saved_id"] != other["saved_id"]
+        assert "saved_id" not in answer(ws, "scenario_list")
+        assert "saved_id" not in answer(ws, "scenario_delete", {"id": other["saved_id"]})
+
+
 def test_a_scenario_store_failure_is_reported_not_fatal(kernel, monkeypatch):
     async def broken(*_a, **_k):
         raise RuntimeError("disk full")

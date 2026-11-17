@@ -33,13 +33,16 @@ export function RoleplayDialog() {
 /** Mounted while the dialog is open, so each opening starts from an empty form. */
 function RoleplayBody() {
   const scenarios = useChat((s) => s.scenarios);
+  const saveState = useChat((s) => s.scenarioSave);
   const canStart = useChat(canStartThread);
   const companion = useChat((s) => s.companion?.name ?? null);
   const [form, setForm] = useState<ScenarioForm>(EMPTY_FORM);
   const [loadedId, setLoadedId] = useState<string | null>(null);
   const [confirming, setConfirming] = useState<string | null>(null);
-  // A save waits for the kernel's fresh list; a new card is then the newest one.
-  const [saving, setSaving] = useState<{ kind: "new" | "update"; before: SavedScenario[] | null } | null>(null);
+  // A save waits for its own answer (the store's scenarioSave): the list naming the
+  // saved card, or a store error. No other list counts, so Update can only ever
+  // point at the card this form was saved as.
+  const saving = saveState === "pending";
   const [status, setStatus] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
 
@@ -52,11 +55,13 @@ function RoleplayBody() {
   }, []);
 
   useEffect(() => {
-    if (!saving || scenarios === saving.before) return;
-    if (saving.kind === "new") setLoadedId(scenarios?.[0]?.id ?? null);
-    setSaving(null);
-    setStatus("Saved.");
-  }, [scenarios, saving]);
+    if (saveState === "failed") {
+      setStatus("Could not save the card.");
+    } else if (saveState !== null && saveState !== "pending") {
+      setLoadedId(saveState.saved);
+      setStatus("Saved.");
+    }
+  }, [saveState]);
 
   const edit = (key: keyof ScenarioForm, value: string) => {
     setForm({ ...form, [key]: value });
@@ -73,10 +78,7 @@ function RoleplayBody() {
   const save = (kind: "new" | "update") => {
     if (blank) return;
     const sent = kind === "update" && loaded ? actions.saveScenario(card, loaded.id) : actions.saveScenario(card);
-    if (sent) {
-      setSaving({ kind, before: scenarios });
-      setStatus("Saving…");
-    }
+    if (sent) setStatus("Saving…");
   };
 
   const remove = (id: string) => {
@@ -101,7 +103,7 @@ function RoleplayBody() {
               <li key={c.id} className="card-confirm" role="group" aria-label={`Delete ${c.title}?`}>
                 <span className="confirm-text">Delete “{c.title}”?</span>
                 <span className="card-confirm-actions">
-                  <button type="button" className="danger" onClick={() => remove(c.id)}>
+                  <button type="button" className="danger" disabled={saving} onClick={() => remove(c.id)}>
                     Delete
                   </button>
                   {/* the safe choice gets the focus */}
@@ -121,7 +123,14 @@ function RoleplayBody() {
                 >
                   {c.title}
                 </button>
-                <button type="button" className="card-delete" aria-label={`Delete ${c.title}`} title="Delete" onClick={() => setConfirming(c.id)}>
+                <button
+                  type="button"
+                  className="card-delete"
+                  aria-label={`Delete ${c.title}`}
+                  title="Delete"
+                  disabled={saving}
+                  onClick={() => setConfirming(c.id)}
+                >
                   ✕
                 </button>
               </li>
@@ -165,11 +174,11 @@ function RoleplayBody() {
             <button type="submit" className="primary" disabled={!canStart}>
               Start roleplay
             </button>
-            <button type="button" disabled={blank || saving !== null} onClick={() => save("new")}>
+            <button type="button" disabled={blank || saving} onClick={() => save("new")}>
               Save card
             </button>
             {loaded ? (
-              <button type="button" disabled={blank || saving !== null || sameCard(card, loaded.card)} onClick={() => save("update")}>
+              <button type="button" disabled={blank || saving || sameCard(card, loaded.card)} onClick={() => save("update")}>
                 Update
               </button>
             ) : null}

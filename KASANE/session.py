@@ -573,16 +573,20 @@ class Session:
 
     # ── saved scenario cards (FR-MODE-6, D-074): app-level, any window ──────
 
-    async def send_scenarios(self) -> None:
+    async def send_scenarios(self, saved_id: str | None = None) -> None:
+        """The fresh list; the answer to a save also names the card it saved, so the
+        dialog ties its pending save to this answer and not to any later list."""
         cards = await self.manager.scenarios()
-        await self.ws.send_json(protocol.frame("scenarios", {"cards": [c.to_dict() for c in cards]}))
+        data: dict[str, Any] = {"cards": [c.to_dict() for c in cards]}
+        if saved_id is not None:
+            data["saved_id"] = saved_id
+        await self.ws.send_json(protocol.frame("scenarios", data))
 
     async def _change_scenarios(self, what: str, change: Callable[[], Awaitable[Any]] | None = None) -> None:
         """Runs `change` (if any), then answers with the fresh list."""
         try:
-            if change is not None:
-                await change()
-            await self.send_scenarios()
+            changed = await change() if change is not None else None
+            await self.send_scenarios(changed.id if what == "scenario_save" else None)
         except Exception as exc:  # noqa: BLE001 -- report, keep the connection
             log.warning(f"scenario request {what} failed: {exc}")
             await self.refuse("threads_unavailable", NO_SCENARIOS)

@@ -30,6 +30,7 @@ def boot_steps(monkeypatch):
         raise AssertionError("voice must not start at launch (D-061)")
 
     monkeypatch.setattr(boot, "_first_window", None)
+    monkeypatch.setattr(boot, "_chat_model_settled", None)
     monkeypatch.setattr(boot, "check_router", step("router"))
     monkeypatch.setattr(boot, "check_chat_model", step("chat"))
     monkeypatch.setattr(boot, "startup_memory_pass", step("memory"))
@@ -59,6 +60,25 @@ async def test_one_failing_boot_step_does_not_stop_the_others(monkeypatch, boot_
     boot.first_window_event().set()
     await boot.boot_sequence()  # must not raise
     assert boot_steps == ["router", "memory"]
+    assert boot.chat_model_settled_event().is_set()   # failed still counts as over
+
+
+@pytest.mark.asyncio
+async def test_the_chat_model_step_is_marked_over_before_the_next_step(monkeypatch, boot_steps):
+    """D-060: story memory (FR-MODE-5) waits for this, not for the first window."""
+    settled = []
+
+    async def chat():
+        settled.append(boot.chat_model_settled_event().is_set())
+
+    async def memory():
+        settled.append(boot.chat_model_settled_event().is_set())
+
+    monkeypatch.setattr(boot, "check_chat_model", chat)
+    monkeypatch.setattr(boot, "startup_memory_pass", memory)
+    boot.first_window_event().set()
+    await boot.boot_sequence()
+    assert settled == [False, True]
 
 
 def _with_stt(**overrides):

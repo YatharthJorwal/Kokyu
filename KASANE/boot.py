@@ -204,6 +204,19 @@ def first_window_event() -> asyncio.Event:
     return _first_window
 
 
+# Set once boot's chat-model step is over, loaded or failed (D-060): background model
+# work that a window can start (story memory, FR-MODE-5) waits for it, like the
+# memory writer's catch-up pass.
+_chat_model_settled: asyncio.Event | None = None
+
+
+def chat_model_settled_event() -> asyncio.Event:
+    global _chat_model_settled
+    if _chat_model_settled is None:
+        _chat_model_settled = asyncio.Event()
+    return _chat_model_settled
+
+
 async def boot_sequence() -> None:
     """D-060: the kernel opens its port at once and loads nothing heavy until a
     window is up, so the window paints on an idle PC. Then the chat model, then the
@@ -220,6 +233,9 @@ async def after_first_window() -> None:
             await step()
         except Exception as exc:  # noqa: BLE001 -- one failed step must not stop the rest
             log.warning(f"boot step {step.__name__} failed: {type(exc).__name__}: {exc}")
+        finally:
+            if step is check_chat_model:
+                chat_model_settled_event().set()
 
 
 async def start_screen_companions() -> None:

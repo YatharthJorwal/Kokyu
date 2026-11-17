@@ -14,8 +14,9 @@ folded, so Regenerate (which replaces only the last exchange) never has to take
 back text that is already in the summary.
 
 When it runs: in the background after a roleplay exchange is saved, and when a
-roleplay thread is opened that is behind. Only while nothing else uses the model
-(the arbiter is idle, as for the memory writer's timer pass), one pass per thread at
+roleplay thread is opened that is behind; never before boot's chat-model step is
+over (D-060). Only while nothing else uses the model (the arbiter is idle, as for
+the memory writer's timer pass, and no chat model is loading), one pass per thread at
 a time, and a turn that starts cancels it (`preempt`, beside the memory writer's).
 A failure is logged and leaves the old summary; the next exchange tries again.
 Temp Chat keeps none, and chat threads have none. Nothing here reads or writes app
@@ -25,9 +26,10 @@ from __future__ import annotations
 
 import asyncio
 import logging
-from collections.abc import Callable
+from collections.abc import Awaitable, Callable
 
 import conversation
+import model_loader
 import router
 from audio import arbiter
 from config import CONFIG
@@ -55,6 +57,12 @@ MAX_BATCH_CHARS = 12000
 # however keep_recent is configured, those two are never folded.
 MIN_KEEP_RECENT = 2
 CHARS_PER_WORD = 6            # turns story.max_chars into the word limit in the instruction
+# The fold call's reply cap. A local call otherwise gets llm.max_tokens (512), less
+# than a summary near max_chars needs; a reply cut there would lose the newest scenes
+# while through_message_id still moved past them. English runs about 4 characters a
+# token; 3 leaves room, and the margin covers a short preamble.
+CHARS_PER_TOKEN = 3
+TOKEN_MARGIN = 128
 
 _ENDS = ".!?"
 _CLOSERS = "\"')]*”’"
@@ -106,6 +114,11 @@ def words_for(max_chars: int) -> int:
     return max(40, max_chars // CHARS_PER_WORD)
 
 
+def tokens_for(max_chars: int) -> int:
+    """The reply cap a fold asks for: room for a whole summary of `max_chars`."""
+    return -(-max(max_chars, words_for(max_chars) * CHARS_PER_WORD) // CHARS_PER_TOKEN) + TOKEN_MARGIN
+
+
 def cut(text: str, limit: int) -> str:
     """`text` trimmed to `limit` characters, ending at the last sentence end that fits
     (a closing quote or bracket stays with its sentence); at a word when none does."""
@@ -139,17 +152,32 @@ def fold_messages(summary: str, batch: list[Message], max_chars: int) -> list[di
     ]
 
 
-def _arbiter_busy() -> bool:
+def _model_busy() -> bool:
     """The memory writer's signal (app.py): anything but idle means a turn or a voice
-    exchange holds the model."""
-    return arbiter.ARBITER.state != arbiter.IDLE
+    exchange holds the model. A chat-model load in progress (the model loader, K1-10)
+    counts too: a fold beside it would load a second local model (D-065, D-072)."""
+    return arbiter.ARBITER.state != arbiter.IDLE or model_loader.LOADER.busy()
+
+
+async def _after_boot() -> None:
+    """D-060: nothing folds before boot's chat-model step is over, the same point the
+    memory writer's catch-up pass waits behind. Imported here: boot imports much."""
+    import boot
+
+    await boot.chat_model_settled_event().wait()
 
 
 class StoryKeeper:
-    """Runs the summaries in the background: one task per thread at most."""
+    """Runs the summaries in the background: one task per thread at most. `ready` is
+    awaited before each pass (the running kernel's keeper waits for boot)."""
 
-    def __init__(self, is_busy: Callable[[], bool] | None = None) -> None:
-        self._is_busy = is_busy or _arbiter_busy
+    def __init__(
+        self,
+        is_busy: Callable[[], bool] | None = None,
+        ready: Callable[[], Awaitable[None]] | None = None,
+    ) -> None:
+        self._is_busy = is_busy or _model_busy
+        self._ready = ready
         self._running: dict[str, asyncio.Task] = {}
         self._listeners: list[Listener] = []
 
@@ -198,6 +226,8 @@ class StoryKeeper:
 
     async def _guarded(self, thread_id: str, manager: conversation.ConversationManager) -> None:
         try:
+            if self._ready is not None:
+                await self._ready()
             await self.catch_up(thread_id, manager)
         except asyncio.CancelledError:
             log.debug(f"story memory: pass for thread {thread_id} preempted by a turn")
@@ -241,7 +271,11 @@ class StoryKeeper:
     async def _fold(summary: str, batch: list[Message], max_chars: int) -> str:
         """The new summary, or "" when the model failed or wrote nothing."""
         try:
-            text = "".join([d async for d in router.stream_text(ROLE, fold_messages(summary, batch, max_chars))])
+            text = "".join([
+                d async for d in router.stream_text(
+                    ROLE, fold_messages(summary, batch, max_chars), max_tokens=tokens_for(max_chars)
+                )
+            ])
         except Exception as exc:  # noqa: BLE001 -- a failure keeps the old summary
             log.warning(f"story memory: the summary model failed, the old summary stays: {exc}")
             return ""
@@ -255,4 +289,4 @@ class StoryKeeper:
                 log.warning(f"story memory: a listener failed: {exc}")
 
 
-KEEPER = StoryKeeper()
+KEEPER = StoryKeeper(ready=_after_boot)

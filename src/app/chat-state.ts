@@ -99,7 +99,12 @@ export interface ChatState {
   scenarios: SavedScenario[] | null;
   /** FR-MODE-6: the New roleplay dialog is open. */
   roleplayOpen: boolean;
+  /** FR-MODE-6: the dialog's card save. "pending" until its own answer: the
+   * `scenarios` frame naming the saved card, or a store error. null: none asked. */
+  scenarioSave: ScenarioSave;
 }
+
+export type ScenarioSave = null | "pending" | "failed" | { saved: string };
 
 export type ChatEvent =
   | { kind: "frame"; frame: Frame }
@@ -111,7 +116,9 @@ export type ChatEvent =
   | { kind: "dismiss_notice" }
   | { kind: "picker"; open: boolean }
   | { kind: "settings"; section: SettingsSection | null }
-  | { kind: "roleplay"; open: boolean };
+  | { kind: "roleplay"; open: boolean }
+  /** A card save went out (FR-MODE-6). */
+  | { kind: "scenario_saving" };
 
 export const initialState: ChatState = {
   connection: "connecting",
@@ -139,6 +146,7 @@ export const initialState: ChatState = {
   prefs: null,
   scenarios: null,
   roleplayOpen: false,
+  scenarioSave: null,
 };
 
 let localCounter = 0;
@@ -395,8 +403,13 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, memory: (frame.data as ServerData["memory_facts"]).facts };
     case "settings":
       return { ...state, prefs: frame.data as SettingsData };
-    case "scenarios":
-      return { ...state, scenarios: (frame.data as ServerData["scenarios"]).cards };
+    case "scenarios": {
+      const data = frame.data as ServerData["scenarios"];
+      // Only the save's own answer names a card; a list or delete answer is not it.
+      const scenarioSave =
+        state.scenarioSave === "pending" && typeof data.saved_id === "string" ? { saved: data.saved_id } : state.scenarioSave;
+      return { ...state, scenarios: data.cards, scenarioSave };
+    }
     case "error": {
       const data = frame.data as ServerData["error"];
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };
@@ -404,12 +417,15 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       // A failed turn still ends with turn_done; turn_running and a screen-companion
       // refusal are not about the turn at all. Anything else refused the send itself.
       const keepsTurn = failedTurn || data.code === "turn_running" || data.code === "vision_unavailable";
+      // A store failure answers a pending card save (the kernel sends no list then).
+      const scenarioSave = state.scenarioSave === "pending" && data.code === "threads_unavailable" ? "failed" : state.scenarioSave;
       if (!keepsTurn && state.beforeRegenerate) {
-        return { ...state, notice, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle" };
+        return { ...state, notice, scenarioSave, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle" };
       }
       return {
         ...state,
         notice,
+        scenarioSave,
         messages: failedTurn ? markLastUser(state.messages, { failed: true, pending: false }) : state.messages,
         turn: keepsTurn ? state.turn : "idle",
       };
@@ -462,6 +478,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, settings: event.section, pickerOpen: false };
     case "roleplay":
       // Opens only when a new thread could start; closing always works.
-      return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false };
+      return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false, scenarioSave: null };
+    case "scenario_saving":
+      return { ...state, scenarioSave: "pending" };
   }
 }

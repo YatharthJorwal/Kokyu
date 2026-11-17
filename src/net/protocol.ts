@@ -250,8 +250,9 @@ export interface ServerData {
   doctor_report: { checks: DoctorCheck[] };
   memory_facts: { facts: MemoryFact[] };
   settings: SettingsData;
-  /** FR-MODE-6: every saved card, the most recently saved first. */
-  scenarios: { cards: SavedScenario[] };
+  /** FR-MODE-6: every saved card, the most recently saved first. The answer to a
+   * scenario_save also names the card it saved. */
+  scenarios: { cards: SavedScenario[]; saved_id?: string };
 }
 
 /** K1-13b (FR-SET-2, D-070): the editable settings in effect. `saved` names the ones

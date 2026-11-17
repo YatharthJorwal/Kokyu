@@ -16,8 +16,10 @@ import time
 
 import pytest
 
+import boot
 import conversation
 import llm
+import model_loader
 import prompting
 import router
 import story
@@ -54,7 +56,7 @@ def model(monkeypatch):
     state = {"replies": [], "fail": None}
 
     async def fake_stream_text(role, messages, **kwargs):
-        calls.append({"role": role, "messages": [dict(m) for m in messages]})
+        calls.append({"role": role, "messages": [dict(m) for m in messages], "kwargs": dict(kwargs)})
         if state["fail"] is not None:
             raise state["fail"]
         reply = state["replies"].pop(0) if state["replies"] else f"Summary {len(calls)}."
@@ -241,6 +243,40 @@ def test_the_default_busy_signal_is_the_arbiter_like_the_memory_writer(monkeypat
         assert keeper._is_busy() is True
 
 
+def test_a_chat_model_load_in_progress_counts_as_busy(monkeypatch):
+    """D-065, D-072: a fold beside a chat-model load would load a second local model."""
+    keeper = story.StoryKeeper()
+    monkeypatch.setattr(arbiter.ARBITER, "state", arbiter.IDLE)
+    monkeypatch.setattr(model_loader.LOADER, "busy", lambda: True)
+    assert keeper._is_busy() is True
+
+
+@pytest.mark.asyncio
+async def test_the_kernels_keeper_waits_for_boots_chat_model_step(manager, limits, model, monkeypatch):
+    """D-060: a roleplay opened at start-up that is behind does not fold beside the
+    chat-model load; it folds once boot's chat-model step is over."""
+    calls, _ = model
+    monkeypatch.setattr(boot, "_chat_model_settled", None)
+    keeper = story.StoryKeeper(is_busy=lambda: False, ready=story._after_boot)
+    thread = await _roleplay(manager, 3)
+    task = keeper.schedule(thread.id, manager)
+    await asyncio.sleep(0.05)
+    assert calls == [] and not task.done()
+    boot.chat_model_settled_event().set()
+    await asyncio.wait_for(task, 2)
+    assert len(calls) == 1 and (await manager.story(thread.id)).summary == "Summary 1."
+
+
+def test_the_running_kernels_keeper_is_gated_on_boot():
+    """conftest swaps story.KEEPER per test; a fresh copy of the module shows the real one."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("story_fresh_copy", story.__file__)
+    fresh = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(fresh)
+    assert fresh.KEEPER._ready is fresh._after_boot
+
+
 def test_the_story_config_has_the_agreed_defaults():
     assert StoryConfig() == StoryConfig(summarize_every=12, keep_recent=4, max_chars=2400)
     assert CONFIG.story.summarize_every >= 0
@@ -258,6 +294,20 @@ async def test_a_long_summary_is_cut_at_a_sentence_end(manager, limits, model, k
     await keeper.catch_up(thread.id, manager)
     assert (await manager.story(thread.id)).summary == "Sam met Alpha. They argued about the map."
     assert "at most 40 words" in calls[0]["messages"][0]["content"]
+
+
+@pytest.mark.asyncio
+async def test_the_fold_asks_for_room_for_a_whole_summary(manager, limits, model, keeper):
+    """A local call otherwise stops at llm.max_tokens (512), below a summary near
+    max_chars (400 words): the newest scenes would be cut off while
+    through_message_id moved past them. The fold asks for its own cap."""
+    calls, _ = model
+    thread = await _roleplay(manager, 3)
+    await keeper.catch_up(thread.id, manager)
+    cap = calls[0]["kwargs"]["max_tokens"]
+    assert cap == story.tokens_for(2400) and cap > llm.CONFIG.llm.max_tokens
+    assert cap >= story.words_for(2400) * 2      # 400 words fit with room to spare
+    assert story.tokens_for(60) >= story.words_for(60) * 2   # the 40-word floor too
 
 
 def test_cut_keeps_a_closing_quote_and_falls_back_to_a_word():
