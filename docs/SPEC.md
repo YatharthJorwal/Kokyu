@@ -355,7 +355,7 @@ In delivery order (D-085, amended by D-086; provisional). A checkpoint is open u
 | K0 | FR-W-1..4, 6, 7; FR-S-5; FR-R-1, 3; FR-V-1 (gpt_sovits per companion), FR-V-7 (text-only); FR-MEM-1..3 | Open (window and voice not run) |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 | Open |
 | K1c | FR-MODE-1..9 (D-074, D-075) | Open (the user ran the build 2026-11-17; items not ticked) |
-| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083) | In progress |
+| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`) | In progress |
 | UI-2 | The design standard (D-086): `DESIGN.md`, tokens, primitives, applied to every surface | Not started |
 | K1b | FR-DIST-1, 9, 11 (walking-skeleton installer on a clean machine) | Not started |
 | K2 | FR-C-4 (camera, screenshot, paste image), FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-1 (provider interface), 2..6, 8; FR-VP-1..5; FR-SC-6; FR-MODE-10; FR-SET-1 (Voice) | Not started |

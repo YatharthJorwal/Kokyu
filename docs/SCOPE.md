@@ -48,7 +48,7 @@ Order per D-085, amended by D-086 (provisional). Each phase ends with one checkp
 
 | Phase | Delivers |
 |---|---|
-| **UI-1** Chat app polish | Model names: a short name shown, the full id and details muted on hover (D-084, done); only working controls and a disconnect banner (D-082, done); unpriced models; companion portrait, message list, Markdown and keyboard behaviour |
+| **UI-1** Chat app polish | Model names: a short name shown, the full id and details muted on hover (D-084, done); only working controls and a disconnect banner (D-082, done); unpriced models (D-083, done); companion portrait, message list, Markdown and keyboard behaviour |
 | **UI-2** Design standard | Planned from real references before it is built: `DESIGN.md`, tokens, primitives and icons, applied to every surface (D-086) |
 | **K1b** Installer skeleton | A thin per-user NSIS installer with the kernel sidecar, tested on a clean machine (time-boxed) |
 | **K2** Stage and voice | The Ani-style VRM stage with lip-sync and idle life; per-companion voice (the voice a 1.0 buyer gets is still open: D-036, `PRODUCT.md` §9); speech input with barge-in; the mic button appears only when it works (D-082) |

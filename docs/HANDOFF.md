@@ -31,18 +31,21 @@ A solo developer who wants direct commands, no manual file shuffling, phases wit
 4. **UI1-01 model names** (`883f4f7`, D-084, FR-M-12): the user said "Yes, start model names", which also starts the D-085 order. `router/names.py` names every model in the kernel (override, preset label, derivation; 26 cases from the proposal's table pass); the chip has a muted hover/focus card with the full id and facts; the picker has a muted strip for the hovered or highlighted row. Rows use the existing `detail` for the facts rather than a new `facts` field (SPEC FR-M-12 rewritten to match).
 
 5. **UI1-02 only working controls** (`a412120`, `c575b72`, D-082): the mic, the "soon" attach items and New waifu are gone; no "kernel", "waifu" or phase codes in UI text. The sidebar status line became a banner shown after 6 s offline; its Reconnect calls a new shell command, `restart_kernel`, that starts the engine again only if it exited.
-6. **The user's notes, recorded:** the design standard is its own phase UI-2, planned from real references before building (D-086); Luna and Yuri are paid content shipped complete inside the app, never exported or open-sourced, and users' own characters come from a step-by-step creator with their own assets (D-087); the audience is 16+, pending research (D-088).
+6. **The user's notes, recorded:** the design standard is its own phase UI-2, planned from real references before building (D-086); Luna and Yuri are paid content shipped complete inside the app, never exported or open-sourced, and users' own characters come from a step-by-step creator with their own assets (D-087); the audience was 16+ pending research (D-088).
+7. **KASANE as a quiet credit** (`d765a4e`, D-089): the Doctor row "Engine (KASANE)", About, `logs/kasane.log`.
+8. **Age research** (a side session, TODO B-9): the report is `docs/research-age-content-2026-11.md`. The user chose 18+ (`a9ab16d`, D-090, FR-WIZ-8); explicit premades and the payment provider stay open (TODO B-10..12).
+9. **UI1-03 unpriced models** (`3e552e7`, D-083, FR-R-2): a model with no catalog price runs while a cap is on and is not counted against it. The picker shows "price unknown"; a notice comes once per model per run (an error frame with the non-ending code `price_unknown`, styled as info). A reached cap still stops it; helper roles stay local without a price. `budget.on_exhausted` is gone.
 
 ## 3. Where we stopped
 
-Everything is committed and pushed (the user asked). Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
+Everything is committed; pushed through `0a6cdb8`, and `a9ab16d` plus the UI1-03 commits wait for the user's word to push. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
 
 ## 4. Next session: start here
 
 1. `git status`, `git log -5 --oneline`, `npm run check`.
-2. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), and Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect).
-3. Ask which open question to settle first; the age research session's report may be in `docs/` (D-088, TODO B-9).
-4. Next item: **UI1-03**, unpriced models under the cap (D-083).
+2. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect), and, if they have an unpriced endpoint, its "price unknown" row and notice.
+3. Next item: **UI1-06**, her face, which needs open question 6 (a portrait from the VRM thumbnail) settled first. Also open: question 3 (explicit premades, D-090).
+4. Their `config/config.yaml` still has `on_exhausted`: harmless, can go.
 
 **KASANE: decided, option B** (D-089): the Doctor row, About, `logs/kasane.log`; `kasane.exe` waits for packaging (K1b-02). The options were: It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
 - A. Internal only: folder, logs, code. The UI keeps "Kōkyū's engine" (today).
@@ -56,4 +59,6 @@ Everything is committed and pushed (the user asked). Nothing is half-done. Untra
 - Luna's apartment GLB is a Sketchfab download, gitignored there. A shipped room needs its own rights record (R-51).
 - A `disabled` button gets no mouse events in Chrome, not even its parent's `mouseenter`; the picker's `<li>` is `display: contents` (subgrid) and has no box either. Rows that cannot be picked are `aria-disabled` with a guarded click.
 - Chrome and React: a `disabled` button inside the picker's subgrid rows is unhoverable (above); the banner's grace timer depends on the online boolean, so connecting/offline flapping does not reset it.
+- An injected `notice` needs every `Notice` field (`code`, `text`, `actions`); a missing `actions` blanks the page.
+- The 1421 preview can stall at "starting" with nothing listening: stop it and start it again.
 - With a kernel running on 8780, the 1421 preview connects to it and its reconnects wipe injected store state; inject with a `useChat.subscribe` that re-applies it. Never pick a model there: it is the user's kernel.
