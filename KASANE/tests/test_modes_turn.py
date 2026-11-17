@@ -449,7 +449,7 @@ def test_reply_text_strips_only_the_trailing_tag_and_the_ends():
 def _bare_session(mode):
     session = Session.__new__(Session)
     session.ws = object()
-    session.thread = SimpleNamespace(mode=mode, scenario={})
+    session.thread = SimpleNamespace(id="t1", mode=mode, scenario={})
     session.turn = None
     session.ambient_lock = asyncio.Lock()
     session.history, session.temp, session.temp_flags, session.unprompted = [], False, [], []
@@ -500,3 +500,91 @@ async def test_ocr_watch_never_remarks_in_a_roleplay_thread(monkeypatch, mode, s
     monkeypatch.setattr(hub, "drives", lambda ws: True)
     await _spin(_bare_session(mode)._ocr_watch_loop())
     assert bool(checks) is speaks
+
+
+@pytest.mark.asyncio
+async def test_a_screen_check_in_flight_never_lands_in_a_roleplay_opened_meanwhile(monkeypatch):
+    # FR-MODE-9 (review finding): the loop's guard runs before the check; the user
+    # opens a roleplay while the check is still running (_change_thread does not wait).
+    seen = {}
+
+    async def check(*_a, still_valid, on_remark, **_k):
+        session.thread = SimpleNamespace(id="story", mode="roleplay", scenario={})   # thread_open meanwhile
+        seen["valid"] = still_valid()
+        await on_remark("You drifted off task.")
+
+    saved = []
+
+    async def save_remark(text):
+        saved.append(text)
+
+    monkeypatch.setattr(ambient, "TASK_GUIDE_POLL_SECONDS", 0)
+    monkeypatch.setattr(ambient, "run_task_guide_check", check)
+    monkeypatch.setattr(task_guide, "get_state", lambda: SimpleNamespace(active=True, description="fix the build"))
+    monkeypatch.setattr(task_guide, "enabled", lambda: True)
+    monkeypatch.setattr(task_guide, "is_idle", lambda *_a: False)
+    monkeypatch.setattr(task_guide, "due_for_check", lambda *_a: True)
+    monkeypatch.setattr(hub, "drives", lambda ws: True)
+    session = _bare_session("chat")
+    session.thread = SimpleNamespace(id="work", mode="chat", scenario={})
+    session.save_remark = save_remark
+    await _spin(session._task_guide_loop())
+    assert seen["valid"] is False and saved == []
+
+
+@pytest.mark.asyncio
+async def test_a_screen_check_bound_to_another_chat_thread_is_dropped_too(monkeypatch):
+    session = _bare_session("chat")
+    session.thread = SimpleNamespace(id="work", mode="chat", scenario={})
+    saved = []
+
+    async def save_remark(text):
+        saved.append(text)
+
+    session.save_remark = save_remark
+    hooks = session._ambient_hooks()
+    assert hooks["still_valid"]() is True
+    await hooks["on_remark"]("kept")
+    session.thread = SimpleNamespace(id="other", mode="chat", scenario={})
+    assert hooks["still_valid"]() is False
+    await hooks["on_remark"]("dropped")
+    assert saved == ["kept"]
+
+
+def test_reply_text_drops_an_unclosed_tag_only_when_stopped():
+    assert turns.reply_text("Sure, right now. [hap", stopped=True) == "Sure, right now."
+    assert turns.reply_text("Sure, right now. [", stopped=True) == "Sure, right now."
+    assert turns.reply_text("Sure. [happy]", stopped=True) == "Sure."
+    assert turns.reply_text("Sure, right now. [hap") == "Sure, right now. [hap"   # a finished reply is kept as written
+
+
+@pytest.mark.asyncio
+async def test_stop_inside_the_trailing_tag_keeps_no_tag_fragment(waifu, side_effects, monkeypatch):
+    # D-074 (review finding): Stop pressed while the model streams "[hap" must not
+    # store or show the fragment.
+    streamed = asyncio.Event()
+
+    async def fake_stream(role, messages, offered, **kwargs):
+        yield _text("Sure, I can help with that right now. [hap")
+        streamed.set()
+        await asyncio.Event().wait()   # the rest of the tag never arrives: Stop
+
+    monkeypatch.setattr(router, "stream_with_tools", fake_stream)
+    finished = []
+
+    async def on_finished(user_text, text, stopped, meta):
+        finished.append((text, stopped))
+
+    socket, history = Socket(waifu), [{"role": "system", "content": "sys"}]
+    task = asyncio.create_task(
+        turns.run_turn(socket, history, "help?", False, [], on_finished=on_finished, model_ref=LOCAL)
+    )
+    await asyncio.wait_for(streamed.wait(), 5)
+    task.cancel()
+    with pytest.raises(asyncio.CancelledError):
+        await task
+    want = "Sure, I can help with that right now."
+    assert history[-1] == {"role": "assistant", "content": want}
+    assert finished == [(want, True)]
+    done = [f for f in socket.sent if f.get("type") == "turn_done"]
+    assert done and done[-1]["data"]["text"] == want and done[-1]["data"]["stopped"] is True

@@ -795,6 +795,22 @@ class Session:
         the other screen companion speaks. Skipped, not deferred: the next poll decides."""
         return not self.busy and not self.ambient_lock.locked()
 
+    def _ambient_still_in(self, thread_id: str | None) -> bool:
+        """FR-MODE-9: the thread a screen check started in is still open and is not a
+        story. A check takes seconds and the user may open a roleplay meanwhile
+        (_change_thread does not wait for it); its remark is then dropped."""
+        return self.thread_id == thread_id and not self.in_roleplay()
+
+    def _ambient_hooks(self) -> dict[str, Any]:
+        """still_valid and on_remark for one screen check, bound to the open thread."""
+        started = self.thread_id
+
+        async def on_remark(text: str) -> None:
+            if self._ambient_still_in(started):
+                await self.save_remark(text)
+
+        return {"still_valid": lambda: self._ambient_still_in(started), "on_remark": on_remark}
+
     async def _task_guide_loop(self) -> None:
         while True:
             await asyncio.sleep(ambient.TASK_GUIDE_POLL_SECONDS)
@@ -815,7 +831,7 @@ class Session:
             async with self.ambient_lock:
                 await ambient.run_task_guide_check(
                     self.ws, self.history, state.description, self.temp, self.temp_flags, self.unprompted,
-                    on_remark=self.save_remark,
+                    **self._ambient_hooks(),
                 )
 
     async def _ocr_watch_loop(self) -> None:
@@ -851,5 +867,5 @@ class Session:
                 continue   # FR-SC-5: never talk over someone typing
             async with self.ambient_lock:
                 await ambient.run_ocr_watch_check(
-                    self.ws, self.history, self.temp, self.temp_flags, self.unprompted, on_remark=self.save_remark
+                    self.ws, self.history, self.temp, self.temp_flags, self.unprompted, **self._ambient_hooks()
                 )

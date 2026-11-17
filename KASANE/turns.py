@@ -9,6 +9,7 @@ import asyncio
 import base64
 import contextlib
 import logging
+import re
 import sys
 from collections.abc import Awaitable, Callable
 from functools import partial
@@ -238,10 +239,16 @@ def trim_history(history: list[dict[str, str]], temp_turn_flags: list[bool] | No
     history[:] = [system] + turns
 
 
-def reply_text(raw: str) -> str:
+_UNCLOSED_TAG = re.compile(r"\[\w*$")   # the text is already stripped; rstrip after
+
+
+def reply_text(raw: str, stopped: bool = False) -> str:
     """The reply as it is kept and shown (D-074): the raw streamed text with the
-    trailing emotion tag removed and the ends trimmed. Line breaks inside stay."""
-    return extract_emotion_tag(raw)[0].strip()
+    trailing emotion tag removed and the ends trimmed. Line breaks inside stay.
+    `stopped`: Stop cut the stream, possibly inside the tag; a fragment like "[hap"
+    is part of the tag, not of the reply, so it goes too."""
+    text = extract_emotion_tag(raw)[0].strip()
+    return _UNCLOSED_TAG.sub("", text).rstrip() if stopped else text
 
 
 async def run_turn(
@@ -562,7 +569,7 @@ async def run_turn(
         # LLM-unreachable fallback line above is deliberately NOT added to
         # reply_parts -- it was never really said by her, so it shouldn't
         # end up looking like a real reply in history either.
-        final_text = reply_text(raw_text)
+        final_text = reply_text(raw_text, stopped=isinstance(sys.exc_info()[1], asyncio.CancelledError))
         if final_text:
             history.append({"role": "assistant", "content": final_text})
             if temp_turn_flags is not None:

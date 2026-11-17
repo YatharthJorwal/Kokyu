@@ -26,6 +26,16 @@ from tools import vision
 log = logging.getLogger(__name__)
 
 
+def _stale(still_valid: "Callable[[], bool] | None", what: str) -> bool:
+    """FR-MODE-9: the window's thread changed while the check ran (the user opened a
+    roleplay or another thread). The remark belongs to the thread the check started
+    in, so it is dropped, never spoken into the new one or stored there."""
+    if still_valid is None or still_valid():
+        return False
+    log.info(f"{what}: dropped, the thread changed while the check ran")
+    return True
+
+
 # FR-SC-5: OCR watch keeps quiet while the user is typing. The chat window sends a
 # `typing` frame at most every few seconds while keys go down.
 TYPING_QUIET_SECONDS = 10.0
@@ -106,6 +116,7 @@ async def run_task_guide_check(
     temp_turn_flags: list[bool] | None = None,
     unprompted: list[dict[str, str]] | None = None,
     on_remark: "Callable[[str], Awaitable[None]] | None" = None,
+    still_valid: "Callable[[], bool] | None" = None,
 ) -> None:
     """The scheduled half of Task Guide Mode actually doing its job: grab
     a screenshot, ask the VLM whether it still matches the tracked step
@@ -160,6 +171,8 @@ async def run_task_guide_check(
     if result["on_task"]:
         return
 
+    if _stale(still_valid, "task guide"):
+        return   # `history` is another thread's now
     prompt = drift_prompt(task_description, result["note"] or "something unrelated is on screen")
     try:
         buffer = ""
@@ -180,8 +193,12 @@ async def run_task_guide_check(
     if not allowed:
         log.info(f"task guide: chide suppressed ({reason})")
         return
+    if _stale(still_valid, "task guide"):
+        return
     for chunk in reply_parts:
         await turns.send_speak(websocket, apply_persona_pass(chunk))
+    if _stale(still_valid, "task guide"):
+        return   # spoken, but never recorded in the thread that is open now
 
     # Recorded as her own assistant turn, same as a normal reply, so a
     # later real turn sees she already commented on the drift and Phase
@@ -214,6 +231,7 @@ async def run_ocr_watch_check(
     temp_turn_flags: list[bool] | None = None,
     unprompted: list[dict[str, str]] | None = None,
     on_remark: "Callable[[str], Awaitable[None]] | None" = None,
+    still_valid: "Callable[[], bool] | None" = None,
 ) -> None:
     """Continuous OCR's own scheduled check -- structurally the same
     shape as run_task_guide_check above (grab a screenshot, ask the VLM
@@ -274,6 +292,8 @@ async def run_ocr_watch_check(
     if not speak:
         return
 
+    if _stale(still_valid, "ocr watch"):
+        return   # `history` is another thread's now
     prompt = ambient_comment_prompt(result["note"])
     try:
         buffer = ""
@@ -296,8 +316,12 @@ async def run_ocr_watch_check(
     if not allowed:
         log.info(f"ocr watch: comment suppressed ({reason})")
         return
+    if _stale(still_valid, "ocr watch"):
+        return
     for chunk in reply_parts:
         await turns.send_speak(websocket, apply_persona_pass(chunk))
+    if _stale(still_valid, "ocr watch"):
+        return   # spoken, but never recorded in the thread that is open now
 
     # Same "unprompted comment, no preceding user turn" shape
     # run_task_guide_check's own chide uses -- see its comment for why

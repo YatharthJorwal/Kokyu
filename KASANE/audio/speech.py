@@ -272,6 +272,7 @@ def banned_chars_in(text: str) -> set[str]:
 # Double quotes that open or close her line: straight and curly. Single quotes
 # are not dialogue markers here: they are apostrophes far more often (`don't`).
 _DIALOGUE_QUOTES = frozenset('"\N{LEFT DOUBLE QUOTATION MARK}\N{RIGHT DOUBLE QUOTATION MARK}')
+_OPEN_QUOTE = "\N{LEFT DOUBLE QUOTATION MARK}"
 # How many spaces may sit between "(" and "OOC" and still count as an aside.
 _OOC_MAX_GAP = 4
 
@@ -412,11 +413,16 @@ class DialogueFilter:
                     continue
                 # a plain parenthesis is text like any other
             elif char in _DIALOGUE_QUOTES:
-                if state == "quote":
+                # Curly quotes have a direction: an opening one inside a quote is the
+                # next paragraph of the same line (prose convention, no closing quote
+                # before it), and a stray closing one outside a quote opens nothing.
+                # Only the straight quote toggles.
+                if char == _OPEN_QUOTE or (char == '"' and state != "quote"):
+                    if state != "quote":
+                        self._state = "quote"
+                        self._seen_quote = True
+                elif state == "quote":
                     self._state = "text"
-                else:
-                    self._state = "quote"
-                    self._seen_quote = True
                 self._put(" ", out)
                 i += 1
                 continue

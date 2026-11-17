@@ -175,3 +175,77 @@ async def test_a_spoken_remark_is_handed_to_the_chat(monkeypatch, _isolate):
 
     await ambient.run_ocr_watch_check(FakeWebSocket(), [{"role": "system", "content": "p"}], False, [], [], on_remark=on_remark)
     assert saved == _isolate and saved
+
+
+# FR-MODE-9 (review finding): a check takes seconds, and the user may open a roleplay
+# (or another thread) meanwhile. The remark belongs to the thread the check started
+# in: nothing is streamed from, spoken into, recorded in or stored in the new one.
+
+def _flip_on_stream(monkeypatch, valid):
+    async def stream(_messages, **_kw):
+        valid["ok"] = False   # the thread changes while the reflex model writes
+        yield "Look at that mess. [annoyed]"
+
+    monkeypatch.setattr(llm, "stream_reply", stream)
+
+
+@pytest.mark.asyncio
+async def test_ocr_watch_drops_a_remark_when_the_thread_changes_during_the_check(monkeypatch, _isolate):
+    _vlm(monkeypatch, ["a terminal with a failing build"])
+    valid, saved = {"ok": True}, []
+    _flip_on_stream(monkeypatch, valid)
+
+    async def on_remark(text):
+        saved.append(text)
+
+    history, unprompted = [{"role": "system", "content": "p"}], []
+    await ambient.run_ocr_watch_check(
+        FakeWebSocket(), history, False, [], unprompted, on_remark=on_remark, still_valid=lambda: valid["ok"]
+    )
+    assert _isolate == [] and saved == [] and unprompted == []
+    assert history == [{"role": "system", "content": "p"}]
+
+
+@pytest.mark.asyncio
+async def test_ocr_watch_never_streams_from_a_thread_opened_during_the_vlm_check(monkeypatch, _isolate):
+    streamed = []
+
+    async def judged_meanwhile(_prev, _img):
+        valid["ok"] = False
+        return {"comment_worthy": True, "summary": "a spreadsheet", "note": "they are in a spreadsheet"}
+
+    async def stream(messages, **_kw):
+        streamed.append(messages)
+        yield "Hm. [neutral]"
+
+    valid = {"ok": True}
+    monkeypatch.setattr(ocr_watch, "check_for_comment", judged_meanwhile)
+    monkeypatch.setattr(llm, "stream_reply", stream)
+    await ambient.run_ocr_watch_check(
+        FakeWebSocket(), [{"role": "system", "content": "p"}], False, [], [], still_valid=lambda: valid["ok"]
+    )
+    assert streamed == [] and _isolate == []
+
+
+@pytest.mark.asyncio
+async def test_task_guide_drops_a_chide_when_the_thread_changes_during_the_check(monkeypatch, _isolate):
+    from senses import task_guide
+
+    async def drifted(_desc, _img):
+        return {"on_task": False, "note": "a video site"}
+
+    monkeypatch.setattr(task_guide, "check_task_progress", drifted)
+    monkeypatch.setattr(task_guide, "mark_checked", lambda: None)
+    valid, saved = {"ok": True}, []
+    _flip_on_stream(monkeypatch, valid)
+
+    async def on_remark(text):
+        saved.append(text)
+
+    history, unprompted = [{"role": "system", "content": "p"}], []
+    await ambient.run_task_guide_check(
+        FakeWebSocket(), history, "fix the build", False, [], unprompted,
+        on_remark=on_remark, still_valid=lambda: valid["ok"],
+    )
+    assert _isolate == [] and saved == [] and unprompted == []
+    assert history == [{"role": "system", "content": "p"}]

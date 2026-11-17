@@ -68,6 +68,14 @@ GOLDEN = [
     # curly quotes work the same way
     (f"{LDQ}Hi,{RDQ} she said. {LDQ}Bye.{RDQ}", "Hi, Bye. "),
     (f"She nods. {LDQ}Fine.{RDQ} *leaves*", "She nods. Fine. "),
+    # ...but they have a direction (review finding): a line over two paragraphs
+    # reopens without closing first, and a stray closing quote opens nothing
+    (
+        f"{LDQ}First paragraph of her line.\n\n{LDQ}Second paragraph.{RDQ} She walks off, humming. *waves*",
+        "First paragraph of her line. Second paragraph. ",
+    ),
+    (f"{LDQ}Hi.{RDQ} She waves.{RDQ} *nods* She leaves.", "Hi. "),
+    (f"{LDQ}Hi.{RDQ}{RDQ} She waves.", "Hi. "),
     # inside a quote an asterisk is emphasis: words kept, markers dropped
     ('"I *really* missed you."', "I really missed you. "),
     # a quote inside an action is part of the action and does not switch narration off
@@ -171,3 +179,23 @@ def test_a_bracket_followed_by_more_text_is_not_held_back():
 def test_plain_chunking_is_unchanged():
     chunks, rest = extract_ready_chunks("This is a long enough sentence to be spoken now. Next")
     assert chunks == ["This is a long enough sentence to be spoken now."] and rest == " Next"
+
+
+def test_a_trailing_tag_after_whitespace_and_a_newline_is_still_held_back():
+    text = "Sure thing, I can definitely do it now.\n\n  [happy]. \n"
+    assert extract_ready_chunks(text) == ([], text)
+    chunks, rest = extract_ready_chunks("This sentence is long enough to be spoken right away.\n\n  [sad]. \n")
+    assert chunks == ["This sentence is long enough to be spoken right away."] and rest == "\n\n  [sad]. \n"
+
+
+def test_a_long_whitespace_run_is_chunked_in_linear_time():
+    # Review finding: the tag pattern began with `\s*`, so every delta of a newline
+    # run (a small model stuck in a loop) cost O(w^2) and the stream O(w^3): 2000
+    # newlines took about 3 s on the asyncio loop. Now it is a few milliseconds.
+    import time
+
+    buffer, started = "Here is the plan", time.perf_counter()
+    for _ in range(3000):
+        _chunks, buffer = extract_ready_chunks(buffer + "\n")
+    assert time.perf_counter() - started < 1.0
+    assert buffer == "Here is the plan" + "\n" * 3000

@@ -29,7 +29,22 @@ _SENTENCE_BOUNDARY = re.compile(r"[.!?]+(?=\s|$)")
 # stream ends. Held back until more text proves it is not the end: without this,
 # "Sure thing, I can definitely do it now. [happy]." was one ready chunk, so the
 # tag was spoken and the emotion lost (D-074, FR-MODE-8).
-_TRAILING_TAG = re.compile(r"\s*\[\w+\]\.?\s*$")
+# No leading or trailing `\s*` in the pattern: searched over a long whitespace run
+# (a local model stuck emitting newlines) that was cubic over the stream and froze
+# the asyncio loop. The ends are trimmed with rstrip instead, and only the tail is
+# searched.
+_TRAILING_TAG = re.compile(r"\[\w+\]\.?$")
+_TAG_WINDOW = 64
+
+
+def _tag_start(buffer: str) -> int:
+    """Where a possible trailing emotion tag (and the whitespace before it) starts;
+    len(buffer) when there is none."""
+    tail = buffer.rstrip()
+    tag = _TRAILING_TAG.search(tail[-_TAG_WINDOW:])
+    if tag is None:
+        return len(buffer)
+    return len(tail[: len(tail) - len(tag.group())].rstrip())
 
 
 def extract_ready_chunks(buffer: str) -> tuple[list[str], str]:
@@ -37,8 +52,7 @@ def extract_ready_chunks(buffer: str) -> tuple[list[str], str]:
     returns (chunks ready to speak, new remainder to keep buffering)."""
     chunks: list[str] = []
     start = 0
-    tag = _TRAILING_TAG.search(buffer)
-    limit = tag.start() if tag else len(buffer)
+    limit = _tag_start(buffer)
     for match in _SENTENCE_BOUNDARY.finditer(buffer):
         end = match.end()
         if end > limit:
