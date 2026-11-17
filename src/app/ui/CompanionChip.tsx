@@ -122,11 +122,6 @@ function CompanionPopover({
           ))}
         </ul>
       </div>
-      <footer className="model-footer">
-        <button type="button" className="new-waifu" disabled title="The waifu creator arrives in K3">
-          ＋ New waifu
-        </button>
-      </footer>
     </div>
   );
 }

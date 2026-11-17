@@ -26,7 +26,7 @@ export function dispatchRaw(raw: string, handlers: KernelHandlers): void {
   try {
     parsed = JSON.parse(raw);
   } catch {
-    handlers.onProblem("The kernel sent a message this window could not read.");
+    handlers.onProblem("Kōkyū's engine sent a message this window could not read.");
     return;
   }
   const result = parseFrame(parsed);
@@ -62,6 +62,14 @@ export class KernelSocket {
       this.handlers.onStatus("offline");
       if (!this.closed) this.timer = window.setTimeout(() => this.connect(), backoffMs(this.attempts++));
     });
+  }
+
+  /** Try again now instead of after the backoff (the banner's Reconnect). */
+  reconnectNow(): void {
+    if (this.socket) return; // open, or an attempt is under way
+    window.clearTimeout(this.timer);
+    this.attempts = 0;
+    this.connect();
   }
 
   close(): void {

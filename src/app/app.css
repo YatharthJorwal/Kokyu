@@ -369,30 +369,6 @@ button:disabled {
   color: var(--text);
 }
 
-.conn {
-  font-size: 12px;
-  color: var(--muted);
-}
-
-.conn-online::before,
-.conn-connecting::before,
-.conn-offline::before {
-  content: "●";
-  margin-right: 5px;
-}
-
-.conn-online::before {
-  color: #6fcf97;
-}
-
-.conn-connecting::before {
-  color: #e2c46b;
-}
-
-.conn-offline::before {
-  color: var(--danger);
-}
-
 /* ── chat column ─────────────────────────────────────────── */
 
 .chat {
@@ -898,7 +874,6 @@ button:disabled {
   padding: 0 6px;
 }
 
-.composer .mic,
 .composer .send,
 .composer .stop {
   display: grid;
@@ -914,11 +889,6 @@ button:disabled {
 .composer svg {
   width: 22px;
   height: 22px;
-}
-
-.composer .mic {
-  background: transparent;
-  color: var(--muted);
 }
 
 .composer .send {
@@ -1061,7 +1031,7 @@ button:disabled {
   color: var(--muted);
 }
 
-.soon {
+.menu-state {
   font-size: 11px;
   opacity: 0.8;
 }
@@ -1732,14 +1702,6 @@ button:disabled {
   bottom: auto;
   left: 0;
   right: auto;
-}
-
-.new-waifu {
-  padding: 4px 0;
-  border: 0;
-  background: transparent;
-  color: var(--muted);
-  font: inherit;
 }
 
 /* ── "waking up" card (K1-10) ────────────────────────────── */

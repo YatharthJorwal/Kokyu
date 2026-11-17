@@ -3,6 +3,7 @@
 // Stage view with the avatar arrives in K2 (its engine waits in src/engine/).
 
 import { Composer } from "./ui/Composer";
+import { ConnectionBanner } from "./ui/ConnectionBanner";
 import { NoticeBar } from "./ui/NoticeBar";
 import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
@@ -18,6 +19,7 @@ export function App() {
       <main className="chat">
         <TopBar />
         <ThreadView />
+        <ConnectionBanner />
         <NoticeBar />
         <ThinkingRow />
         <Composer />

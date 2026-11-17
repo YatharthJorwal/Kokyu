@@ -467,7 +467,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // and re-sends its model status on reconnect. A save or start still waiting will
       // get no answer: the dialog stops waiting (FR-MODE-6).
       const scenarioSave = state.scenarioSave === "pending" ? "lost" : state.scenarioSave;
-      const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to the kernel dropped." } : state.roleplayStart;
+      const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to Kōkyū's engine dropped." } : state.roleplayStart;
       return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, voice: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
     }
     case "problem":

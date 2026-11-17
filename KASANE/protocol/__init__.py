@@ -367,7 +367,7 @@ def parse_client(raw: Any) -> ClientMessage:
     if raw.get("v") != PROTOCOL_VERSION:
         raise ProtocolError(
             "protocol_version",
-            f"This window speaks protocol {raw.get('v')!r}; the kernel speaks {PROTOCOL_VERSION}. Restart the app.",
+            f"This window speaks protocol {raw.get('v')!r}; Kōkyū's engine speaks {PROTOCOL_VERSION}. Restart the app.",
         )
     type_ = raw.get("type")
     model = CLIENT_TYPES.get(type_) if isinstance(type_, str) else None

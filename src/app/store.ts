@@ -3,6 +3,7 @@
 // state with `useChat(selector)` and call `actions.*`; nothing else touches the
 // socket.
 
+import { invoke, isTauri } from "@tauri-apps/api/core";
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
@@ -61,6 +62,19 @@ const socket = new KernelSocket({
 export const actions = {
   connect(): void {
     socket.connect();
+  },
+
+  /** The banner's Reconnect (D-082): in the desktop app the shell starts the engine
+   * again if it has stopped; then the socket tries at once. */
+  async reconnect(): Promise<void> {
+    if (isTauri()) {
+      try {
+        await invoke<boolean>("restart_kernel");
+      } catch {
+        // the retry below still runs; the banner stays until the engine answers
+      }
+    }
+    socket.reconnectNow();
   },
 
   /** Sends a line. Returns false (and changes nothing) when it can't be sent now. */

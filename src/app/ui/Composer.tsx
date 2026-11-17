@@ -1,8 +1,7 @@
 // The input row (K1-02, K1-05; laid out to the reference in K1-15, D-068): one
 // rounded box with the paperclip tray (FR-C-4) and the screen companions in it
 // (K1-05b, FR-SC-1..4), the message (multi-line, Enter sends, Shift+Enter is a
-// newline, a pasted image or a dropped file is attached, FR-C-3), the mic (voice
-// input arrives in K2) and a round Send, or Stop while a reply runs (FR-C-2).
+// newline, a pasted image or a dropped file is attached, FR-C-3) and a round Send, or Stop while a reply runs (FR-C-2).
 // Under the box: a status line at the left (voice and screen companion chips,
 // FR-SC-2; Temp Chat; else a keyboard hint) and the model chip (K1-10, FR-M-1)
 // at the right. The companion chip moved to the top bar.
@@ -84,7 +83,7 @@ export function Composer() {
 
   const placeholder =
     role === "observer"
-      ? "Another Kōkyū window is talking to the kernel"
+      ? "Another Kōkyū window is running this chat"
       : roleplay
         ? `Write to ${companion ?? "her"}… *actions* in asterisks`
         : companion
@@ -138,12 +137,6 @@ export function Composer() {
             aria-label="Message"
             disabled={role === "observer"}
           />
-          <button type="button" className="mic" aria-label="Talk" disabled title="Talking to her by voice arrives with the stage (K2)">
-            <svg viewBox="0 0 24 24" aria-hidden="true">
-              <rect x="9" y="3" width="6" height="11" rx="3" />
-              <path d="M5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21" />
-            </svg>
-          </button>
           {turn === "idle" ? (
             <button
               type="button"
@@ -178,13 +171,6 @@ export function Composer() {
     </div>
   );
 }
-
-// FR-C-4: every item is listed; the ones that arrive with K2 are visibly disabled.
-const LATER = [
-  { label: "Camera", hint: "Arrives with voice and the stage (K2)" },
-  { label: "Screenshot", hint: "Arrives with voice and the stage (K2)" },
-  { label: "Paste image", hint: "Coming in K2. Ctrl+V in the message box works now" },
-];
 
 /** The status line's quiet state: Temp Chat, else how to send. Silent while a chip speaks. */
 function StatusHint() {
@@ -343,14 +329,8 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
             }}
           >
             Voice
-            <span className="soon">{voiceOn ? "on" : "off"}</span>
+            <span className="menu-state">{voiceOn ? "on" : "off"}</span>
           </button>
-          {LATER.map((item) => (
-            <button key={item.label} type="button" role="menuitem" disabled title={item.hint}>
-              {item.label}
-              <span className="soon">soon</span>
-            </button>
-          ))}
           <div className="tray-section" role="presentation">
             Screen companions
           </div>
@@ -399,7 +379,7 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
             }}
           >
             OCR watch
-            <span className="soon">{screen?.ocr_watch.on ? "on" : "off"}</span>
+            <span className="menu-state">{screen?.ocr_watch.on ? "on" : "off"}</span>
           </button>
         </div>
       ) : null}

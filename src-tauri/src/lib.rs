@@ -8,6 +8,7 @@ use std::net::{SocketAddr, TcpStream};
 use std::os::windows::process::CommandExt;
 use std::path::PathBuf;
 use std::process::{Child, ChildStdin, Command, Stdio};
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::sync::{Arc, Mutex};
 use std::time::{Duration, Instant};
 use tauri::{
@@ -23,6 +24,9 @@ const KERNEL_PORT: u16 = 8780;
 
 /// Win32 CREATE_NO_WINDOW: a child process gets no console window.
 const CREATE_NO_WINDOW: u32 = 0x08000000;
+
+/// True while `spawn_kernel`'s thread runs, so Reconnect never starts a second kernel.
+static SPAWNING: AtomicBool = AtomicBool::new(false);
 
 /// Shown on the tray while a camera stream is open (K2-07, FR-C-4): the camera is
 /// never used without a visible sign.
@@ -114,6 +118,24 @@ async fn delete_api_key(
 }
 
 /// The tray shows the camera icon while a camera stream is open.
+/// The disconnect banner's Reconnect (D-082): starts the kernel again when it has
+/// exited or never started. One still running is left alone; the window's socket
+/// keeps retrying it. Returns whether a start was begun.
+#[tauri::command]
+fn restart_kernel(kernel: tauri::State<'_, KernelChild>, pipe: tauri::State<'_, KernelPipe>) -> bool {
+    if SPAWNING.load(Ordering::SeqCst) {
+        return false;
+    }
+    let exited = match kernel.0.lock() {
+        Ok(mut slot) => slot.as_mut().map_or(true, |child| matches!(child.try_wait(), Ok(Some(_)))),
+        Err(_) => false,
+    };
+    if exited {
+        spawn_kernel(kernel.0.clone(), pipe.inner().clone());
+    }
+    exited
+}
+
 #[tauri::command]
 fn set_camera_indicator(
     app: tauri::AppHandle,
@@ -159,7 +181,7 @@ pub fn run() {
     install_kill_on_close_job();
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_camera_indicator, set_api_key, delete_api_key])
+        .invoke_handler(tauri::generate_handler![set_camera_indicator, set_api_key, delete_api_key, restart_kernel])
         .setup(|app| {
             let window = app
                 .get_webview_window("main")
@@ -192,7 +214,15 @@ pub fn run() {
 /// Paths are relative to src-tauri/ (this binary's working directory under
 /// `tauri dev`). Not verified for a packaged build (K1b).
 fn spawn_kernel(kernel: Arc<Mutex<Option<Child>>>, pipe: KernelPipe) {
+    SPAWNING.store(true, Ordering::SeqCst);
     std::thread::spawn(move || {
+        spawn_kernel_now(&kernel, &pipe);
+        SPAWNING.store(false, Ordering::SeqCst);
+    });
+}
+
+fn spawn_kernel_now(kernel: &Arc<Mutex<Option<Child>>>, pipe: &KernelPipe) {
+    {
         let logs_dir = PathBuf::from("../logs");
         let _ = std::fs::create_dir_all(&logs_dir);
         kill_stale_kernel();
@@ -255,7 +285,7 @@ fn spawn_kernel(kernel: Arc<Mutex<Option<Child>>>, pipe: KernelPipe) {
             }
             Err(e) => eprintln!("[kokyu] failed to start the kernel: {e}"),
         }
-    });
+    }
 }
 
 /// A kernel left running by an earlier run (a crash before the Job Object existed,

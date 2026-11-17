@@ -125,7 +125,7 @@ function ModelsSection() {
 
       <h4>On this PC</h4>
       {prefs ? <OllamaForm key={prefs.ollama_url} prefs={prefs} saving={saving} /> : null}
-      {!models ? <p className="muted">Asking the kernel…</p> : null}
+      {!models ? <p className="muted">Looking for models…</p> : null}
       {models?.local_error ? <p className="muted">{models.local_error}</p> : null}
       <ul className="settings-list">{(models?.local ?? []).map(row)}</ul>
 
@@ -501,7 +501,7 @@ function AppearanceSection() {
         value={theme.messages}
         options={[
           { id: "open", label: "Open" },
-          { id: "bubbles", label: "Bubbles with her picture" },
+          { id: "bubbles", label: "Bubbles with her initial" },
         ]}
         onPick={(messages) => change({ messages })}
       />

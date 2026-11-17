@@ -64,7 +64,7 @@ function RoleplayBody() {
     if (saveState === "failed") {
       setStatus("Could not save the card.");
     } else if (saveState === "lost") {
-      setStatus("The connection dropped before the kernel answered, so the card may not be saved. Check the list once it is back.");
+      setStatus("The connection dropped before Kōkyū answered, so the card may not be saved. Check the list once it is back.");
     } else if (saveState !== null && saveState !== "pending") {
       setLoadedId(saveState.saved);
       setStatus("Saved.");

@@ -119,9 +119,6 @@ export function Sidebar() {
             <path d="M12 2.8l1.6 2.3 2.7-.7.9 2.6 2.6.9-.7 2.7 2.3 1.6-2.3 1.6.7 2.7-2.6.9-.9 2.6-2.7-.7L12 21.2l-1.6-2.3-2.7.7-.9-2.6-2.6-.9.7-2.7L2.8 12l2.3-1.6-.7-2.7 2.6-.9.9-2.6 2.7.7z" />
           </svg>
         </button>
-        <span className={`conn conn-${connection}`} role="status">
-          {connection === "online" ? "Connected" : connection === "connecting" ? "Connecting…" : "Kernel offline"}
-        </span>
       </div>
     </aside>
   );
