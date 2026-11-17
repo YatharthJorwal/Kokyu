@@ -4,7 +4,7 @@ Binding rules for everyone (human or agent) working in this repo. A rule changes
 
 ## 1. Product invariants
 
-- **R-01 Waifu invariance.** A companion is a prompt, voice parameters, a VRM and pet sprites. No code branches on a companion id for anything else (model, effort, routing, tools, permissions, memory scope, recall, conversation mode). The invariance tests (FR-W-3) stay green.
+- **R-01 Waifu invariance.** A companion is a prompt, voice parameters, a VRM (with its portrait, D-091) and pet sprites. No code branches on a companion id for anything else (model, effort, routing, tools, permissions, memory scope, recall, conversation mode). The invariance tests (FR-W-3) stay green.
 - **R-02 Memory is shared.** Never namespace or filter memory by companion. Record the speaker's name in messages and episode summaries (FR-MEM-2).
 - **R-03 One model switcher.** The user sees exactly one chat-model control with Local and API sections. Helper models never appear in it.
 - **R-04 No silent model change.** If a user-selected model fails, show the error with *Retry* and *Switch model*. Never fall back automatically.

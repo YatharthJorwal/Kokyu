@@ -10,7 +10,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 **Changelog v1.0 → v1.1**
 - Folded in: D-059 (one API endpoint), D-064 (effort data), D-065, D-071 (VRAM checks), D-066 (failure card), D-067, D-070, D-073 (Settings, settings.json, appearance), D-068 (window layout), D-072 (one chat model in memory).
 - Added: FR-MODE (D-074, D-075); FR-M-12 model names (D-084).
-- Changed: FR-C-4 only working controls (D-082); FR-CR-5, 6 Write it for me (D-077); FR-R-2 unpriced models (D-083); FR-DIST one NSIS installer (D-081); FR-COMP, FR-WIZ automatic setup (D-080).
+- Changed: FR-W-1, 3, 8, 9 her portrait and profile (D-091); FR-C-4 only working controls (D-082); FR-CR-5, 6 Write it for me (D-077); FR-R-2 unpriced models (D-083); FR-DIST one NSIS installer (D-081); FR-COMP, FR-WIZ automatic setup (D-080).
 - Moved to Appendix B: FR-P, FR-3D (now the apartment, D-078). Removed: agent mode, VR (D-079), Track T (D-080).
 
 ## 1. Definitions
@@ -33,12 +33,14 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-W-1 | A waifu MUST consist of exactly: `id`, `name`, `traits[]`, `prompt`, `vrm`, `voice{provider, provider-specific fields}`, plus a derived `pet/` atlas (1.1). | K0 |
+| FR-W-1 | A waifu MUST consist of exactly: `id`, `name`, `traits[]`, an optional `about` (a short brief for her profile, D-091), `prompt`, `vrm`, `voice{provider, provider-specific fields}`, plus a derived portrait (FR-W-8) and a derived `pet/` atlas (1.1). | K0, UI-1 |
 | FR-W-2 | Waifus MUST live in the app-data directory (`waifus/<id>/`). They MUST be created, edited and deleted only through the app UI (K3). A dev seed script MAY import packs before the creator exists. | K0, K3 |
-| FR-W-3 | **Invariance:** for the same thread state and input, switching the active waifu MUST NOT change model selection, effort, router decisions, available tools, permissions or memory recall results. Only the system prompt, TTS parameters, VRM and pet sprites differ. A parameterized test over two fixture waifus MUST enforce this. | K0 |
+| FR-W-3 | **Invariance:** for the same thread state and input, switching the active waifu MUST NOT change model selection, effort, router decisions, available tools, permissions or memory recall results. Only the system prompt, TTS parameters, VRM, portrait and pet sprites differ. A parameterized test over two fixture waifus MUST enforce this. | K0 |
 | FR-W-4 | `id` is an immutable slug (`[a-z0-9-]{2,32}`). The display `name` (1 to 32 chars) MAY be renamed. | K0 |
 | FR-W-5 | Deleting a waifu MUST remove her pack and sprites. Existing messages keep a **snapshot of her name** and render as "(deleted)" if needed. | K3 |
 | FR-W-6 | Packs MUST be validated on load; an invalid pack is skipped and reported in the UI and log, never crashing the kernel. | K0 |
+| FR-W-8 | **Portrait (D-091):** her picture is the VRM's own thumbnail, scaled down by the engine and served like the VRM; without one, her initial. The user MAY replace it from her profile with an image file and MAY reset it to the model's face. The replacement is stored in the app data folder, never in a pack. It appears in the companion chip, the conversation list and her messages. | UI-1 |
+| FR-W-9 | **Character profile (D-091):** her portrait, name, traits, About and a **Chat** button that starts a new chat with her, plus *Change picture* and *Use the model's face*. No creator handle, likes, counts, sharing or similar characters. | UI-1 |
 | FR-W-7 | **Premade companions:** **Luna** and **Yuri** are built-in, read-only packs (`assets/premade/<id>/`, resolved through `KASANE/paths.py`), loaded together with user packs from `waifus/`. Ids are unique across both; a user pack cannot shadow a premade one. The user MAY duplicate a premade pack to edit it (D-041). | K0 |
 
 ### 2.2 Chat (FR-C)
@@ -355,7 +357,7 @@ In delivery order (D-085, amended by D-086; provisional). A checkpoint is open u
 | K0 | FR-W-1..4, 6, 7; FR-S-5; FR-R-1, 3; FR-V-1 (gpt_sovits per companion), FR-V-7 (text-only); FR-MEM-1..3 | Open (window and voice not run) |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 | Open |
 | K1c | FR-MODE-1..9 (D-074, D-075) | Open (the user ran the build 2026-11-17; items not ticked) |
-| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`) | In progress |
+| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`); FR-W-8, 9 (portrait and profile, D-091) | In progress |
 | UI-2 | The design standard (D-086): `DESIGN.md`, tokens, primitives, applied to every surface | Not started |
 | K1b | FR-DIST-1, 9, 11 (walking-skeleton installer on a clean machine) | Not started |
 | K2 | FR-C-4 (camera, screenshot, paste image), FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-1 (provider interface), 2..6, 8; FR-VP-1..5; FR-SC-6; FR-MODE-10; FR-SET-1 (Voice) | Not started |

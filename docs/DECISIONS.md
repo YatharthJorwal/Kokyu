@@ -19,7 +19,7 @@ The compact decision reference: what holds now, what is open, what was replaced.
 | 3 | Premade personas: explicit or not? The audience is 18+ (D-090), but every payment provider checked bans sexual products whatever the age; the report recommends non-explicit premades. Also open: a written yes from a provider, UK sales (Ofcom), a lawyer's read on California SB 243. | K7, B-3 |
 | 4 | Premade packs in git. Claude's recommendation: track `persona.md`, `waifu.yaml` and the clip transcripts in the private repo; keep VRM and WAV out of git (size, invariant 5) with a separate backup. | Every commit |
 | 5 | An API key for testing the API path. | K1 checkpoint |
-| 6 | A face for the companion (a VRM thumbnail portrait). | UI-1, K2 |
+| 6 | Closed: her face is the VRM's own thumbnail, changeable in her profile (D-091). | — |
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
 | 8 | D-057's per-launch WebSocket token. | K7 |
 | 9 | Delete `KASANE/vrm/` (C-1b, the user's action). | Nothing |
@@ -273,6 +273,9 @@ Docs reset; UI-1 (model names first); K1b installer skeleton (time-boxed); K2 st
 
 **D-090 Audience: 18+, with an age check at first run** · Accepted · User · 2026-11-17
 "go with 18+". From `docs/research-age-content-2026-11.md` (TODO B-9): every comparable app with sexual content is 18+, and 16+ is not a norm or a legal line anywhere checked. Kōkyū is sold for adults: the first run asks for age before anything else and stops under 18 (FR-WIZ-8); the terms say 18+. Whether the premade personas stay explicit is separate and open (open question 3). Supersedes D-088.
+
+**D-091 Her face, and a character profile** · Accepted · User · 2026-11-17
+"yes, just a vrm face. we will include a way to change the pfp in character profile though." Her portrait is the VRM's own thumbnail (VRM 1.0 `meta.thumbnailImage`; VRoid exports a face shot, as Luna's and Yuri's are), scaled down by the engine and served like the VRM. A companion whose VRM has none shows her initial. The user may replace the portrait from her profile and reset it to the model's face; the replacement lives in the app data folder, so premade packs stay read-only (D-039, D-087). A **character profile** shows her portrait, name, traits, a short About and a Chat button; packs gain an optional `about` field. It is not a platform page: no creator handle, likes, counts, sharing or similar characters. character.ai screens were references only, nothing copied. Closes open question 6. Amends FR-W-1 and FR-W-3 (the portrait joins what differs per companion) and R-01; adds FR-W-8 and FR-W-9.
 
 ## Superseded
 

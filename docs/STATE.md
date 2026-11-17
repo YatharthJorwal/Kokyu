@@ -3,7 +3,7 @@
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
 - **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models)
-- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) and UI1-03 unpriced models under the cap (`3e552e7`) are done. **Next: UI1-06**, her face (needs open question 6). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) and UI1-03 unpriced models under the cap (`3e552e7`) are done. **Next: UI1-06**, her face, then UI1-06b her profile (D-091). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
 - **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `0a6cdb8`; `a9ab16d` (the age research, 18+) and the UI1-03 commits are not pushed yet.
 - **Last green run (the user's PC, 2026-11-17, at `3e552e7`):** `npm run check`: tsc, frontend tests 142, vite build, cargo check, pytest 1243.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
@@ -58,7 +58,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 3. Premade personas explicit or not (18+ is decided, D-090); payment provider, UK and SB 243 follow-ups (TODO B-10..12).
 4. Premade packs in git: recommendation in `DECISIONS.md` (text tracked, VRM and WAV not).
 5. An API key for testing the API path.
-6. A face for the companion (a portrait from the VRM thumbnail).
+6. Closed: her face is the VRM thumbnail, changeable in her profile (D-091).
 7. The six assumed K1c answers (D-074): confirm or reverse.
 8. D-057: move the WebSocket token check earlier?
 9. C-1b: the user deletes `KASANE/vrm/`.
