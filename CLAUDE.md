@@ -7,7 +7,7 @@ Instructions for any AI coding agent working in this repository. **Read this fil
 Kōkyū is a Windows desktop app for AI companions, **primarily a roleplay character app** (D-079). It looks like a normal chatbot (sidebar, one input box, one model switcher), and each thread is either a **Chat** or a **Roleplay** (D-074). Planned on top: a VRM **stage view** with voice (K2), an in-app **companion creator** (K3), **desktop pets** and a walkable **3D apartment** (1.1).
 
 - **A companion ("waifu") is a voice and a persona, nothing more.** Switching her never changes the model, intelligence, tools, permissions, memory scope or conversation mode.
-- **KASANE** is the kernel (Python, `KASANE/`). The client is Tauri 2 + React + TypeScript (`src/`, `src-tauri/`), with three.js / `@pixiv/three-vrm` waiting in `src/engine/` for K2.
+- **KASANE** is the kernel (Python, `KASANE/`); users meet the name only as a quiet credit (D-089), and UI text says "Kōkyū's engine". The client is Tauri 2 + React + TypeScript (`src/`, `src-tauri/`), with three.js / `@pixiv/three-vrm` waiting in `src/engine/` for K2.
 - Seeded from the author's earlier projects **Yuri** and **Luna** (`github.com/YatharthJorwal/Yuri`, `.../Luna`); Yuri and Luna are now only premade characters. Luna's apartment code is the base for the 3D apartment (D-078).
 - One user per install, one Windows PC, local-first. Development machine: RTX 3060 12 GB, i5-14400F, 32 GB DDR5-4800.
 - Commercial direction: a paid, one-time-purchase app where users bring their own models and keys (`docs/PRODUCT.md`). Ordinary users and a clean-machine install shape priorities.

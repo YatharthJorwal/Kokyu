@@ -23,7 +23,6 @@ The compact decision reference: what holds now, what is open, what was replaced.
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
 | 8 | D-057's per-launch WebSocket token. | K7 |
 | 9 | Delete `KASANE/vrm/` (C-1b, the user's action). | Nothing |
-| 10 | Where users meet the name KASANE, if anywhere (options in `HANDOFF.md`). The UI says "Kōkyū's engine" until then. | Nothing |
 
 ## In force
 
@@ -37,6 +36,9 @@ Kōkyū started from a copy of Yuri with fresh history; Yuri and Luna stay untou
 
 **D-003 A companion is a voice and a persona only** · Accepted · User · 2026-11-11
 Pack = prompt, TTS parameters, VRM, pet sprites; no model, tools, permissions or memory keys. FR-W-3 test; CLAUDE.md invariant 1.
+
+**D-089 KASANE as a quiet credit** · Accepted · User · 2026-11-17
+"B: quiet credit". Users meet the engine's name only where it helps: the Doctor row "Engine (KASANE)", About ("Engine: KASANE" and one line on the name), the log `logs/kasane.log`, and the packaged process `kasane.exe` (K1b). Banners and messages keep saying "Kōkyū's engine"; no "powered by" branding. Amends D-001.
 
 **D-024 Kernel folder `KASANE/`, flat modules** · Accepted · User (folder), Claude (layout) · 2026-11-11
 The kernel folder is on `sys.path`; modules import by top-level name. There is no `kasane` package.

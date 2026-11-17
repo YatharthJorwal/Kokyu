@@ -61,7 +61,6 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 7. The six assumed K1c answers (D-074): confirm or reverse.
 8. D-057: move the WebSocket token check earlier?
 9. C-1b: the user deletes `KASANE/vrm/`.
-10. Where users meet the name KASANE, if anywhere (options in `HANDOFF.md` §4).
 
 ## 4. Known issues and risks
 

@@ -26,7 +26,7 @@ Tauri window (React, src/app) ⇄ WebSocket, protocol v1 ⇄ KASANE kernel on 12
 | Process | Started by | When | Port and notes |
 |---|---|---|---|
 | Tauri shell (`src-tauri/src/lib.rs`) | the user | launch | One window (`main`) and a tray with Show/Hide and Quit. Closing the window hides it. |
-| Kernel (`KASANE/app.py` on `.venv` Python) | the shell, on its own thread | launch, after a stale-kernel sweep | `127.0.0.1:8780` (D-027). Hidden window, log `logs/kernel.log`. |
+| Kernel (`KASANE/app.py` on `.venv` Python) | the shell, on its own thread | launch, after a stale-kernel sweep | `127.0.0.1:8780` (D-027). Hidden window, log `logs/kasane.log`; packaged, the process is `kasane.exe` (D-089). |
 | Ollama | the user (external service) | already running | `11434`. The kernel only talks HTTP to it. |
 | `llama-server` | the kernel (`router/providers/llamacpp.py`) | only when the user picks a llama.cpp model or messages a thread that uses one (D-060) | `8080` (`llamacpp.port`). One at a time, for the picked preset; the binary is configured, else the one inside Ollama. Log `logs/llama-server.log`. |
 | GPT-SoVITS (`api_v2.py`) | the kernel (`audio/tts.py` `ensure_server`) | when the user turns voice mode on (D-061); stopped `tts.idle_stop_s` (300 s) after it goes off | `9880`, from `tts.gpt_sovits.api_url`; folder in `tts.gpt_sovits.launch`. A server already answering on the port is used, never a second. Log `logs/gpt_sovits.log`. |
@@ -184,7 +184,7 @@ data/
   active_waifu.txt      the companion used last
   <endpoint>_models.json  cached API catalogs
   waifus/<id>/          user-made companions (the creator is K3)
-logs/                   kernel.log, llama-server.log, gpt_sovits.log, audit.jsonl, latency.jsonl
+logs/                   kasane.log, llama-server.log, gpt_sovits.log, audit.jsonl, latency.jsonl
 assets/premade/<id>/    Luna and Yuri: waifu.yaml, prompt.md, model.vrm, voice/ref.wav (read-only, untracked, D-041)
 ```
 

@@ -41,10 +41,10 @@ Everything is committed and pushed (the user asked). Nothing is half-done. Untra
 
 1. `git status`, `git log -5 --oneline`, `npm run check`.
 2. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), and Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect).
-3. Ask which KASANE option they want (below), and which open question to settle first.
+3. Ask which open question to settle first; the age research session's report may be in `docs/` (D-088, TODO B-9).
 4. Next item: **UI1-03**, unpriced models under the cap (D-083).
 
-**KASANE: where users could meet it** (open question 10). It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
+**KASANE: decided, option B** (D-089): the Doctor row, About, `logs/kasane.log`; `kasane.exe` waits for packaging (K1b-02). The options were: It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
 - A. Internal only: folder, logs, code. The UI keeps "Kōkyū's engine" (today).
 - B. A quiet credit (Claude's recommendation): the sidecar is `kasane.exe` (Task Manager shows something better than `python.exe`), the Doctor row reads "Engine (KASANE)", About shows "Engine: KASANE 1.0" with one line on the name, logs are `kasane.log`. Banners still say "Kōkyū's engine".
 - C. A visible brand ("powered by KASANE", the banner naming it): a second name buyers must learn; not for 1.0.

@@ -58,7 +58,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 ## Phase K1b: Installer walking skeleton (D-035, D-081), time-boxed to about two sessions
 
 - [ ] K1b-01 Kernel packaging spike: PyInstaller one-folder vs embedded CPython (size, antivirus, updates) (`ARCHITECTURE.md` packaging questions)
-- [ ] K1b-02 Tauri per-user NSIS `.exe`, WebView2 bootstrapper, kernel as a sidecar, data in `%APPDATA%\Kokyu` (D-081)
+- [ ] K1b-02 Tauri per-user NSIS `.exe`, WebView2 bootstrapper, kernel as a sidecar named `kasane.exe`, data in `%APPDATA%\Kokyu` (D-081, D-089)
 - [ ] K1b-03 Clean Windows VM (no Python, Node, Rust, Git): install, launch, a chat (local model, or an API key once there is one), uninstall
 - [ ] K1b-04 Record antivirus/SmartScreen behaviour, size and install time in `STATE.md`
 - **Checkpoint K1b:** a clean-machine install reaches a working chat; the packaging approach is a decision.
