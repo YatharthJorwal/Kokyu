@@ -577,3 +577,53 @@ test("a confirm is asked and answered without closing what it sits on", () => {
   s = reduce(s, { kind: "confirm", ask: null });
   assert.equal(s.confirm, null);
 });
+
+// UI1-10 (D-095): the keyboard
+
+import { anyModal, paletteItems, shortcutFor } from "../src/app/keys.ts";
+
+const key = (k, mods = {}) => ({ key: k, ctrlKey: false, metaKey: false, altKey: false, shiftKey: false, ...mods });
+
+test("Ctrl+N, Ctrl+K, Ctrl+comma and Escape are the shortcuts; a handled Escape is not a Stop", () => {
+  assert.equal(shortcutFor(key("n", { ctrlKey: true })), "new_chat");
+  assert.equal(shortcutFor(key("K", { ctrlKey: true })), "palette");
+  assert.equal(shortcutFor(key(",", { ctrlKey: true })), "settings");
+  assert.equal(shortcutFor(key("Escape")), "stop");
+  assert.equal(shortcutFor(key("Escape", { defaultPrevented: true })), null);
+  assert.equal(shortcutFor(key("n", { ctrlKey: true, shiftKey: true })), null);
+  assert.equal(shortcutFor(key("n")), null);
+  assert.equal(shortcutFor(key("k", { ctrlKey: true, isComposing: true })), null);
+});
+
+test("any open dialog or pop-up keeps the shortcuts away", () => {
+  assert.equal(anyModal(initialState), false);
+  for (const open of [{ settings: "models" }, { roleplayOpen: true }, { profile: "luna" }, { confirm: { title: "x", action: "y" } }, { pickerOpen: true }, { palette: true }]) {
+    assert.equal(anyModal({ ...initialState, ...open }), true);
+  }
+});
+
+test("the palette lists what works now and filters by every word", () => {
+  const base = run(
+    online,
+    frame("waifu_state", { waifus: [{ id: "luna", name: "Luna" }, { id: "yuri", name: "Yuri" }], active: "luna", pending: null }),
+    frame("thread_list", { query: "", threads: [thread("a", { title: "Garden plans" }), thread("b", { title: "Cat names" })] }),
+    frame("thread_opened", { thread: thread("a", { title: "Garden plans" }), messages: [] }),
+  );
+  const labels = (s, q) => paletteItems(s, q).map((i) => i.label);
+  const all = labels(base, "");
+  assert.ok(all.includes("New chat") && all.includes("Talk to Yuri") && all.includes("Luna's profile"));
+  assert.ok(!all.includes("Talk to Luna")); // she is already here
+  assert.ok(all.includes("Cat names") && !all.includes("Garden plans")); // not the open one
+  assert.deepEqual(labels(base, "cat NA"), ["Cat names"]);
+  assert.deepEqual(labels(base, "zzz"), []);
+  // mid-reply: no new thread, no model switch, no other conversation
+  const busy = reduce(base, { kind: "sent", text: "hi" });
+  const during = labels(busy, "");
+  assert.ok(!during.includes("New chat") && !during.includes("Choose a model") && !during.includes("Cat names"));
+  assert.ok(during.includes("Settings"));
+});
+
+test("opening the palette closes the model picker", () => {
+  const s = reduce({ ...initialState, pickerOpen: true }, { kind: "palette", open: true });
+  assert.deepEqual([s.palette, s.pickerOpen], [true, false]);
+});

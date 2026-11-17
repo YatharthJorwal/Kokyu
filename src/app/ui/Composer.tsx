@@ -152,7 +152,7 @@ export function Composer() {
               </svg>
             </button>
           ) : (
-            <button type="button" className="stop" aria-label="Stop" title="Stop" onClick={() => actions.stop()}>
+            <button type="button" className="stop" aria-label="Stop" title="Stop (Esc)" onClick={() => actions.stop()}>
               <svg viewBox="0 0 24 24" aria-hidden="true">
                 <rect x="7" y="7" width="10" height="10" rx="1.5" />
               </svg>
@@ -288,7 +288,10 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
       className="tray"
       ref={wrapper}
       onKeyDown={(e) => {
-        if (e.key === "Escape") setOpen(false);
+        if (e.key === "Escape") {
+          e.preventDefault(); // closing the tray, not stopping a reply (UI1-10)
+          setOpen(false);
+        }
       }}
     >
       <button

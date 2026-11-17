@@ -208,6 +208,16 @@ export const actions = {
     researchThreads();
   },
 
+  // ── the Ctrl+K palette (UI1-10) ─────────────────────────────────────
+
+  openPalette(): void {
+    dispatch({ kind: "palette", open: true });
+  },
+
+  closePalette(): void {
+    dispatch({ kind: "palette", open: false });
+  },
+
   // ── toasts and confirms (UI1-09) ────────────────────────────────────
 
   toast(text: string): void {

@@ -151,6 +151,8 @@ export interface ChatState {
   toasts: Toast[];
   /** UI1-09: the in-app confirm being asked, or null. */
   confirm: ConfirmAsk | null;
+  /** UI1-10: the Ctrl+K palette is open. */
+  palette: boolean;
   /** FR-MODE-6: the dialog's card save. "pending" until its own answer: the
    * `scenarios` frame naming the saved card, or a store error. null: none asked. */
   scenarioSave: ScenarioSave;
@@ -181,6 +183,7 @@ export type ChatEvent =
   | { kind: "toast"; text: string }
   | { kind: "toast_gone"; id: number }
   | { kind: "confirm"; ask: ConfirmAsk | null }
+  | { kind: "palette"; open: boolean }
   /** A card save went out (FR-MODE-6). */
   | { kind: "scenario_saving" }
   /** The dialog's thread_new went out (FR-MODE-6). */
@@ -215,6 +218,7 @@ export const initialState: ChatState = {
   profile: null,
   toasts: [],
   confirm: null,
+  palette: false,
   scenarioSave: null,
   roleplayStart: null,
 };
@@ -613,6 +617,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, toasts: state.toasts.filter((t) => t.id !== event.id) };
     case "confirm":
       return { ...state, confirm: event.ask };
+    case "palette":
+      return { ...state, palette: event.open, pickerOpen: event.open ? false : state.pickerOpen };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
     case "roleplay_starting":

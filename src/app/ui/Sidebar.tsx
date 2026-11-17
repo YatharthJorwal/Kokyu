@@ -47,7 +47,7 @@ function NewButton({ disabled }: { disabled: boolean }) {
           at={menu}
           onClose={() => setMenu(null)}
           items={[
-            { label: "Chat", onSelect: () => actions.newThread() },
+            { label: "Chat", hint: "Ctrl+N", onSelect: () => actions.newThread() },
             // FR-MODE-6: a story from a scenario card, or blank
             { label: "Roleplay…", onSelect: () => actions.openRoleplay() },
           ]}
@@ -99,7 +99,10 @@ export function Sidebar() {
           value={query}
           onChange={(e) => setQuery(e.target.value)}
           onKeyDown={(e) => {
-            if (e.key === "Escape") setQuery("");
+            if (e.key === "Escape" && query) {
+              e.preventDefault(); // clearing the search, not stopping a reply (UI1-10)
+              setQuery("");
+            }
           }}
         />
       </label>
@@ -126,7 +129,7 @@ export function Sidebar() {
       </nav>
 
       <div className="sidebar-footer">
-        <button type="button" className="settings" aria-label="Settings" title="Settings" onClick={() => actions.openSettings()}>
+        <button type="button" className="settings" aria-label="Settings" title="Settings (Ctrl+,)" onClick={() => actions.openSettings()}>
           <svg viewBox="0 0 24 24" aria-hidden="true">
             <circle cx="12" cy="12" r="3.2" />
             <path d="M12 2.8l1.6 2.3 2.7-.7.9 2.6 2.6.9-.7 2.7 2.3 1.6-2.3 1.6.7 2.7-2.6.9-.9 2.6-2.7-.7L12 21.2l-1.6-2.3-2.7.7-.9-2.6-2.6-.9.7-2.7L2.8 12l2.3-1.6-.7-2.7 2.6-.9.9-2.6 2.7.7z" />
@@ -167,7 +170,10 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
     };
     const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
       if (e.key === "Enter") done(true);
-      else if (e.key === "Escape") done(false);
+      else if (e.key === "Escape") {
+        e.preventDefault();
+        done(false);
+      }
     };
     return (
       <li className="thread-row">

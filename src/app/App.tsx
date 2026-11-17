@@ -3,6 +3,7 @@
 // Stage view with the avatar arrives in K2 (its engine waits in src/engine/).
 
 import { Composer } from "./ui/Composer";
+import { CommandPalette } from "./ui/CommandPalette";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { ConnectionBanner } from "./ui/ConnectionBanner";
 import { NoticeBar } from "./ui/NoticeBar";
@@ -31,6 +32,7 @@ export function App() {
       <RoleplayDialog />
       <ProfileDialog />
       <ConfirmDialog />
+      <CommandPalette />
       <Toasts />
     </div>
   );

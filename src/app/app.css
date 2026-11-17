@@ -2841,3 +2841,69 @@ button:disabled {
   background: var(--accent);
   color: var(--on-accent);
 }
+
+/* ── the Ctrl+K palette (UI1-10, D-095) ── */
+.palette-backdrop {
+  align-items: flex-start;
+  padding-top: 12vh;
+}
+
+.palette {
+  display: flex;
+  flex-direction: column;
+  width: min(560px, calc(100vw - 48px));
+  max-height: min(480px, 70vh);
+  overflow: hidden;
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  background: var(--panel);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+}
+
+.palette-input {
+  flex: none;
+  padding: 14px 16px;
+  border: 0;
+  border-bottom: 1px solid var(--line);
+  outline: none;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: 15px;
+}
+
+.palette-list {
+  margin: 0;
+  padding: 6px;
+  overflow-y: auto;
+  list-style: none;
+}
+
+.palette-group {
+  display: block;
+  margin: 8px 10px 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.palette-item {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+  padding: 8px 10px;
+  border-radius: 8px;
+  cursor: pointer;
+}
+
+.palette-item.active {
+  background: var(--panel-2);
+  box-shadow: inset 3px 0 0 var(--accent);
+}
+
+.palette-empty {
+  margin: 0;
+  padding: 16px;
+  color: var(--muted);
+}
