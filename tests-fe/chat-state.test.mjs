@@ -7,6 +7,7 @@ import {
   canSend,
   canStartThread,
   currentMode,
+  fromStored,
   initialState,
   lastExchange,
   reduce,
@@ -234,12 +235,25 @@ test("search hits older than the history list stay; Regenerate needs a saved thr
   assert.equal(canRegenerate(s), true);
 });
 
+test("her portrait stamp reaches the roster, and replies remember who spoke (D-091)", () => {
+  let s = run(
+    online,
+    frame("waifu_state", { active: "luna", waifus: [{ id: "luna", name: "Luna", portrait: "m1-2" }], problems: [], pending: null }, null),
+  );
+  assert.equal(s.companion.portrait, "m1-2");
+  assert.equal(fromStored({ ...stored(1, "assistant", "hi"), speaker_waifu_id: "luna" }).speakerId, "luna");
+  s = reduce(s, frame("turn_start", { user_text: "a" }));
+  s = reduce(s, frame("token", { text: "hello [happy]" }));
+  s = reduce(s, frame("turn_done", {}));
+  assert.equal(s.messages.at(-1).speakerId, "luna");
+});
+
 test("companion name, observer role and a lost connection", () => {
   let s = run(
     online,
     frame("waifu_state", { active: "yuri", waifus: [{ id: "yuri", name: "Yuri" }], problems: [], pending: null }, null),
   );
-  assert.deepEqual(s.companion, { id: "yuri", name: "Yuri" });
+  assert.deepEqual(s.companion, { id: "yuri", name: "Yuri", portrait: null });
   s = reduce(s, frame("surface_status", { role: "observer" }, null));
   assert.equal(canSend(s), false);
   s = reduce(s, frame("surface_status", { role: "driver" }, null));

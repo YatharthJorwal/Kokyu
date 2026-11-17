@@ -127,4 +127,4 @@ def test_reload_picks_up_new_packs(tmp_path):
 def test_describe_exposes_no_paths_or_prompt_text(tmp_path):
     make_pack(tmp_path / "premade", "alpha")
     info = WaifuRegistry(tmp_path / "premade", tmp_path / "u").describe()[0]
-    assert set(info) == {"id", "name", "premade", "traits"}
+    assert set(info) == {"id", "name", "premade", "traits", "portrait"}

@@ -99,6 +99,10 @@ export interface ScreenCompanions {
 export interface CompanionInfo {
   id: string;
   name: string;
+  premade?: boolean;
+  traits?: string[];
+  /** A version stamp for `/waifus/<id>/portrait`, or null (D-091, FR-W-8). */
+  portrait?: string | null;
 }
 
 export type ClientType = (typeof CLIENT_TYPES)[number];

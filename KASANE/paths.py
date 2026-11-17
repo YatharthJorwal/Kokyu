@@ -92,6 +92,11 @@ def waifus_dir() -> Path:
     return app_data_dir() / "waifus"
 
 
+def portraits_dir() -> Path:
+    """Companion portraits: the user's chosen pictures and the cached VRM thumbnails (D-091)."""
+    return app_data_dir() / "portraits"
+
+
 def premade_dir() -> Path:
     """Built-in companions (read-only, D-041)."""
     return resource_dir() / "assets" / "premade"

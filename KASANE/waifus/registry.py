@@ -10,6 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import paths
+from waifus import portrait
 from waifus.pack import PackError, Waifu, load_pack
 
 log = logging.getLogger("kokyu.waifus")
@@ -68,8 +69,12 @@ class WaifuRegistry:
         return len(self._waifus)
 
     def describe(self) -> list[dict]:
-        """What clients may know about each waifu. No paths, no prompt text."""
-        return [{"id": w.id, "name": w.name, "premade": w.premade, "traits": list(w.traits)} for w in self.list()]
+        """What clients may know about each waifu. No paths, no prompt text. `portrait` is
+        a version stamp for `/waifus/<id>/portrait` (D-091), or None when nothing can be read."""
+        return [
+            {"id": w.id, "name": w.name, "premade": w.premade, "traits": list(w.traits), "portrait": portrait.version(w)}
+            for w in self.list()
+        ]
 
 
 def _pack_dirs(folder: Path) -> list[Path]:

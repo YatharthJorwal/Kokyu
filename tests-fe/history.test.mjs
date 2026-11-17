@@ -53,8 +53,9 @@ test("the roster and the active companion come from waifu_state", () => {
     initialState,
     frame("waifu_state", { active: "luna", waifus: [{ id: "yuri", name: "Yuri", premade: true, traits: [] }, { id: "luna", name: "Luna" }], problems: [], pending: null }),
   );
-  assert.deepEqual(s.roster, [{ id: "yuri", name: "Yuri" }, { id: "luna", name: "Luna" }]); // no extra fields kept
-  assert.deepEqual(s.companion, { id: "luna", name: "Luna" });
+  // no extra fields kept; the portrait stamp is the one addition (D-091)
+  assert.deepEqual(s.roster, [{ id: "yuri", name: "Yuri", portrait: null }, { id: "luna", name: "Luna", portrait: null }]);
+  assert.deepEqual(s.companion, { id: "luna", name: "Luna", portrait: null });
   assert.equal(s.pendingCompanion, null);
 });
 

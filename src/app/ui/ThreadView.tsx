@@ -18,15 +18,13 @@ import {
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
+import { Portrait } from "./Portrait";
 import { WakingCard } from "./WakingCard";
 
-/** Her initial in a circle, shown when Appearance → Messages is "Bubbles" (D-073). */
-function Avatar({ name }: { name: string | null }) {
-  return (
-    <span className="avatar" aria-hidden="true">
-      {name ? name.slice(0, 1).toUpperCase() : ""}
-    </span>
-  );
+/** Her face in a circle, shown when Appearance → Messages is "Bubbles" (D-073, D-091). */
+function Avatar({ id, name }: { id: string | null | undefined; name: string | null }) {
+  const portrait = useChat((s) => s.roster.find((w) => w.id === id)?.portrait ?? null);
+  return <Portrait id={id} name={name ?? ""} portrait={portrait} className="avatar" />;
 }
 
 function Message({ m, lastReply, roleplay }: { m: ChatMessage; lastReply: boolean; roleplay: boolean }) {
@@ -42,7 +40,7 @@ function Message({ m, lastReply, roleplay }: { m: ChatMessage; lastReply: boolea
   const classes = ["msg", m.role, m.pending ? "pending" : "", m.failed ? "failed" : ""].filter(Boolean).join(" ");
   return (
     <div className={classes}>
-      {m.role === "assistant" ? <Avatar name={m.speaker ?? null} /> : null}
+      {m.role === "assistant" ? <Avatar id={m.speakerId} name={m.speaker ?? null} /> : null}
       {m.role === "assistant" ? (
         // The actions share the name's line (shown on hover), so the reply ends at its text.
         <div className="msg-head">
@@ -111,6 +109,7 @@ export function ThreadView() {
   const turn = useChat((s) => s.turn);
   const streaming = useChat(visibleStream);
   const companion = useChat((s) => s.companion?.name ?? null);
+  const companionId = useChat((s) => s.companion?.id ?? null);
   const modelState = useChat((s) => s.modelStatus?.state ?? null);
   // The mode is the open thread's (FR-MODE-1), never the companion's.
   const roleplay = useChat((s) => currentMode(s) === "roleplay");
@@ -165,7 +164,7 @@ export function ThreadView() {
       {turn !== "idle" && streaming ? (
         // While she thinks, the line above the input box says so (ThinkingRow).
         <div className="msg assistant streaming">
-          <Avatar name={companion} />
+          <Avatar id={companionId} name={companion} />
           <div className="msg-head">{companion ? <span className="speaker">{companion}</span> : null}</div>
           <div className="bubble">
             <Markdown text={streaming} roleplay={roleplay} />

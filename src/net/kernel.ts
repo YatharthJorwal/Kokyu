@@ -5,6 +5,8 @@
 import { clientFrame, parseFrame, type ClientData, type ClientType, type Frame } from "./protocol";
 
 export const KERNEL_WS_URL = "ws://127.0.0.1:8780/ws";
+/** The same engine over HTTP: files such as her portrait (D-091). */
+export const KERNEL_HTTP_URL = "http://127.0.0.1:8780";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
 

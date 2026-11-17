@@ -39,6 +39,7 @@ from audio import arbiter, tts, voice_mode
 from config import CONFIG
 from memory import writer
 from router import listing as model_listing
+from waifus import portrait
 
 log = logging.getLogger(__name__)
 
@@ -114,6 +115,20 @@ async def waifu_vrm(waifu_id: str) -> FileResponse:
     if waifu is None:
         raise HTTPException(status_code=404, detail="unknown companion")
     return FileResponse(waifu.vrm_path, media_type="model/gltf-binary")
+
+
+@app.get("/waifus/{waifu_id}/portrait")
+async def waifu_portrait(waifu_id: str) -> FileResponse:
+    """Her face (D-091, FR-W-8): the picture the user chose, else the VRM's thumbnail
+    scaled down. 404 when she has neither; the window then shows her initial. The URL
+    carries a version (`?v=`), so the browser may keep it."""
+    waifu = waifus.get_registry().get(waifu_id)
+    if waifu is None:
+        raise HTTPException(status_code=404, detail="unknown companion")
+    path = await asyncio.to_thread(portrait.portrait_file, waifu)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no portrait")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "max-age=31536000, immutable"})
 
 
 async def apply_shell_key(provider_id: str, key: str | None) -> None:

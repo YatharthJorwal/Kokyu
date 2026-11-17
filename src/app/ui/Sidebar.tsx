@@ -11,16 +11,9 @@ import type { ThreadInfo } from "../../net/protocol";
 import type { Companion } from "../chat-state";
 import { groupThreads } from "../history";
 import { actions, useChat } from "../store";
+import { Portrait } from "./Portrait";
 
 const SEARCH_DELAY_MS = 250;
-
-export function Initial({ name }: { name: string | null | undefined }) {
-  return (
-    <span className="avatar-dot" aria-hidden="true">
-      {(name ?? "?").slice(0, 1).toUpperCase()}
-    </span>
-  );
-}
 
 export function Sidebar() {
   const threads = useChat((s) => s.threads);
@@ -205,9 +198,10 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
         title={label}
       >
         {waifu ? (
-          <span className="thread-badge" title={waifu.name} aria-label={`with ${waifu.name}`}>
-            {waifu.name.slice(0, 1).toUpperCase()}
-          </span>
+          <>
+            <Portrait id={waifu.id} name={waifu.name} portrait={waifu.portrait} className="thread-badge" title={waifu.name} />
+            <span className="sr-only">with {waifu.name}</span>
+          </>
         ) : null}
         <span className="thread-title">{label}</span>
         {thread.mode === "roleplay" ? <span className="badge">Roleplay</span> : null}

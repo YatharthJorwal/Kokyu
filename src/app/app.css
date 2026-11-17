@@ -153,8 +153,8 @@ button:disabled {
   display: grid;
   flex: none;
   place-items: center;
-  width: 18px;
-  height: 18px;
+  width: 24px;
+  height: 24px;
   border-radius: 50%;
   background: var(--line);
   font-size: 11px;
@@ -236,6 +236,21 @@ button:disabled {
   background: var(--accent);
   color: var(--accent-ink);
   font-weight: 700;
+}
+
+/* Her face (D-091): the picture fills whichever circle it is in. */
+.has-face {
+  overflow: hidden;
+  padding: 0;
+  background: var(--line) !important;
+}
+
+.has-face img {
+  display: block;
+  width: 100%;
+  height: 100%;
+  object-fit: cover;
+  border-radius: 50%;
 }
 
 .new-chat {

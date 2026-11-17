@@ -35,6 +35,8 @@ export interface ChatMessage {
   role: "user" | "assistant" | "divider";
   text: string;
   speaker: string | null;
+  /** Who spoke it, for her portrait (D-091); null for the user and old rows. */
+  speakerId?: string | null;
   /** Stop cut the reply short (FR-C-2). */
   stopped?: boolean;
   /** Sent by this window, not yet acknowledged by `turn_start`. */
@@ -55,6 +57,8 @@ export interface Notice {
 export interface Companion {
   id: string;
   name: string;
+  /** Her portrait's version stamp, or null for her initial (D-091). */
+  portrait?: string | null;
 }
 
 export interface ChatState {
@@ -172,6 +176,7 @@ export function fromStored(m: ThreadMessage): ChatMessage {
     role: m.role,
     text: m.content,
     speaker: m.speaker_name,
+    speakerId: m.speaker_waifu_id,
     stopped: m.meta?.stopped === true ? true : undefined,
     sentTo: typeof m.meta?.sent_to === "string" ? m.meta.sent_to : undefined,
   };
@@ -390,6 +395,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
               role: "assistant" as const,
               text: reply,
               speaker: state.companion?.name ?? null,
+              speakerId: state.companion?.id ?? null,
               stopped: stopped || undefined,
             },
           ]
@@ -406,7 +412,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, voice: frame.data as VoiceStatus };
     case "waifu_state": {
       const data = frame.data as ServerData["waifu_state"];
-      const roster = (data.waifus ?? []).map((w) => ({ id: w.id, name: w.name }));
+      const roster = (data.waifus ?? []).map((w) => ({ id: w.id, name: w.name, portrait: w.portrait ?? null }));
       const found = roster.find((w) => w.id === data.active);
       const pending = data.pending !== data.active ? roster.find((w) => w.id === data.pending) : undefined;
       return { ...state, roster, companion: found ?? null, pendingCompanion: pending ?? null };

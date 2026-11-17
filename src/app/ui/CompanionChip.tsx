@@ -1,14 +1,13 @@
 // The companion chip in the input row (K1-06, FR-S-1): her avatar and name, and a
 // popover with a searchable list plus "＋ New waifu". Switching changes only her
 // voice and persona (FR-W-3); mid-reply it waits for the reply to finish, and the
-// chip says who comes next (FR-S-2). The kernel writes the divider.
-//
-// shortcut: the avatar is her initial until packs carry a portrait (the creator, K3).
+// chip says who comes next (FR-S-2). The kernel writes the divider. Her face is
+// the portrait from her VRM (D-091).
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
 import { actions, useChat } from "../store";
-import { Initial } from "./Sidebar";
+import { Portrait } from "./Portrait";
 
 export function CompanionChip() {
   const companion = useChat((s) => s.companion);
@@ -41,7 +40,7 @@ export function CompanionChip() {
         disabled={!enabled && !open}
         onClick={() => setOpen((o) => !o)}
       >
-        <Initial name={companion?.name} />
+        <Portrait id={companion?.id} name={companion?.name} portrait={companion?.portrait} className="avatar-dot" />
         <span className="model-name">{name}</span>
         {pending ? <span className="effort-label">then {pending.name}</span> : null}
         <span className="caret" aria-hidden="true">
