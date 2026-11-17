@@ -33,6 +33,8 @@ export const CLIENT_TYPES = [
   "screen_companion",
   "typing",
   "read_aloud",
+  "dictate_start",
+  "dictate",
   "doctor",
   "memory_list",
   "memory_edit",
@@ -59,6 +61,7 @@ export const SERVER_TYPES = [
   "model_status",
   "screen_companions",
   "read_aloud_status",
+  "dictation",
   "waifu_state",
   "waifu_roster",
   "surface_status",
@@ -264,6 +267,8 @@ export interface ServerData {
   model_status: ModelStatus;
   screen_companions: ScreenCompanions;
   read_aloud_status: ReadAloudStatus;
+  /** D-097: a recording's words for this window's input box, or why there are none. */
+  dictation: { text: string; error: string | null };
   waifu_state: { active: string | null; waifus: CompanionInfo[]; problems: string[]; pending: string | null };
   /** D-091: only the roster changed (a new picture); active and pending stay. */
   waifu_roster: { waifus: CompanionInfo[] };
@@ -356,6 +361,10 @@ export interface ClientData {
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
   read_aloud: { on: boolean };
+  /** D-097: recording began; the engine loads speech-to-text meanwhile. */
+  dictate_start: Record<string, never>;
+  /** D-097: the recording (the page's WebM/Opus), written down on this PC, never sent on. */
+  dictate: { audio_b64: string; mime: string };
   doctor: Record<string, never>;
   memory_list: Record<string, never>;
   memory_edit: { id: number; text: string };

@@ -4,13 +4,17 @@
 // now and at start), Memory (read, correct, forget, restore the remembered facts),
 // Doctor (each component's state with a fix hint) and About. What is edited here is
 // saved in settings.json and applies at once (D-070). Appearance is this window's own
-// look, kept on this PC by the page (D-073). Voice, Waifus, Scenes, Pets
-// and Advanced arrive with their phases.
+// look, kept on this PC by the page (D-073). Voice: Read aloud (kept by the engine)
+// and the dictation key (kept by the page, like Appearance) (D-097). Waifus, Scenes,
+// Pets and Advanced arrive with their phases.
 
 import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
 
 import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, SettingsChange, SettingsData } from "../../net/protocol";
 import { modelLabel, type SettingsSection } from "../chat-state";
+import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
+import { setDictationKey, useDictationKey } from "../dictation-key";
+import { VOICE_START_S } from "../read-aloud";
 import { formatSize, formatUsd } from "../models";
 import { actions, useChat } from "../store";
 import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
@@ -19,6 +23,7 @@ import { version } from "../../../package.json";
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "models", label: "Models" },
   { id: "appearance", label: "Appearance" },
+  { id: "voice", label: "Voice" },
   { id: "screen", label: "Screen" },
   { id: "memory", label: "Memory" },
   { id: "doctor", label: "Doctor" },
@@ -61,6 +66,7 @@ export function SettingsDialog() {
           </button>
           {section === "models" ? <ModelsSection /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
+          {section === "voice" ? <VoiceSection /> : null}
           {section === "screen" ? <ScreenSection /> : null}
           {section === "memory" ? <MemorySection /> : null}
           {section === "doctor" ? <DoctorSection /> : null}
@@ -273,6 +279,104 @@ function BudgetForm({ prefs, saving }: { prefs: SettingsData; saving: Saving }) 
       </div>
       <p className="muted settings-hint">A cap of 0 means no API spending at all. Empty means no cap.</p>
     </form>
+  );
+}
+
+/** D-097: Read aloud (the engine keeps it) and the dictation key (this page keeps it). */
+function VoiceSection() {
+  const readAloud = useChat((s) => s.readAloud);
+  const canToggle = useChat((s) => s.role === "driver" && s.connection === "online");
+  const key = useDictationKey((s) => s.key);
+  const [capturing, setCapturing] = useState(false);
+  const [problem, setProblem] = useState<string | null>(null);
+
+  // While capturing, the next key press is the new key. Escape cancels; the capture
+  // listener runs first, so neither the dialog nor a shortcut sees that press.
+  useEffect(() => {
+    if (!capturing) return;
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      e.preventDefault();
+      e.stopPropagation();
+      if (e.key === "Escape") {
+        setCapturing(false);
+        setProblem(null);
+        return;
+      }
+      if (["Control", "Shift", "Alt", "Meta", "AltGraph"].includes(e.key)) return; // still choosing
+      const name = keyName(e);
+      const why = keyProblem(name);
+      if (why) {
+        setProblem(why);
+        return;
+      }
+      setDictationKey(name as string);
+      setProblem(null);
+      setCapturing(false);
+    };
+    document.addEventListener("keydown", onKey, true);
+    return () => document.removeEventListener("keydown", onKey, true);
+  }, [capturing]);
+
+  return (
+    <>
+      <h3>Voice</h3>
+      <p className="muted">
+        Her voice and your speech are handled on this PC. Nothing you say is kept after it is written down.
+      </p>
+      <ul className="settings-list voice">
+        <li>
+          <span className="doctor-main">
+            <strong>Read aloud</strong>
+            <span className="muted">
+              She reads each reply aloud once it is written, in chats and roleplays (in a roleplay, only what she
+              says). Her voice takes about {VOICE_START_S} seconds to start.
+            </span>
+          </span>
+          <label className="switch">
+            <input
+              type="checkbox"
+              role="switch"
+              checked={readAloud?.on ?? false}
+              disabled={!canToggle || !readAloud}
+              onChange={(e) => actions.setReadAloud(e.target.checked)}
+            />
+            <span className="switch-track" aria-hidden="true" />
+            On
+          </label>
+        </li>
+        <li>
+          <span className="doctor-main">
+            <strong>Dictation key</strong>
+            <span className="muted">
+              Press it to start speaking and again to stop; your words go into the message box and are not sent. It
+              works while the Kōkyū window is in front.
+            </span>
+          </span>
+          {capturing ? (
+            <span className="key-capture" role="status">
+              Press a key… (Esc to cancel)
+            </span>
+          ) : (
+            <kbd className="key-chip">{key}</kbd>
+          )}
+          <button
+            type="button"
+            onClick={() => {
+              setProblem(null);
+              setCapturing((c) => !c);
+            }}
+          >
+            {capturing ? "Cancel" : "Change…"}
+          </button>
+          {key !== DEFAULT_DICTATION_KEY && !capturing ? (
+            <button type="button" className="ghost" onClick={() => setDictationKey(DEFAULT_DICTATION_KEY)}>
+              Use {DEFAULT_DICTATION_KEY}
+            </button>
+          ) : null}
+        </li>
+      </ul>
+      <FormStatus text={problem} failed />
+    </>
   );
 }
 

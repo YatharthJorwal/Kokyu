@@ -75,6 +75,7 @@ export function paletteItems(s: ChatState, query: string): PaletteItem[] {
     ...(canPickModel(s) ? [{ key: "model", label: "Choose a model", group: "Actions" as const, action: { kind: "model" as const } }] : []),
     { key: "settings", label: "Settings", group: "Actions", hint: "Ctrl+,", action: { kind: "settings", section: "models" } },
     { key: "appearance", label: "Appearance", group: "Actions", action: { kind: "settings", section: "appearance" } },
+    { key: "voice", label: "Voice: Read aloud, dictation key", group: "Actions", action: { kind: "settings", section: "voice" } },
     { key: "memory", label: "Memory", group: "Actions", action: { kind: "settings", section: "memory" } },
     { key: "doctor", label: "Doctor", group: "Actions", action: { kind: "settings", section: "doctor" } },
   ];

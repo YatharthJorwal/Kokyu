@@ -41,6 +41,16 @@ const voice = new VoicePlayer();
 const TYPING_EVERY_MS = 4000;
 let lastTypingSent = 0;
 
+/** D-097: the window waiting for a recording's words (one recording at a time). */
+type Dictated = ServerData["dictation"];
+let dictationWait: ((d: Dictated) => void) | null = null;
+
+function dictationDone(d: Dictated): void {
+  const wait = dictationWait;
+  dictationWait = null;
+  wait?.(d);
+}
+
 /** The open in-app confirm's answer (UI1-09); one question at a time. */
 let answer: ((yes: boolean) => void) | null = null;
 
@@ -53,10 +63,14 @@ function researchThreads(): void {
 const socket = new KernelSocket({
   onFrame: (frame) => {
     if (frame.type === "speak") voice.enqueue(frame.data as ServerData["speak"]);
+    if (frame.type === "dictation") dictationDone(frame.data as Dictated);
     dispatch({ kind: "frame", frame });
   },
   onStatus: (status) => {
-    if (status !== "online") voice.stop();
+    if (status !== "online") {
+      voice.stop();
+      if (dictationWait) dictationDone({ text: "", error: "The connection to Kōkyū's engine dropped." });
+    }
     dispatch({ kind: "status", status });
     // The New roleplay dialog stayed open across a reconnect: its card list may be stale.
     if (status === "online" && useChat.getState().roleplayOpen) socket.send("scenario_list", {});
@@ -299,6 +313,23 @@ export const actions = {
   /** Task Guide (with the task in the user's words) or OCR watch, on or off (FR-SC-1, 4). */
   setScreenCompanion(mode: "task_guide" | "ocr_watch", on: boolean, task = ""): void {
     socket.send("screen_companion", task ? { mode, on, task } : { mode, on });
+  },
+
+  /** Dictation began recording (D-097): the engine loads speech-to-text meanwhile. */
+  dictateStart(): void {
+    socket.send("dictate_start", {});
+  },
+
+  /** A recording to write down (D-097). Resolves with the words for the input box, or
+   * why there are none; never sends anything to her. */
+  dictate(audio_b64: string, mime: string): Promise<Dictated> {
+    if (!socket.send("dictate", { audio_b64, mime })) {
+      return Promise.resolve({ text: "", error: "Kōkyū's engine is not connected." });
+    }
+    if (dictationWait) dictationDone({ text: "", error: null }); // a stale wait gives way
+    return new Promise((resolve) => {
+      dictationWait = resolve;
+    });
   },
 
   /** Read aloud on or off (D-097): kept by the engine; her voice starts while it is on.

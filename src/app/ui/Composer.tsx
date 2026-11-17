@@ -2,15 +2,29 @@
 // rounded box with the paperclip tray (FR-C-4) and the screen companions in it
 // (K1-05b, FR-SC-1..4), the message (multi-line, Enter sends, Shift+Enter is a
 // newline, a pasted image or a dropped file is attached, FR-C-3) and a round Send, or Stop while a reply runs (FR-C-2).
-// Under the box: a status line at the left (voice and screen companion chips,
+// Under the box: a status line at the left (Read aloud and screen companion chips,
 // FR-SC-2; Temp Chat; else a keyboard hint) and the model chip (K1-10, FR-M-1)
-// at the right. The companion chip moved to the top bar.
+// at the right. The companion chip moved to the top bar. Beside Send, the mic
+// (D-097): it or its key (F9 unless changed) dictates into the box, never sends.
 
-import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type ClipboardEvent,
+  type DragEvent,
+  type KeyboardEvent,
+} from "react";
 
 import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
 import { canSend, currentMode } from "../chat-state";
+import { MAX_DICTATION_S, insertDictation, isDictationKey, micProblem, recordingTime } from "../dictation";
+import { useDictationKey } from "../dictation-key";
+import { anyModal } from "../keys";
 import { readAloudLine, voiceStarting } from "../read-aloud";
+import { MicRecorder, blobToBase64 } from "../recorder";
 import { actions, useChat, type Attachment } from "../store";
 import { Icon } from "./Icon";
 import { ModelChip } from "./ModelChip";
@@ -38,6 +52,7 @@ export function Composer() {
   const companion = useChat((s) => s.companion?.name ?? null);
   const roleplay = useChat((s) => currentMode(s) === "roleplay");
   const box = useRef<HTMLTextAreaElement>(null);
+  const dictation = useDictation(box, setText, setProblem);
 
   const attach = async (file: File | undefined) => {
     if (!file) return;
@@ -139,6 +154,7 @@ export function Composer() {
             aria-label="Message"
             disabled={role === "observer"}
           />
+          <MicButton dictation={dictation} />
           {turn === "idle" ? (
             <button
               type="button"
@@ -171,6 +187,140 @@ export function Composer() {
         <ModelChip />
       </div>
     </div>
+  );
+}
+
+type DictationPhase = "idle" | "opening" | "recording" | "writing";
+
+interface Dictation {
+  phase: DictationPhase;
+  startedAt: number;
+  toggle: () => void;
+}
+
+/** D-097: the mic. Recording → the engine writes it down → the words go into the box
+ * at the caret (never sent). Its key toggles it while the window has focus and no
+ * dialog is open; it stops by itself after MAX_DICTATION_S. */
+function useDictation(
+  box: React.RefObject<HTMLTextAreaElement | null>,
+  setText: React.Dispatch<React.SetStateAction<string>>,
+  setProblem: (p: string | null) => void,
+): Dictation {
+  const [phase, setPhase] = useState<DictationPhase>("idle");
+  const [startedAt, setStartedAt] = useState(0);
+  const mic = useRef<MicRecorder | null>(null);
+  const caret = useRef<number | null>(null);
+  const key = useDictationKey((s) => s.key);
+  const usable = useChat((s) => s.role === "driver" && s.connection === "online");
+
+  const start = async () => {
+    setPhase("opening");
+    setProblem(null);
+    const rec = new MicRecorder();
+    try {
+      await rec.start();
+    } catch (err) {
+      setProblem(micProblem(err));
+      setPhase("idle");
+      return;
+    }
+    mic.current = rec;
+    setStartedAt(Date.now());
+    setPhase("recording");
+    actions.dictateStart();
+  };
+
+  const stop = async () => {
+    const rec = mic.current;
+    mic.current = null;
+    if (!rec) return;
+    setPhase("writing");
+    const blob = await rec.stop();
+    if (!blob) {
+      setPhase("idle");
+      setProblem("Nothing was recorded.");
+      return;
+    }
+    const heard = await actions.dictate(await blobToBase64(blob), blob.type || "audio/webm");
+    setPhase("idle");
+    if (heard.error) return setProblem(heard.error);
+    if (!heard.text.trim()) return setProblem("Didn't catch anything. Try again, a little closer to the mic.");
+    const el = box.current;
+    setText((cur) => {
+      const put = insertDictation(cur, heard.text, el?.selectionStart ?? cur.length, el?.selectionEnd ?? cur.length);
+      caret.current = put.caret;
+      return put.value;
+    });
+  };
+
+  // After the words go in: the caret after them, the box focused for editing.
+  useLayoutEffect(() => {
+    if (caret.current === null || !box.current) return;
+    box.current.focus();
+    box.current.setSelectionRange(caret.current, caret.current);
+    caret.current = null;
+  });
+
+  const toggle = () => {
+    if (phase === "recording") void stop();
+    else if (phase === "idle" && usable) void start();
+  };
+  const latest = useRef(toggle);
+  latest.current = toggle;
+
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (!isDictationKey(e, key) || anyModal(useChat.getState())) return;
+      e.preventDefault();
+      latest.current();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, [key]);
+
+  useEffect(() => {
+    if (phase !== "recording") return;
+    const t = window.setTimeout(() => latest.current(), MAX_DICTATION_S * 1000);
+    return () => window.clearTimeout(t);
+  }, [phase]);
+
+  useEffect(() => () => mic.current?.cancel(), []); // the window went: the mic light goes off
+
+  return { phase, startedAt, toggle };
+}
+
+function MicButton({ dictation }: { dictation: Dictation }) {
+  const key = useDictationKey((s) => s.key);
+  const usable = useChat((s) => s.role === "driver" && s.connection === "online");
+  const { phase, startedAt, toggle } = dictation;
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (phase !== "recording") return;
+    setNow(Date.now());
+    const t = window.setInterval(() => setNow(Date.now()), 500);
+    return () => window.clearInterval(t);
+  }, [phase]);
+  const recording = phase === "recording";
+  const label = recording ? `Stop dictating (${key})` : phase === "writing" ? "Writing it down…" : `Dictate (${key})`;
+  return (
+    <>
+      {recording ? (
+        <span className="mic-time" aria-hidden="true">
+          {recordingTime((now - startedAt) / 1000)}
+        </span>
+      ) : null}
+      <button
+        type="button"
+        className={`mic ${phase}`}
+        aria-label={label}
+        aria-pressed={recording}
+        title={label}
+        disabled={!usable || phase === "opening" || phase === "writing"}
+        onClick={toggle}
+      >
+        {phase === "writing" ? <span className="spinner" aria-hidden="true" /> : <Icon name="mic" size={18} />}
+      </button>
+    </>
   );
 }
 

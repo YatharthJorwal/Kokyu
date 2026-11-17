@@ -34,7 +34,7 @@ import settings_file
 import story
 import turns
 import waifus
-from audio import read_aloud
+from audio import read_aloud, stt
 from config import CONFIG
 from memory import viewer as memory_viewer
 from memory import writer
@@ -81,6 +81,8 @@ class Session:
         # Read aloud (D-097): the finished reply being spoken, its own task so the user
         # can type and send meanwhile; a new turn, Stop or another thread cancels it.
         self.speech: asyncio.Task | None = None
+        # Dictation (D-097): one recording written down at a time, off the receive loop.
+        self.dictating: asyncio.Task | None = None
         # A companion switch asked for mid-reply; it applies when the reply ends (FR-S-2).
         self.pending_waifu: str | None = None
         # Task Guide and OCR watch never speak at once: they share the history and the socket.
@@ -178,6 +180,8 @@ class Session:
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self.turn
         await self.hush()
+        if self.dictating is not None and not self.dictating.done():
+            self.dictating.cancel()
         # The screen loops never end on their own. Their state (task_guide, ocr_watch)
         # is kernel-wide and outlives the window, so a reconnect finds the task.
         for loop in self._loops:
@@ -845,6 +849,41 @@ class Session:
         except Exception as exc:  # noqa: BLE001 -- the switch stays as it was, and says why
             log.warning(f"read aloud: not saved: {exc}")
             await self.refuse("bad_message", f"Read aloud could not be saved: {exc}")
+
+    # ── Dictation (D-097): the mic button and its key fill the input box ────────
+
+    async def on_dictate_start(self, msg: Any) -> None:
+        """Recording began: load the speech model while the user talks (once per run,
+        on the CPU). Best-effort and in the background: stt.preload never raises."""
+        asyncio.create_task(stt.preload(), name="stt-preload")
+
+    async def on_dictate(self, msg: Any) -> None:
+        """Write a recording down for this window's input box. Any window may: it sends
+        nothing. The audio stays on this PC and is not kept (invariant 3)."""
+        if self.dictating is not None and not self.dictating.done():
+            await self.send_dictation("", "Still writing down the last recording.")
+            return
+        try:
+            audio = base64.b64decode(msg.data.audio_b64, validate=True)
+        except (binascii.Error, ValueError):
+            audio = b""
+        if not audio:
+            await self.send_dictation("", "That recording could not be read.")
+            return
+        self.dictating = asyncio.create_task(self._write_down(audio), name="dictation")
+
+    async def _write_down(self, audio: bytes) -> None:
+        try:
+            text = await stt.transcribe(audio)
+        except stt.STTError as exc:
+            log.warning(f"dictation: speech to text failed: {exc}")
+            await self.send_dictation("", "Speech to text failed. Settings → Doctor shows why.")
+            return
+        await self.send_dictation(text, None)
+
+    async def send_dictation(self, text: str, error: str | None) -> None:
+        with contextlib.suppress(Exception):   # the window may have closed meanwhile
+            await self.ws.send_json(protocol.frame("dictation", {"text": text, "error": error}))
 
     async def on_screen_companion(self, msg: Any) -> None:
         """K1-05b (FR-SC-1..4, D-048): the + tray's Task Guide and OCR watch."""

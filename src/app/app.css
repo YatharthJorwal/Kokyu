@@ -1460,6 +1460,70 @@ button:disabled {
   stroke: none;
 }
 
+/* Dictation (D-097): the mic beside Send; red while it records, with the time */
+.composer .mic {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 36px;
+  height: 36px;
+  margin-bottom: 2px;
+  padding: 0;
+  border: 0;
+  border-radius: 50%;
+  background: transparent;
+  color: var(--muted);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
+}
+
+.composer .mic svg {
+  width: 19px;
+  height: 19px;
+}
+
+.composer .mic:hover:not(:disabled),
+.composer .mic:focus-visible {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.composer .mic:disabled {
+  opacity: 0.45;
+}
+
+.composer .mic.recording {
+  background: color-mix(in srgb, var(--danger) 18%, transparent);
+  color: var(--danger);
+  animation: mic-recording 1.4s ease-in-out infinite;
+}
+
+.composer .mic.writing:disabled {
+  opacity: 1;
+}
+
+.mic-time {
+  flex: none;
+  align-self: center;
+  margin-bottom: 2px;
+  color: var(--danger);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+
+@keyframes mic-recording {
+  50% {
+    box-shadow: 0 0 0 4px color-mix(in srgb, var(--danger) 22%, transparent);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .composer .mic.recording {
+    animation: none;
+  }
+}
+
 /* the model chip under the box, at its right (FR-M-1, D-068) */
 .composer-under {
   display: flex;
@@ -2591,6 +2655,24 @@ button:disabled {
 
 .settings-list li > span:first-child {
   flex: 1;
+}
+
+/* Settings → Voice: the dictation key (D-097) */
+.key-chip {
+  padding: 3px 9px;
+  border: 1px solid var(--line);
+  border-bottom-width: 2px;
+  border-radius: 6px;
+  background: var(--panel-2);
+  font-family: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+}
+
+.key-capture {
+  color: var(--accent);
+  font-size: 13px;
+  white-space: nowrap;
 }
 
 .settings-list.facts .fact-text {

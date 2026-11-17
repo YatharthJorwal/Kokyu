@@ -28,7 +28,7 @@ from config import CONFIG
 log = logging.getLogger(__name__)
 
 # faster-whisper (with av and numpy) costs ~130 ms to import, so it loads with the
-# model, when voice is first used (D-060, D-061). Tests replace this attribute.
+# model, when dictation is first used (D-060, D-097). Tests replace this attribute.
 WhisperModel: Any = None
 
 _model: Any = None
@@ -93,8 +93,8 @@ def _load_model() -> None:
 
 
 async def preload() -> None:
-    """Loads the speech model off the event loop when voice mode is turned on, so
-    the first spoken turn is not also a model load. Never at launch (D-061).
+    """Loads the speech model off the event loop when a dictation starts recording,
+    so writing it down is not also a model load. Never at launch (D-060, D-097).
     Best-effort: never raises (the first real transcription loads it instead)."""
     if _model is not None:
         return

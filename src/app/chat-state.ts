@@ -27,7 +27,7 @@ import { shortRef } from "./models";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
 /** K1-13: the Settings dialog's sections (FR-SET-1; the rest arrive with their phases). */
-export type SettingsSection = "models" | "appearance" | "screen" | "memory" | "doctor" | "about";
+export type SettingsSection = "models" | "appearance" | "voice" | "screen" | "memory" | "doctor" | "about";
 export type TurnPhase = "idle" | "thinking" | "replying";
 export type SurfaceRole = "driver" | "observer";
 
