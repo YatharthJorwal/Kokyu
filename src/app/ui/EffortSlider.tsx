@@ -1,10 +1,11 @@
 // The effort slider (K1-11; FR-M-8, FR-M-9): detents for the levels the model
-// supports, a thumb that glides between them with a short spring, and a fill
+// supports, a thumb that follows the pointer while dragged and glides to the
+// nearest detent on release (the change is sent once, then), and a fill
 // whose glow brightens and pulses faster as the effort rises. Reduced motion
 // (the prop or the OS setting) leaves a static fill. Nothing supported: no slider.
 // Logic in ../effort-slider.ts; the caller owns the value (per model per thread).
 
-import { useRef, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
+import { useEffect, useRef, useState, type CSSProperties, type KeyboardEvent, type PointerEvent } from "react";
 
 import {
   detents,
@@ -29,31 +30,44 @@ export interface EffortSliderProps {
 
 export function EffortSlider({ supported, value, onChange, reducedMotion = false }: EffortSliderProps) {
   const track = useRef<HTMLDivElement>(null);
-  const dragging = useRef(false);
+  /** While dragged: where the pointer is on the track, 0..1; null otherwise. */
+  const [drag, setDrag] = useState<number | null>(null);
+  /** The level just picked, shown until the engine confirms it (or briefly, if it never does). */
+  const [held, setHeld] = useState<string | null>(null);
+  useEffect(() => setHeld(null), [value]);
+  useEffect(() => {
+    if (held === null) return;
+    const t = window.setTimeout(() => setHeld(null), 1500);
+    return () => window.clearTimeout(t);
+  }, [held]);
   const stops = detents(supported);
   if (stops.length === 0) return null;
 
-  const index = indexOf(stops, value);
+  const shownValue = held ?? value;
+  const dragIndex = drag === null ? -1 : nearestIndex(drag, stops.length);
+  const index = drag === null ? indexOf(stops, shownValue) : dragIndex;
   const current = index >= 0 ? stops[index] : null;
   const glow = glowFor(current);
   const style = {
-    "--effort-pos": positionFor(index, stops.length),
+    "--effort-pos": drag ?? positionFor(index, stops.length),
     "--effort-glow": glow.intensity,
     "--effort-period": `${glow.periodS || 1}s`,
   } as CSSProperties;
 
   const pick = (next: string | undefined) => {
-    if (next && next !== value) onChange(next);
+    if (!next || next === shownValue) return;
+    setHeld(next);
+    onChange(next);
   };
 
-  const pickAt = (clientX: number) => {
+  const fractionAt = (clientX: number): number | null => {
     const rect = track.current?.getBoundingClientRect();
-    if (!rect || rect.width === 0) return;
-    pick(stops[nearestIndex((clientX - rect.left) / rect.width, stops.length)]);
+    if (!rect || rect.width === 0) return null;
+    return Math.min(Math.max((clientX - rect.left) / rect.width, 0), 1);
   };
 
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
-    const next = stepFor(stops, value, e.key);
+    const next = stepFor(stops, shownValue, e.key);
     if (next === null) return;
     e.preventDefault();
     pick(next);
@@ -61,22 +75,27 @@ export function EffortSlider({ supported, value, onChange, reducedMotion = false
 
   const onPointerDown = (e: PointerEvent<HTMLDivElement>) => {
     if (e.button !== 0) return;
-    dragging.current = true;
     e.currentTarget.setPointerCapture(e.pointerId);
-    pickAt(e.clientX);
+    setDrag(fractionAt(e.clientX));
   };
 
   const onPointerMove = (e: PointerEvent<HTMLDivElement>) => {
-    if (dragging.current) pickAt(e.clientX);
+    if (drag !== null) setDrag(fractionAt(e.clientX) ?? drag);
   };
 
-  const stopDragging = () => {
-    dragging.current = false;
+  // Release: the thumb glides to the nearest detent, and that is the pick.
+  const onPointerUp = () => {
+    if (drag === null) return;
+    setDrag(null);
+    pick(stops[dragIndex]);
   };
+
+  const onPointerCancel = () => setDrag(null);
 
   const classes = ["effort-slider"];
   if (reducedMotion) classes.push("reduced");
   if (glow.periodS === 0) classes.push("still");
+  if (drag !== null) classes.push("dragging");
 
   return (
     <div
@@ -93,8 +112,8 @@ export function EffortSlider({ supported, value, onChange, reducedMotion = false
       onKeyDown={onKeyDown}
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
-      onPointerUp={stopDragging}
-      onPointerCancel={stopDragging}
+      onPointerUp={onPointerUp}
+      onPointerCancel={onPointerCancel}
     >
       <div className="effort-track" ref={track}>
         <span className="effort-glow" aria-hidden="true" />
@@ -107,7 +126,7 @@ export function EffortSlider({ supported, value, onChange, reducedMotion = false
             aria-hidden="true"
           />
         ))}
-        {index >= 0 ? <span className="effort-thumb" aria-hidden="true" /> : null}
+        {index >= 0 || drag !== null ? <span className="effort-thumb" aria-hidden="true" /> : null}
       </div>
       <div className="effort-labels" aria-hidden="true">
         {stops.map((stop, i) => (

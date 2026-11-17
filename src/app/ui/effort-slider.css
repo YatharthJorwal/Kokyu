@@ -125,6 +125,13 @@
   }
 }
 
+/* Dragged: the thumb and fill follow the pointer with no lag. */
+.effort-slider.dragging .effort-fill,
+.effort-slider.dragging .effort-glow,
+.effort-slider.dragging .effort-thumb {
+  transition: none;
+}
+
 /* Reduced motion: a static fill, no glide, no pulse (the prop or the OS). */
 .effort-slider.reduced .effort-fill,
 .effort-slider.reduced .effort-thumb {
