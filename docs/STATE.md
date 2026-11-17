@@ -54,7 +54,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 
 1. Design references for UI-2 (D-086): which apps and screens the look follows.
 2. The voice a buyer hears: premades ship clips and transcripts (D-087); buyers without an NVIDIA GPU, and the ElevenLabs rights, are open.
-3. Age and content (D-088, provisional 16+): research before release (TODO B-9).
+3. Premade personas explicit or not (18+ is decided, D-090); payment provider, UK and SB 243 follow-ups (TODO B-10..12).
 4. Premade packs in git: recommendation in `DECISIONS.md` (text tracked, VRM and WAV not).
 5. An API key for testing the API path.
 6. A face for the companion (a portrait from the VRM thumbnail).
@@ -65,7 +65,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 ## 4. Known issues and risks
 
 - **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, emoji glyphs. Names, dead controls and developer words are fixed (UI1-01, UI1-02); the look is phase UI-2 (D-086).
-- **Premade personas carry explicit sexual instructions** while the intended audience is 16+ (D-088, provisional): to resolve before release.
+- **Premade personas carry explicit sexual instructions**, and every payment provider checked bans sexual products even for an 18+ app (D-090; the B-9 report): to resolve before release.
 - **Reconnect cannot revive a hung engine:** `restart_kernel` starts one only when the process has exited; a running process that stopped answering needs tray Quit and a restart.
 - **Unpriced models are refused while a cap is on** until UI1-03 lands (D-083 allows them).
 - **Two files set the same keys (D-070):** `settings.json` wins over `config/config.yaml`.

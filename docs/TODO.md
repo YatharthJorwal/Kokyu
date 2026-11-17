@@ -96,6 +96,7 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 - [ ] W-03 Doctor checks grow fix actions (open the installer, start, retry) (FR-COMP-4, 5)
 - [ ] W-04 First run: model or key (with Test key), companion (premade or create), setup, first conversation (FR-WIZ)
 - [ ] W-05 Premade companions as built-in read-only packs (D-039; open questions 3 and 4)
+- [ ] W-06 Age check as the first step of the first run; under 18 stops (FR-WIZ-8, D-090)
 - **Checkpoint W:** on a clean machine, installer to first reply on the API path and on the local path; voice set up with no terminal; every failure shows a plain message.
 
 ## Phase K6: Hardening
@@ -146,7 +147,10 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 - [ ] B-6 Code-signing options and cost
 - [ ] B-7 Website, checkout, downloads, support
 - [ ] B-8 Privacy policy, terms (audience age), refunds
-- [ ] B-9 Research for D-088: age-rating norms for character and companion apps, laws on sexual content and minors (companion-chatbot laws included), the payment provider's adult-content rules, age-gate options; a short report in `docs/` with sources
+- [x] B-9 Research for D-088: age-rating norms, laws, payment-provider rules, age-gate options; report `docs/research-age-content-2026-11.md`; the user chose 18+ (D-090)
+- [ ] B-10 Premade personas explicit or not (open question 3); then ask Paddle and FastSpring in writing whether they accept the app as described (Lemon Squeezy is closing, Gumroad bans chatbots)
+- [ ] B-11 UK: ask Ofcom's checker whether a local-only app is in scope of the Online Safety Act; block UK sales until then
+- [ ] B-12 A lawyer's read on California SB 243 (and New York's companion law) for a bring-your-own-model desktop app: AI disclosure, crisis referral
 - [ ] B-9 Marketing plan
 
 ## Backlog (parked, not approved)

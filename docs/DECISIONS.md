@@ -16,7 +16,7 @@ The compact decision reference: what holds now, what is open, what was replaced.
 |---|---|---|
 | 1 | Design references: which apps and screens the look follows. UI-2 starts by collecting them (D-086). | UI-2 |
 | 2 | The voice a buyer hears. The premades ship their clips and transcripts (D-087) and GPT-SoVITS is set up automatically (D-080). Open: buyers without an NVIDIA GPU (D-036); the ElevenLabs plan's commercial rights for the clips (D-041). | K2, W, K7 |
-| 3 | Age and content (D-088, Provisional): research age-rating norms, laws on sexual content and minors in companion apps, the payment provider's rules, and whether an age gate is needed. | K7, B-3 |
+| 3 | Premade personas: explicit or not? The audience is 18+ (D-090), but every payment provider checked bans sexual products whatever the age; the report recommends non-explicit premades. Also open: a written yes from a provider, UK sales (Ofcom), a lawyer's read on California SB 243. | K7, B-3 |
 | 4 | Premade packs in git. Claude's recommendation: track `persona.md`, `waifu.yaml` and the clip transcripts in the private repo; keep VRM and WAV out of git (size, invariant 5) with a separate backup. | Every commit |
 | 5 | An API key for testing the API path. | K1 checkpoint |
 | 6 | A face for the companion (a VRM thumbnail portrait). | UI-1, K2 |
@@ -268,8 +268,11 @@ Docs reset; UI-1 (model names first); K1b installer skeleton (time-boxed); K2 st
 **D-086 The design standard is its own phase, planned from references** · Accepted · User · 2026-11-17
 "we will *plan* it first by taking actual references and all before finally building. its a real frontend update so a separate phase." Phase UI-2: collect reference apps and screens, agree `docs/DESIGN.md`, then build tokens, type scale, primitives and icons and apply them to every surface. UI-1 keeps the work that does not depend on the look. Amends D-085: UI-2 follows UI-1 (order provisional).
 
-**D-088 Audience: a 16+ roleplay character app** · Provisional · User · 2026-11-17
+**D-088 Audience: a 16+ roleplay character app** · Superseded by D-090 · User · 2026-11-17
 "roleplay character app category is already for mature teens (16+) so its fine when we ship it like that. needs some research though". The premade personas ship as written, pending research before release (open question 3). Claude's flag: explicit sexual content usually means an 18+ rating and an age gate; if the research confirms that, the choice is 18+ with a gate, or 16+ with personas that are not explicit.
+
+**D-090 Audience: 18+, with an age check at first run** · Accepted · User · 2026-11-17
+"go with 18+". From `docs/research-age-content-2026-11.md` (TODO B-9): every comparable app with sexual content is 18+, and 16+ is not a norm or a legal line anywhere checked. Kōkyū is sold for adults: the first run asks for age before anything else and stops under 18 (FR-WIZ-8); the terms say 18+. Whether the premade personas stay explicit is separate and open (open question 3). Supersedes D-088.
 
 ## Superseded
 
@@ -278,6 +281,7 @@ Docs reset; UI-1 (model names first); K1b installer skeleton (time-boxed); K2 st
 - D-011 3D mode WASD; VR deferred → superseded by D-078 (apartment) and D-079 (VR long term)
 - D-012 Agent mode deferred → superseded by D-079 (not planned)
 - D-015 Licence MIT → superseded by D-040 (proprietary)
+- D-088 Audience 16+ → superseded by D-090 (18+, after the B-9 research)
 - D-018 Helper models in Settings → Advanced → superseded by D-072 (helpers follow the pick)
 - D-027 Shell starts kernel and TTS in parallel → superseded by D-060 (lazy boot; port 8780 stays, D-017)
 - D-030 Delivery by git bundle → superseded by D-076 (commits on the user's PC)

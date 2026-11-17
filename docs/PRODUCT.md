@@ -76,7 +76,7 @@ Per D-085 (provisional; the user confirms it next session).
 None of this is code, but each item can block a sale.
 
 1. **Premades are paid content** (D-087): buyers pay for the app and for Luna and Yuri, each shipped complete (persona, voice clips with transcripts, VRM). Users can read her traits and how she behaves; the clips and VRM are used only inside the app, never exported, and are not open-sourced. Protection is an app-only packed format plus the licence terms; a file on the user's PC can never be made fully unreadable. Luna's and Yuri's VRMs are self-made; their voices were generated on the ElevenLabs website (D-041). To verify before release: the ElevenLabs plan's commercial rights, and the image tool's terms for the app icon (`THIRD-PARTY.md`).
-2. **Audience** (D-088, provisional): a 16+ roleplay character app. The premade personas carry explicit sexual instructions today; research before release decides whether that fits 16+ or needs 18+ and an age gate, and what the payment provider accepts (§9).
+2. **Audience: adults, 18+** (D-090), with an age check at first run. The premade personas carry explicit sexual instructions today, and every payment provider checked bans sexual products whatever the age; whether the premades stay explicit is open (§9). Research: `docs/research-age-content-2026-11.md`.
 3. **Dependencies** must be permissive for closed-source sale; no GPL/AGPL or non-commercial dependency without a decision (RULES R-38). Model weights are never bundled.
 4. **Brand:** the stage copies a camera framing, not xAI's character. No look-alikes of Ani or AI-company mascots. Run a trademark and domain check on "Kokyu" / "Kōkyū" before branding.
 5. **Policies before sale:** privacy policy (what leaves the machine), terms (intended audience age), refunds, support.
@@ -92,7 +92,7 @@ Everything else was adopted or adapted into the sections above.
 The user will come back to these.
 
 1. **The 1.0 voice for buyers.** The premades ship their clips and transcripts and GPT-SoVITS is set up automatically (D-080, D-087); a buyer without an NVIDIA GPU is still open (D-036).
-2. **Age and content** (D-088). Research: age-rating norms, laws on sexual content and minors in companion apps, the payment provider's rules and Merchant of Record, an age gate (TODO B-9).
+2. **Premade content and payment fit.** 18+ is decided (D-090). Open: explicit premades or not, a written yes from Paddle or FastSpring, UK sales, a legal read on SB 243 (TODO B-10..12).
 3. **Premade packs in git.** Recommendation: version `persona.md`, `waifu.yaml` and the transcripts in the private repo; VRM and WAV stay out of git with a separate backup.
 4. **An API key for testing the API path** (path A has never run on the development PC).
 5. **Price and trial.** $14.99 launch and $19.99 standard were discussed; whether a limited demo exists.

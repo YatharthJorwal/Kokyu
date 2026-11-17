@@ -196,6 +196,7 @@ D-080: small setup modules, one per component the app installs itself; no generi
 | FR-WIZ-5 | The key step explains what a key is and what it costs, links to the provider's key page, has a **Test key** button, and stores the key in the Credential Manager. | W |
 | FR-WIZ-6 | No terminal and no manual file editing anywhere in the first run. | W |
 | FR-WIZ-7 | TARGET: on a clean machine, installer to first reply on the API path in under 10 minutes excluding downloads. Measured at the W checkpoint. | W |
+| FR-WIZ-8 | **Age (D-090):** the first step is a neutral age check (a date of birth, no hint of the answer that passes); under 18 the app explains it is for adults and goes no further. The answer is kept on this PC only. | W |
 
 ### 2.16 Voice providers (FR-VP)
 
@@ -359,7 +360,7 @@ In delivery order (D-085, amended by D-086; provisional). A checkpoint is open u
 | K1b | FR-DIST-1, 9, 11 (walking-skeleton installer on a clean machine) | Not started |
 | K2 | FR-C-4 (camera, screenshot, paste image), FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-1 (provider interface), 2..6, 8; FR-VP-1..5; FR-SC-6; FR-MODE-10; FR-SET-1 (Voice) | Not started |
 | K3 | FR-W-2 (UI), FR-W-5; FR-CR-1..8; FR-SET-1 (Companions) | Not started |
-| W | FR-COMP-1..5; FR-WIZ-1..7; FR-DIST-3; FR-SET-3 (fix actions) | Not started |
+| W | FR-COMP-1..5; FR-WIZ-1..8; FR-DIST-3; FR-SET-3 (fix actions) | Not started |
 | K6 | NFR calibration (§4), evals, crash recovery, docs | Not started |
 | K7 | FR-DIST-1..11 | Not started |
 | K4 (1.1) | FR-P-1..6 | Not started |
