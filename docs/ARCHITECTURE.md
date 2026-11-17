@@ -141,12 +141,13 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `send` | C→K | A typed line starts a turn (FR-C-1) |
 | `send_file` | C→K | An image or text file, with a caption, starts a turn (FR-C-4) |
 | `stop` | C→K | Stop the reply in flight (FR-C-2) |
-| `regenerate` | C→K | Run the last exchange again: Regenerate and Retry (FR-C-9) |
-| `turn_start`, `token`, `turn_done` | K→C | A reply: start, streamed text, final text and whether it was stopped (FR-C-2) |
+| `regenerate` | C→K | Run the last exchange again: Regenerate and Retry (FR-C-9); with `text`, the edited last line replaces the old one (refused for a line with a file, D-092) |
+| `turn_start`, `token`, `turn_done` | K→C | A reply: start (with `file` when the line carried one), streamed text, final text and whether it was stopped (FR-C-2) |
 | `speak` | K→C | One spoken clause: caption text and a WAV; empty audio when voice is off or down (FR-V-7) |
 | `thread_list`, `thread_search` | both | The sidebar history, or threads matching a query; answered with `thread_list` |
 | `thread_new` | C→K | A new thread: `mode` chat or roleplay, fixed for its life, and a roleplay's scenario card (FR-MODE-1, 6); `waifu_id` starts it with her, from her profile, with no divider in the open thread (D-091) |
 | `thread_open`, `thread_delete`, `thread_rename` | C→K | Change, delete or rename a thread; refused with `turn_running` during a reply |
+| `thread_pin` | C→K | Pin or unpin a thread (`id`, `on`); every window gets the new list (D-094) |
 | `thread_opened` | K→C | The open thread and its messages, on connect and after every open, new or delete |
 | `thread_updated` | K→C | The open thread's row after a change of model, effort or Temp Chat |
 | `thread_message` | K→C | One stored line added outside a turn: a companion-change divider (FR-S-2), a screen remark |
@@ -178,7 +179,7 @@ All paths come from `paths.py`. Development: `./data`, `./logs` and `./config` i
 ```
 data/
   settings.json         what Settings changed (D-070)
-  threads.db            threads, messages, attachments, story_memory, scenarios, kv (schema 5)
+  threads.db            threads (with `pinned`), messages, attachments, story_memory, scenarios, kv (schema 6)
   memory.db             facts, episodes, events, profile card, transcript_log, sqlite-vec tables
   spend.db              the API spend ledger
   vram_measured.json    what each model really took (D-065)
@@ -247,7 +248,7 @@ model stream ─> token frames (the chat shows the raw text)
 
 ## 9. Client
 
-- **`src/app/`**: the React window (D-053). `store.ts` is a Zustand store (D-013) around the pure reducer in `chat-state.ts`; components read with `useChat(selector)` and act through `actions.*`. `ui/` holds 15 components (Sidebar, TopBar, ThreadView, Composer, ModelChip, EffortSlider, SettingsDialog, RoleplayDialog, ProfileDialog, Portrait, …). `theme.ts` holds the themes, kept in the window's localStorage (D-073). `markdown.ts` is an in-house parser that returns a tree, so model output never reaches the page as HTML (D-055). `voice.ts` plays `speak` clips. Other pure helpers: `models.ts`, `history.ts`, `scenario.ts`, `file-upload.ts`, `effort-slider.ts`.
+- **`src/app/`**: the React window (D-053). `store.ts` is a Zustand store (D-013) around the pure reducer in `chat-state.ts`; components read with `useChat(selector)` and act through `actions.*`. `ui/` holds 23 components (Sidebar, TopBar, ThreadView, Composer, ModelChip, EffortSlider, SettingsDialog, RoleplayDialog, ProfileDialog, Portrait, Menu, Toasts, ConfirmDialog, CommandPalette, Icon, …). `theme.ts` holds the themes, kept in the window's localStorage (D-073). `markdown.ts` is an in-house parser that returns a tree, so model output never reaches the page as HTML (D-055); `highlight.ts` colours code blocks (D-093). `keys.ts` holds the shortcuts and the palette's list as pure functions (D-095). `voice.ts` plays `speak` clips. Other pure helpers: `models.ts`, `history.ts`, `scenario.ts`, `file-upload.ts`, `effort-slider.ts`.
 - **`src/net/`**: `kernel.ts` (one WebSocket with reconnect backoff; no state) and `protocol.ts` (the typed mirror of §5).
 - **`src/engine/`**: pure-logic avatar parts from Yuri waiting for the K2 Stage (idle motion, eyes, expression life, lip-sync, framing, a VRM report), plus mic and camera capture. The VRM loader and the stage itself are not in the repo yet.
 - **Rule:** clients hold no business logic. The window renders kernel state and sends intents; decisions about models, memory and speech are the kernel's.

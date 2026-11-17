@@ -2,10 +2,10 @@
 
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models, UI1-06 her face and profile)
-- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done. **Next: UI1-07**, the message list. The design standard is its own phase, UI-2, planned from references before it is built (D-086).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Everything through this session's docs is pushed (the user asked).
-- **Last green run (the user's PC, 2026-11-17, at `e62374f`):** `npm run check`: tsc, frontend tests 145, vite build, cargo check, pytest 1259.
+- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models, UI1-06 her face and profile, UI1-07..10 message list, Markdown, shell, keyboard)
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done, and so are UI1-07 the message list (`0fac211`, D-092), UI1-08 Markdown (`12af2b8`, D-093), UI1-09 the shell (`cb24949`, D-094) and UI1-10 the keyboard (`77af8c0`, D-095), built in autonomous mode on Assumed answers. **UI-1 is code-complete; next is Checkpoint UI-1** (the user, in the desktop app). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `599484c`. **Local only, waiting for the user's review:** `0fac211`, `12af2b8`, `cb24949`, `77af8c0` and the docs commit after them.
+- **Last green run (the user's PC, 2026-11-17, at `77af8c0`):** `npm run check`: tsc, frontend tests 165, vite build, cargo check, pytest 1263.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
@@ -17,6 +17,10 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Kernel split by job (D-062), port 8780, `paths.py`, companion packs and registry, shared memory with speakers | T, B |
 | Waifu invariance (FR-W-3), one router door, egress rules (D-025), every message type has a handler | T |
 | Threads (history, search, rename, delete, Temp Chat), Markdown replies, Copy, Regenerate, Stop | T, B |
+| Message list: grouping, hover bar (time, model, Copy, Regenerate, Edit), thinking line in the reply slot, caret, jump-to-latest pill (D-092) | T, B (injected state, 900×600 and 1440×900, dark and light); edit-and-resend not run against a live model |
+| Markdown tables, nested lists, coloured code with a header and Copy (D-093) | T, B (injected replies) |
+| Shell: slim header, split New, thread menu, pins and the Pinned group, in-app confirm, toasts, empty state with starters (D-094) | T (pins in the store and over the socket), B (injected state); pin and delete not run against a live engine; window buttons not seen in the desktop app |
+| Shortcuts and the Ctrl+K palette; Esc stops a reply, but not while a dialog is open (D-095) | T, B (keys dispatched in the page); not tried in the desktop webview, where Ctrl+N could behave differently |
 | Lazy boot (D-060), voice only when voice mode is on (D-061, 47 s to start GPT-SoVITS) | T, B; no audible playback checked |
 | Model picker: Local and API sections, fits hints, capability badges, effort slider per model (D-064), "waking up" card | T, B (real Ollama and GPU) |
 | Her face from the VRM thumbnail in the chip, the conversation list, her messages and the companion menu; her initial without one (D-091, FR-W-8) | T, B (real thumbnails from a scratch engine, injected roster); not seen in the desktop app |
@@ -64,6 +68,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 7. The six assumed K1c answers (D-074): confirm or reverse.
 8. D-057: move the WebSocket token check earlier?
 9. C-1b: the user deletes `KASANE/vrm/`.
+10. D-092..D-095 (UI1-07..10) were Assumed in autonomous mode: confirm or reverse, including the four starter lines and pins stored by the engine.
 
 ## 4. Known issues and risks
 
@@ -96,4 +101,6 @@ This one list replaces the three stacked manual gates (K0, K1, K1c) (D-076). In 
 | K0 automated | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
 | K1 automated | 2026-11-15 | `npm run check` green after `89bdb95` | Claude |
 | K1c automated | 2026-11-17 | `npm run check` green after `97de53a` | Claude |
+| UI-1 automated | 2026-11-17 | `npm run check` green at `77af8c0` | Claude |
+| UI-1 in the desktop app (the look, with a local model) | | | |
 | K0 + K1 + K1c in the desktop app | | The user ran the K1c build on their PC (2026-11-17); the items above not yet ticked | |

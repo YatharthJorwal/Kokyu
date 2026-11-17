@@ -38,17 +38,25 @@ A solo developer who wants direct commands, no manual file shuffling, phases wit
 10. **Her face** (`04e0296`, D-091, FR-W-8): the user's answer to open question 6 was "just a vrm face", with a way to change it in her profile. Both VRMs carry a VRoid face shot as `meta.thumbnailImage`; the engine reads only that image, cuts a 512 px square and caches it in `data/portraits/cache`. `GET /waifus/<id>/portrait?v=` serves it; the roster carries a version stamp. Shown in the companion chip, the conversation list, her messages and the companion menu; her initial without one.
 11. **Her profile** (`e62374f`, D-091, FR-W-9): About, traits, Chat (a new chat with her, no divider in the open one), Change picture and Use the model's face. Opens from Profile in the companion menu or her face beside a message. Packs gain `about`; Claude drafted Luna's and Yuri's in the untracked packs for the user to edit. `build_premade.py --force` used to delete `persona.md` too; it now keeps it and `about`.
 
+12. **The rest of UI-1** (the user: "finish phase ui-1, … commit locally"; autonomous mode, answers Assumed):
+   - **UI1-07** `0fac211` (D-092): grouped messages, a hover bar (time · model, Copy, Regenerate, Edit), edit-and-resend of the last line via `regenerate {text}`, the thinking line in the reply slot, a caret, a jump-to-latest pill.
+   - **UI1-08** `12af2b8` (D-093): tables, nested lists, code with a header and in-house colouring (`highlight.ts`).
+   - **UI1-09** `cb24949` (D-094): one slim header, split New, a thread menu with pins (`thread_pin`, schema 6), toasts, in-app confirms, an empty chat with her face and starters.
+   - **UI1-10** `77af8c0` (D-095): Ctrl+N, Ctrl+K palette, Ctrl+, and Esc to stop.
+
 ## 3. Where we stopped
 
-Everything is committed and pushed (the user asked). Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
+UI-1 is code-complete. **Nothing from item 12 is pushed**: the user reviews first, then says push. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
 
 ## 4. Next session: start here
 
 1. `git status`, `git log -5 --oneline`, `npm run check`.
-2. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect), and, if they have an unpriced endpoint, its "price unknown" row and notice.
-3. Ask the user to read Luna's and Yuri's About drafts (`assets/premade/<id>/waifu.yaml`) and to try her profile in the desktop app: Chat, Change picture, Use the model's face.
-4. Next item: **UI1-07**, the message list. Also open: question 3 (explicit premades, D-090).
-5. Their `config/config.yaml` still has `on_exhausted`: harmless, can go.
+2. Ask whether the user reviewed `0fac211..` (UI1-07..10 and the docs) and wants them pushed; confirm or reverse D-092..D-095 (open question 10).
+3. **Checkpoint UI-1** is the user's: a while in the desktop app with a local model (edit the last line, pin and delete a thread, the palette, Esc, the window buttons).
+4. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect), and, if they have an unpriced endpoint, its "price unknown" row and notice.
+5. Ask the user to read Luna's and Yuri's About drafts (`assets/premade/<id>/waifu.yaml`) and to try her profile in the desktop app: Chat, Change picture, Use the model's face.
+6. After the checkpoint: phase UI-2 (D-086) or K1b, the user's call (D-085). Also open: question 3 (explicit premades, D-090).
+7. Their `config/config.yaml` still has `on_exhausted`: harmless, can go.
 
 **KASANE: decided, option B** (D-089): the Doctor row, About, `logs/kasane.log`; `kasane.exe` waits for packaging (K1b-02). The options were: It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
 - A. Internal only: folder, logs, code. The UI keeps "Kōkyū's engine" (today).
@@ -67,4 +75,7 @@ Everything is committed and pushed (the user asked). Nothing is half-done. Untra
 - The 1421 preview never connects to a kernel: `/ws` accepts only 1420 origins (403). Its failed reconnects still wipe injected state; inject with a `useChat.subscribe` that re-applies it. HTTP GETs (portraits) do reach a scratch kernel.
 - A scratch kernel's `thread_new` loads the thread's model, which would touch the user's Ollama: live checks avoid it.
 - Two `websocket_connect` contexts in one TestClient test break on `hub.shutdown_event`'s loop; fake the second window in `hub.connections` instead.
+- The browser pane is often hidden: scroll events and animations are throttled there. Dispatch `scroll` by hand and wait before a screenshot. The injection code for the 1421 preview was kept in the page's `localStorage.__injectCode` (run with `await eval(...)`); it is gone if the pane's storage is cleared.
+- A menu's `onClose` passed inline re-runs its effect on every render: keep it in a ref (`Menu.tsx`).
+- Shortcuts listen on `document`, registered first, so a dialog's own Escape is still open when the shortcut sees it; handlers that consume Escape call `preventDefault`, and `shortcutFor` ignores a prevented one.
 - The Windows console is cp1252: a Python script printing "Kōkyū" needs `PYTHONIOENCODING=utf-8`.

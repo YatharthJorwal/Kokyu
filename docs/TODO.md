@@ -40,10 +40,10 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [x] UI1-03 Unpriced models under the cap (D-083) `3e552e7`: they run, uncounted; the picker says "price unknown" (detail: "price unknown, not counted against the cap"); a notice once per model per run (in memory, so it returns after a restart); a reached cap still stops them; `budget.on_exhausted` removed
 - [x] UI1-06 Her face (D-091, FR-W-8) `04e0296`: the engine reads the VRM thumbnail, scales it down, serves `/waifus/<id>/portrait`; her initial when there is none; the portrait in the companion chip, the conversation list and her messages
 - [x] UI1-06b Her profile (D-091, FR-W-9) `e62374f`: portrait, name, traits, About (packs gain `about`; `build_premade.py` keeps it), a Chat button; *Change picture* (stored in the app data folder) and *Use the model's face*
-- [ ] UI1-07 Message list: grouped by speaker, a hover action bar with icons, time and model on hover, no jump to the bottom while reading plus a jump-to-latest pill, the thinking state where the reply appears, a streaming caret, edit and resend of the last message
-- [ ] UI1-08 Markdown: tables, nested lists, highlighted code with a header and copy
-- [ ] UI1-09 Shell: one slim header (portrait chip, thread title, Temp toggle, window buttons), a split New button (Chat / Roleplay…), a sidebar context menu and pinning, an empty state with her face and starter chips, toasts, in-app confirms instead of `window.confirm`
-- [ ] UI1-10 Keyboard: Ctrl+N, Ctrl+K palette, Ctrl+comma, Esc stops a reply
+- [x] UI1-07 Message list (D-092, FR-C-9, FR-C-5) `0fac211`: grouped by speaker, a hover action bar with icons, time and model on hover, no jump to the bottom while reading plus a jump-to-latest pill, the thinking state where the reply appears, a streaming caret, edit and resend of the last message (`regenerate {text}`; a line with a file can't be edited)
+- [x] UI1-08 Markdown (D-093, FR-C-8) `12af2b8`: tables, nested lists, highlighted code with a header and copy; in-house parser and highlighter, no dependency
+- [x] UI1-09 Shell (D-094, FR-C-6) `cb24949`: one slim header (portrait chip, thread title, Temp toggle, window buttons), a split New button (Chat / Roleplay…), a sidebar context menu and pinning (`thread_pin`, schema 6), an empty state with her face and starter chips, toasts, in-app confirms instead of `window.confirm`
+- [x] UI1-10 Keyboard (D-095) `77af8c0`: Ctrl+N, Ctrl+K palette, Ctrl+comma, Esc stops a reply
 - **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
 
 ## Phase UI-2: Design standard (D-086)

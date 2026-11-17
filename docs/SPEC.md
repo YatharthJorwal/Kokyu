@@ -10,7 +10,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 **Changelog v1.0 → v1.1**
 - Folded in: D-059 (one API endpoint), D-064 (effort data), D-065, D-071 (VRAM checks), D-066 (failure card), D-067, D-070, D-073 (Settings, settings.json, appearance), D-068 (window layout), D-072 (one chat model in memory).
 - Added: FR-MODE (D-074, D-075); FR-M-12 model names (D-084).
-- Changed: FR-W-1, 3, 8, 9 her portrait and profile (D-091); FR-C-4 only working controls (D-082); FR-CR-5, 6 Write it for me (D-077); FR-R-2 unpriced models (D-083); FR-DIST one NSIS installer (D-081); FR-COMP, FR-WIZ automatic setup (D-080).
+- Changed: FR-C-6 shell, FR-C-8 Markdown, FR-C-9 edit (D-092..D-094); FR-W-1, 3, 8, 9 her portrait and profile (D-091); FR-C-4 only working controls (D-082); FR-CR-5, 6 Write it for me (D-077); FR-R-2 unpriced models (D-083); FR-DIST one NSIS installer (D-081); FR-COMP, FR-WIZ automatic setup (D-080).
 - Moved to Appendix B: FR-P, FR-3D (now the apartment, D-078). Removed: agent mode, VR (D-079), Track T (D-080).
 
 ## 1. Definitions
@@ -52,10 +52,10 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-C-3 | The input box MUST be centered, multi-line (`Enter` sends, `Shift+Enter` newline), and accept pasted images and dropped files. | K1 |
 | FR-C-4 | **Only working controls (D-082):** a control appears only when it works end to end, and a new control lands with its working code; no disabled placeholders or "coming soon". The `＋` tray (the paperclip, D-068) offers what works: upload file, Voice, Task Guide, OCR watch; camera, screenshot and paste image join when they work. The mic button stays hidden until voice input works. **Copy rule:** UI text uses plain words, never internal ones ("kernel", "waifu", phase codes such as K2). | K1, UI-1, K2 |
 | FR-C-5 | The **heart** above the input box (D-063) MUST show idle, thinking and replying. It respects reduced motion. | K1 |
-| FR-C-6 | The sidebar MUST show New chat and search at the top, history in the middle (grouped Today / Yesterday / Previous 7 days / Older, each with her badge), and **Settings** at the bottom. It does not list companions; she is picked with the companion chip (FR-S-1, D-068). | K1 |
+| FR-C-6 | The sidebar MUST show New chat (split: Chat, and a menu with Chat / Roleplay…) and search at the top, history in the middle (Pinned first, then Today / Yesterday / Previous 7 days / Older, each with her badge), and **Settings** at the bottom. Each conversation has a menu (right-click or ⋯): Pin, Rename, Delete; pins are stored by the engine. Deletes ask in an in-app dialog; done actions confirm with a toast (D-094). It does not list companions; she is picked with the companion chip (FR-S-1, D-068). | K1, UI-1 |
 | FR-C-7 | A **Chat / Stage** toggle MUST switch views of the same thread without losing state. | K2 |
-| FR-C-8 | Replies MUST render Markdown (code blocks with a copy button), parsed in-house, never as HTML (D-055). What is *spoken* is the speech-safe version (FR-V-2). | K1 |
-| FR-C-9 | Each assistant message SHOULD offer *Copy*, and the last one *Regenerate* (run in the kernel, D-055). | K1 |
+| FR-C-8 | Replies MUST render Markdown, parsed in-house, never as HTML (D-055): tables, nested lists, and code blocks with a header (language, Copy) and in-house colouring (D-093). What is *spoken* is the speech-safe version (FR-V-2). | K1, UI-1 |
+| FR-C-9 | Each assistant message SHOULD offer *Copy*, and the last one *Regenerate* (run in the kernel, D-055). The last user line SHOULD offer *Edit*, which replaces it and its reply (`regenerate {text}`); a line sent with a file is not editable (D-092). Time and model show on hover. | K1, UI-1 |
 | FR-C-10 | Messages MUST record: speaker waifu id and name snapshot, model ref, effort, timestamps, token counts where known. | K1 |
 
 ### 2.3 Companion switcher (FR-S)
@@ -357,7 +357,7 @@ In delivery order (D-085, amended by D-086; provisional). A checkpoint is open u
 | K0 | FR-W-1..4, 6, 7; FR-S-5; FR-R-1, 3; FR-V-1 (gpt_sovits per companion), FR-V-7 (text-only); FR-MEM-1..3 | Open (window and voice not run) |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 | Open |
 | K1c | FR-MODE-1..9 (D-074, D-075) | Open (the user ran the build 2026-11-17; items not ticked) |
-| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`); FR-W-8, 9 (portrait and profile, D-091) | In progress |
+| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`); FR-W-8, 9 (portrait and profile, D-091); FR-C-9 edit and the message list (D-092, `0fac211`); FR-C-8 (D-093, `12af2b8`); FR-C-6 shell (D-094, `cb24949`); shortcuts (D-095, `77af8c0`) | Code complete; the checkpoint is the user's |
 | UI-2 | The design standard (D-086): `DESIGN.md`, tokens, primitives, applied to every surface | Not started |
 | K1b | FR-DIST-1, 9, 11 (walking-skeleton installer on a clean machine) | Not started |
 | K2 | FR-C-4 (camera, screenshot, paste image), FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-1 (provider interface), 2..6, 8; FR-VP-1..5; FR-SC-6; FR-MODE-10; FR-SET-1 (Voice) | Not started |

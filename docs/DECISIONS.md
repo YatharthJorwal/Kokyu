@@ -277,6 +277,18 @@ Docs reset; UI-1 (model names first); K1b installer skeleton (time-boxed); K2 st
 **D-091 Her face, and a character profile** · Accepted · User · 2026-11-17
 "yes, just a vrm face. we will include a way to change the pfp in character profile though." Her portrait is the VRM's own thumbnail (VRM 1.0 `meta.thumbnailImage`; VRoid exports a face shot, as Luna's and Yuri's are), scaled down by the engine and served like the VRM. A companion whose VRM has none shows her initial. The user may replace the portrait from her profile and reset it to the model's face; the replacement lives in the app data folder, so premade packs stay read-only (D-039, D-087). A **character profile** shows her portrait, name, traits, a short About and a Chat button; packs gain an optional `about` field. It is not a platform page: no creator handle, likes, counts, sharing or similar characters. character.ai screens were references only, nothing copied. Closes open question 6. Amends FR-W-1 and FR-W-3 (the portrait joins what differs per companion) and R-01; adds FR-W-8 and FR-W-9.
 
+**D-092 The message list; edit and resend** · Assumed · Claude · 2026-11-17
+UI1-07. Lines from one speaker group under one name; time and model show in a hover bar (Copy, Regenerate, Edit). Editing the last user line re-runs the exchange through `regenerate {text}`: the edited line replaces the old one and its reply, no new message type. A line sent with a file can't be edited (the engine refuses; send the file again). The thinking state sits where the reply will appear; the heart above the input stays (FR-C-5). The view never jumps down while the user reads; a pill jumps to the latest. Amends FR-C-9.
+
+**D-093 Markdown tables, nested lists and coloured code, in-house** · Assumed · Claude · 2026-11-17
+UI1-08. The parser gains pipe tables (with alignment) and nested lists by indentation; code blocks get a header with the language and Copy, and colour from a small in-house highlighter (about 30 languages, keywords, strings, comments, numbers; skipped above 60k characters). No dependency: the output stays a tree, never HTML (D-055). Reversible by swapping in a library later with a THIRD-PARTY row. Amends FR-C-8.
+
+**D-094 The shell: one header, split New, pins, toasts, in-app confirms** · Assumed · Claude · 2026-11-17
+UI1-09. One slim header (companion chip, thread title, Temp, window buttons). New is split: New chat, and a menu with Chat / Roleplay…. Each conversation has a menu (right-click or ⋯): Pin, Rename, Delete…. Pins are stored by the engine (`threads.pinned`, schema 6, `thread_pin`) so every window agrees; pinned threads lead the list under "Pinned". Deletes ask through an in-app dialog, never `window.confirm`. Toasts only confirm what the user did (deleted, pinned); errors keep their cards. A new chat shows her face, name and four starter lines that send as typed. Amends FR-C-6.
+
+**D-095 Keyboard shortcuts and a palette** · Assumed · Claude · 2026-11-17
+UI1-10. Ctrl+N a new chat, Ctrl+K a palette, Ctrl+, Settings, Esc stops a reply. While a dialog or pop-up is open, it owns Escape and the shortcuts wait. The palette lists what works now: actions, companions (talk to, profile) and conversations, filtered by every typed word; it hides what a running reply forbids. Hints sit beside the controls (the New menu, Settings, Stop). No rebinding.
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)
