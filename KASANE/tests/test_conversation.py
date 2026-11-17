@@ -405,6 +405,28 @@ def test_rename_search_and_delete(kernel):
         assert err["data"]["code"] == "unknown_thread"
 
 
+def test_pin_and_unpin_a_thread(kernel):
+    # UI1-09 (D-094)
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        tid = opened["data"]["thread"]["id"]
+
+        def pinned_after(on):
+            ws.send_json({"v": 1, "type": "thread_pin", "data": {"id": tid, "on": on}})
+            # an earlier list (from opening) may still be on its way: wait for the change
+            for _ in range(5):
+                listing, _ = _until(ws, "thread_list")
+                flags = [t["pinned"] for t in listing["data"]["threads"] if t["id"] == tid]
+                if flags == [on]:
+                    return True
+            return False
+
+        assert pinned_after(True) and pinned_after(False)
+        ws.send_json({"v": 1, "type": "thread_pin", "data": {"id": "nope", "on": True}})
+        err, _ = _until(ws, "error")
+    assert err["data"]["code"] == "unknown_thread"
+
+
 def test_another_web_page_cannot_open_the_kernel_socket(kernel):
     # review finding: CORS does not cover websockets, so any page the user had open
     # could read every thread; Kokyu's own page and local programs still connect

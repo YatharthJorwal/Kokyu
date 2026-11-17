@@ -17,6 +17,7 @@ import {
   reduce,
   type ChatEvent,
   type ChatState,
+  type ConfirmAsk,
   type SettingsSection,
 } from "./chat-state";
 import { resizeImageToBase64Jpeg } from "./file-upload";
@@ -39,6 +40,9 @@ const voice = new VoicePlayer();
 
 const TYPING_EVERY_MS = 4000;
 let lastTypingSent = 0;
+
+/** The open in-app confirm's answer (UI1-09); one question at a time. */
+let answer: ((yes: boolean) => void) | null = null;
 
 /** Open search results follow a rename or a delete: the kernel answers in order. */
 function researchThreads(): void {
@@ -194,8 +198,41 @@ export const actions = {
 
   deleteThread(id: string): void {
     if (useChat.getState().turn !== "idle") return;
-    socket.send("thread_delete", { id });
+    if (socket.send("thread_delete", { id })) dispatch({ kind: "toast", text: "Conversation deleted" });
     researchThreads();
+  },
+
+  /** UI1-09 (D-094): pinned threads stay at the top of the history list. */
+  pinThread(id: string, on: boolean): void {
+    if (socket.send("thread_pin", { id, on })) dispatch({ kind: "toast", text: on ? "Pinned" : "Unpinned" });
+    researchThreads();
+  },
+
+  // ── toasts and confirms (UI1-09) ────────────────────────────────────
+
+  toast(text: string): void {
+    dispatch({ kind: "toast", text });
+  },
+
+  dismissToast(id: number): void {
+    dispatch({ kind: "toast_gone", id });
+  },
+
+  /** Asks in the window (never the browser's confirm box); resolves true to go ahead.
+   * A new question answers an open one with "no". */
+  confirm(ask: ConfirmAsk): Promise<boolean> {
+    answer?.(false);
+    dispatch({ kind: "confirm", ask });
+    return new Promise((resolve) => {
+      answer = resolve;
+    });
+  },
+
+  answerConfirm(yes: boolean): void {
+    const resolve = answer;
+    answer = null;
+    dispatch({ kind: "confirm", ask: null });
+    resolve?.(yes);
   },
 
   // ── her profile (D-091, FR-W-9) ─────────────────────────────────────

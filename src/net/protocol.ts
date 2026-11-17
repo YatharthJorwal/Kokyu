@@ -23,6 +23,7 @@ export const CLIENT_TYPES = [
   "thread_open",
   "thread_delete",
   "thread_rename",
+  "thread_pin",
   "set_model",
   "set_effort",
   "model_list",
@@ -142,6 +143,8 @@ export interface ThreadInfo {
   mode: ThreadMode;
   /** The filled-in fields of the card; empty for chat threads and blank roleplays. */
   scenario: Scenario;
+  /** Kept at the top of the history list (UI1-09, D-094); absent from an older engine. */
+  pinned?: boolean;
 }
 
 /** A saved scenario card (FR-MODE-6): `title` is the card's own, else derived from its setting. */
@@ -340,6 +343,8 @@ export interface ClientData {
   thread_open: { id: string };
   thread_delete: { id: string };
   thread_rename: { id: string; title: string };
+  /** UI1-09 (D-094): pinned threads stay at the top of the history list. */
+  thread_pin: { id: string; on: boolean };
   set_model: { model_ref: string | null };
   set_effort: { effort: Effort | null };
   model_list: { refresh?: boolean };

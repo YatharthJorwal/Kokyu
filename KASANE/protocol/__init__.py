@@ -48,6 +48,13 @@ class ThreadRename(_Data):
     title: str = Field(max_length=TITLE_MAX)
 
 
+class ThreadPin(_Data):
+    """UI1-09 (D-094): pin a thread to the top of the history list, or unpin it."""
+
+    id: str = Field(min_length=1, max_length=64)
+    on: bool
+
+
 class ThreadSearch(_Data):
     query: str = Field(default="", max_length=QUERY_MAX)
 
@@ -235,6 +242,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "thread_open": ThreadRef,
     "thread_delete": ThreadRef,
     "thread_rename": ThreadRename,
+    "thread_pin": ThreadPin,          # UI1-09 (D-094): pinned threads stay on top
     "set_model": SetModel,
     "set_effort": SetEffort,
     "model_list": ModelListRequest,   # K1-10: what the chip's popover lists

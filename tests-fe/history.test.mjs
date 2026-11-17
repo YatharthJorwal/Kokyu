@@ -90,3 +90,17 @@ test("a message's hover time is the clock today and adds the day before (UI1-07)
   assert.ok(!today.includes(","));
   assert.ok(older.includes(", ") && older.endsWith(today));
 });
+
+test("pinned conversations come first in their own group, whatever their age (UI1-09, D-094)", () => {
+  const groups = groupThreads(
+    [thread("new", at(2026, 11, 14, 14)), { ...thread("old", at(2026, 1, 2)), pinned: true }, { ...thread("mid", at(2026, 11, 14, 9)), pinned: true }],
+    NOW,
+  );
+  assert.deepEqual(
+    groups.map((g) => [g.name, g.threads.map((t) => t.id)]),
+    [
+      ["Pinned", ["mid", "old"]],
+      ["Today", ["new"]],
+    ],
+  );
+});

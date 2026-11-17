@@ -566,6 +566,15 @@ class Session:
             self.thread = renamed
         await self.send_thread_list()
 
+    async def on_thread_pin(self, msg: Any) -> None:
+        pinned = await self.manager.pin(msg.data.id, msg.data.on)
+        if pinned is None:
+            await self.refuse("unknown_thread", GONE)
+            return
+        if self.thread is not None and pinned.id == self.thread.id:
+            self.thread = pinned
+        await self.send_thread_list()
+
     async def on_thread_new(self, msg: Any) -> None:
         """A new thread in the mode asked for, fixed for its life (FR-MODE-1). It keeps
         the open thread's model and effort, but not its Temp Chat flag."""

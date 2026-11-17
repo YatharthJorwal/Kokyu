@@ -161,6 +161,12 @@ class ConversationManager:
     async def delete(self, thread_id: str) -> bool:
         return await self._run(self.store.delete_thread, thread_id)
 
+    async def pin(self, thread_id: str, on: bool) -> Thread | None:
+        """UI1-09 (D-094): pinned threads stay at the top of the history list."""
+        if await self.get(thread_id) is None:
+            return None
+        return await self._run(self.store.update_thread, thread_id, pinned=on)
+
     async def set_temp(self, thread_id: str, temp: bool) -> Thread | None:
         if await self.get(thread_id) is None:
             return None

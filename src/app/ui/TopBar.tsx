@@ -1,7 +1,8 @@
-// The top of the chat column (K1-15, D-068): the companion chip (FR-S-1) and the
-// Temp Chat switch (FR-MEM-5). In the desktop app the window has no frame, so
-// this row is also where the window is dragged and where its own minimize,
-// maximize and close buttons sit; close hides to the tray, as the frame's did.
+// The top of the chat column (K1-15, D-068; one slim row since UI1-09): the
+// companion chip with her face (FR-S-1), the open conversation's title, the Temp
+// Chat switch (FR-MEM-5) and, in the desktop app, the window's own minimize,
+// maximize and close buttons (the window has no frame; close hides to the tray, as
+// the frame's did). The row is where the window is dragged.
 
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
@@ -11,14 +12,15 @@ import { CompanionChip } from "./CompanionChip";
 
 export function TopBar() {
   const desktop = isTauri();
+  const title = useChat((s) => (s.thread ? s.thread.title || (s.thread.mode === "roleplay" ? "New story" : "New chat") : ""));
   return (
     <header className={desktop ? "top-bar framed" : "top-bar"} data-tauri-drag-region>
+      <CompanionChip />
+      <span className="top-bar-title" data-tauri-drag-region title={title || undefined}>
+        {title}
+      </span>
+      <TempSwitch />
       {desktop ? <WindowControls /> : null}
-      <div className="top-bar-row" data-tauri-drag-region>
-        <CompanionChip />
-        <span className="top-bar-gap" data-tauri-drag-region />
-        <TempSwitch />
-      </div>
     </header>
   );
 }

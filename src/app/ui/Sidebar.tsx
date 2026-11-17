@@ -2,16 +2,60 @@
 // logo, New chat and search at the top, history in the middle (grouped Today /
 // Yesterday / Previous 7 days / Older, each with its companion's badge,
 // searchable, renamable, deletable) and the Settings gear at the bottom. The
-// companions moved to the chip in the top bar. New roleplay… sits beside New chat
-// and a roleplay thread carries a badge (K1c-08; FR-MODE-6, 7).
+// companions moved to the chip in the top bar. A roleplay thread carries a badge
+// (K1c-08; FR-MODE-6, 7). UI1-09: New is a split button (Chat, or Roleplay… from
+// its arrow), and each conversation has a menu (right-click, or its ⋯ button):
+// Pin, Rename, Delete (asked in the window first). Pinned ones list first (D-094).
 
-import { useEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
 import type { ThreadInfo } from "../../net/protocol";
 import type { Companion } from "../chat-state";
 import { groupThreads } from "../history";
 import { actions, useChat } from "../store";
+import { Icon } from "./Icon";
+import { Menu } from "./Menu";
 import { Portrait } from "./Portrait";
+
+/** New chat, with Chat and Roleplay… under its arrow (UI1-09). */
+function NewButton({ disabled }: { disabled: boolean }) {
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
+  return (
+    <div className="new-split">
+      <button type="button" className="new-chat" onClick={() => actions.newThread()} disabled={disabled}>
+        <Icon name="plus" size={18} />
+        New chat
+      </button>
+      <button
+        type="button"
+        className="new-more"
+        aria-label="More ways to start"
+        title="Chat or roleplay"
+        aria-haspopup="menu"
+        aria-expanded={menu !== null}
+        disabled={disabled}
+        onClick={(e) => {
+          const r = e.currentTarget.parentElement?.getBoundingClientRect() ?? e.currentTarget.getBoundingClientRect();
+          setMenu(menu ? null : { x: r.left, y: r.bottom + 6 });
+        }}
+      >
+        <Icon name="chevron" size={18} />
+      </button>
+      {menu ? (
+        <Menu
+          label="Start"
+          at={menu}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: "Chat", onSelect: () => actions.newThread() },
+            // FR-MODE-6: a story from a scenario card, or blank
+            { label: "Roleplay…", onSelect: () => actions.openRoleplay() },
+          ]}
+        />
+      ) : null}
+    </div>
+  );
+}
 
 const SEARCH_DELAY_MS = 250;
 
@@ -40,31 +84,7 @@ export function Sidebar() {
         <span className="brand-name">Kōkyū</span>
       </div>
 
-      <div className="new-row">
-        <button
-          type="button"
-          className="new-chat"
-          onClick={() => actions.newThread()}
-          disabled={busy || connection !== "online"}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M8 2.5v11M2.5 8h11" />
-          </svg>
-          New chat
-        </button>
-        {/* FR-MODE-6: a story from a scenario card, or blank */}
-        <button
-          type="button"
-          className="new-roleplay"
-          onClick={() => actions.openRoleplay()}
-          disabled={busy || connection !== "online"}
-        >
-          <svg viewBox="0 0 16 16" aria-hidden="true">
-            <path d="M3 2.5h7.5l2.5 2.5v8.5H3z M5.5 7h5 M5.5 9.5h5" />
-          </svg>
-          New roleplay…
-        </button>
-      </div>
+      <NewButton disabled={busy || connection !== "online"} />
 
       <label className="thread-search">
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -129,7 +149,8 @@ function ThreadList({ threads, roster, busy }: { threads: ThreadInfo[]; roster: 
 
 function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Companion[]; busy: boolean }) {
   const current = useChat((s) => s.thread?.id === thread.id);
-  const [mode, setMode] = useState<"view" | "rename" | "delete">("view");
+  const [mode, setMode] = useState<"view" | "rename">("view");
+  const [menu, setMenu] = useState<{ x: number; y: number } | null>(null);
   const [title, setTitle] = useState(thread.title);
   const input = useRef<HTMLInputElement>(null);
   const waifu = roster.find((w) => w.id === thread.active_waifu_id);
@@ -164,31 +185,16 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
     );
   }
 
-  if (mode === "delete") {
-    return (
-      <li className="thread-row confirm" role="group" aria-label={`Delete ${label}?`}>
-        <span className="confirm-text">Delete “{label}”?</span>
-        <button
-          type="button"
-          className="danger"
-          disabled={busy}
-          onClick={() => {
-            actions.deleteThread(thread.id);
-            setMode("view");
-          }}
-        >
-          Delete
-        </button>
-        {/* the safe choice gets the focus */}
-        <button type="button" autoFocus onClick={() => setMode("view")}>
-          Cancel
-        </button>
-      </li>
-    );
-  }
+  const openMenu = (e: MouseEvent<HTMLElement>, below: boolean) => {
+    e.preventDefault();
+    const r = e.currentTarget.getBoundingClientRect();
+    // The keyboard's menu key reports no pointer: open under the row instead.
+    const keyboard = e.clientX === 0 && e.clientY === 0;
+    setMenu(below || keyboard ? { x: r.left, y: r.bottom + 2 } : { x: e.clientX, y: e.clientY });
+  };
 
   return (
-    <li className="thread-row">
+    <li className="thread-row" onContextMenu={(e) => openMenu(e, false)}>
       <button
         type="button"
         className={current ? "thread-item active" : "thread-item"}
@@ -203,6 +209,12 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
             <span className="sr-only">with {waifu.name}</span>
           </>
         ) : null}
+        {thread.pinned ? (
+          <span className="thread-pin" title="Pinned">
+            <Icon name="pin" size={13} />
+            <span className="sr-only">Pinned</span>
+          </span>
+        ) : null}
         <span className="thread-title">{label}</span>
         {thread.mode === "roleplay" ? <span className="badge">Roleplay</span> : null}
         {thread.temp ? <span className="badge">Temp</span> : null}
@@ -210,19 +222,47 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
       <span className="thread-actions">
         <button
           type="button"
-          aria-label={`Rename ${label}`}
-          title="Rename"
-          onClick={() => {
-            setTitle(thread.title);
-            setMode("rename");
-          }}
+          aria-label={`More for ${label}`}
+          title="More"
+          aria-haspopup="menu"
+          aria-expanded={menu !== null}
+          onClick={(e) => (menu ? setMenu(null) : openMenu(e, true))}
         >
-          ✎
-        </button>
-        <button type="button" aria-label={`Delete ${label}`} title="Delete" disabled={busy} onClick={() => setMode("delete")}>
-          🗑
+          <Icon name="more" />
         </button>
       </span>
+      {menu ? (
+        <Menu
+          label={label}
+          at={menu}
+          onClose={() => setMenu(null)}
+          items={[
+            { label: thread.pinned ? "Unpin" : "Pin", onSelect: () => actions.pinThread(thread.id, !thread.pinned) },
+            {
+              label: "Rename",
+              onSelect: () => {
+                setTitle(thread.title);
+                setMode("rename");
+              },
+            },
+            {
+              label: "Delete…",
+              danger: true,
+              disabled: busy,
+              onSelect: () => {
+                void actions
+                  .confirm({
+                    title: "Delete this conversation?",
+                    body: `“${label}” and its messages are removed from this PC. This cannot be undone.`,
+                    action: "Delete",
+                    danger: true,
+                  })
+                  .then((yes) => yes && actions.deleteThread(thread.id));
+              },
+            },
+          ]}
+        />
+      ) : null}
     </li>
   );
 }

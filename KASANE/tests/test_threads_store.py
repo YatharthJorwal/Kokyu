@@ -7,6 +7,7 @@ import sqlite3
 import pytest
 
 from threads import ThreadNotFound, ThreadStore, title_from
+from threads import store as store_module
 
 
 @pytest.fixture
@@ -47,6 +48,18 @@ def test_a_divider_does_not_reorder_history(store):
     b = store.create_thread()
     store.add_message(a.id, "divider", "Yuri joined the conversation")
     assert [t.id for t in store.list_threads()] == [b.id, a.id]
+
+
+def test_pinned_threads_list_first_and_a_pin_does_not_reorder_by_time(store):
+    # UI1-09 (D-094)
+    old = store.create_thread()
+    new = store.create_thread()
+    store.add_message(new.id, "user", "hi")
+    assert store.update_thread(old.id, pinned=True).pinned is True
+    assert [t.id for t in store.list_threads()] == [old.id, new.id]
+    assert [t.id for t in store.list_threads(limit=1)] == [old.id]       # the limit never drops a pin
+    assert store.get_thread(old.id).to_dict()["pinned"] is True
+    assert store.update_thread(old.id, pinned=False).pinned is False
 
 
 def test_rename_and_unknown_ids(store):
@@ -207,7 +220,7 @@ def test_a_version_2_database_gains_mode_and_scenario_and_old_threads_are_chat(t
         # Schema 4 (K1c-04, FR-MODE-5) added the story_memory table on top of schema 3's
         # columns, and schema 5 (K1c-06, FR-MODE-6) the scenarios table, so an old
         # database now lands on 5 and gains both tables too.
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == store_module.SCHEMA_VERSION
         columns = {row[1] for row in conn.execute("PRAGMA table_info(threads)")}
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"efforts", "mode", "scenario"} <= columns

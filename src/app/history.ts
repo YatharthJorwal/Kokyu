@@ -1,10 +1,10 @@
-// The sidebar's history, grouped by day (K1-03, FR-C-6): Today, Yesterday,
-// Previous 7 days, Older. Pure: the caller passes "now", so it is testable and a
-// window left open past midnight regroups on the next render.
+// The sidebar's history, grouped by day (K1-03, FR-C-6): Pinned (UI1-09, D-094),
+// then Today, Yesterday, Previous 7 days, Older. Pure: the caller passes "now", so it
+// is testable and a window left open past midnight regroups on the next render.
 
 import type { ThreadInfo } from "../net/protocol";
 
-export type GroupName = "Today" | "Yesterday" | "Previous 7 days" | "Older";
+export type GroupName = "Pinned" | "Today" | "Yesterday" | "Previous 7 days" | "Older";
 
 export interface ThreadGroup {
   name: GroupName;
@@ -42,13 +42,13 @@ export function messageTime(ts: number, nowMs: number): string {
   return `${day}, ${clock}`;
 }
 
-const ORDER: GroupName[] = ["Today", "Yesterday", "Previous 7 days", "Older"];
+const ORDER: GroupName[] = ["Pinned", "Today", "Yesterday", "Previous 7 days", "Older"];
 
 /** Newest first inside each group; empty groups are left out. */
 export function groupThreads(threads: ThreadInfo[], nowMs: number): ThreadGroup[] {
   const buckets = new Map<GroupName, ThreadInfo[]>();
   for (const t of [...threads].sort((a, b) => b.updated_at - a.updated_at)) {
-    const name = groupOf(t.updated_at, nowMs);
+    const name = t.pinned ? "Pinned" : groupOf(t.updated_at, nowMs);
     const list = buckets.get(name) ?? [];
     list.push(t);
     buckets.set(name, list);

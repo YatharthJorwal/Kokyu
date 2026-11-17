@@ -61,6 +61,25 @@ export interface Notice {
   detail?: string | null;
 }
 
+/** A short confirmation that fades by itself (UI1-09): "Pinned", "Conversation deleted". */
+export interface Toast {
+  id: number;
+  text: string;
+}
+
+/** An in-app question before something that cannot be undone (UI1-09), in place of
+ * the browser's own confirm box. The answer goes back through the store. */
+export interface ConfirmAsk {
+  title: string;
+  body?: string;
+  /** The button that goes ahead: "Delete", "Remove". */
+  action: string;
+  danger?: boolean;
+}
+
+/** At most this many toasts at once; an older one gives way. */
+export const MAX_TOASTS = 3;
+
 export interface Companion {
   id: string;
   name: string;
@@ -128,6 +147,10 @@ export interface ChatState {
   roleplayOpen: boolean;
   /** D-091 (FR-W-9): whose profile is open, or null. */
   profile: string | null;
+  /** UI1-09: the toasts on screen, oldest first. */
+  toasts: Toast[];
+  /** UI1-09: the in-app confirm being asked, or null. */
+  confirm: ConfirmAsk | null;
   /** FR-MODE-6: the dialog's card save. "pending" until its own answer: the
    * `scenarios` frame naming the saved card, or a store error. null: none asked. */
   scenarioSave: ScenarioSave;
@@ -155,6 +178,9 @@ export type ChatEvent =
   | { kind: "settings"; section: SettingsSection | null }
   | { kind: "roleplay"; open: boolean }
   | { kind: "profile"; id: string | null }
+  | { kind: "toast"; text: string }
+  | { kind: "toast_gone"; id: number }
+  | { kind: "confirm"; ask: ConfirmAsk | null }
   /** A card save went out (FR-MODE-6). */
   | { kind: "scenario_saving" }
   /** The dialog's thread_new went out (FR-MODE-6). */
@@ -187,11 +213,14 @@ export const initialState: ChatState = {
   scenarios: null,
   roleplayOpen: false,
   profile: null,
+  toasts: [],
+  confirm: null,
   scenarioSave: null,
   roleplayStart: null,
 };
 
 let localCounter = 0;
+let toastCounter = 0;
 function localKey(): string {
   localCounter += 1;
   return `l${localCounter}`;
@@ -576,6 +605,14 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false, scenarioSave: null, roleplayStart: null };
     case "profile":
       return { ...state, profile: event.id, pickerOpen: false };
+    case "toast": {
+      toastCounter += 1;
+      return { ...state, toasts: [...state.toasts, { id: toastCounter, text: event.text }].slice(-MAX_TOASTS) };
+    }
+    case "toast_gone":
+      return { ...state, toasts: state.toasts.filter((t) => t.id !== event.id) };
+    case "confirm":
+      return { ...state, confirm: event.ask };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
     case "roleplay_starting":

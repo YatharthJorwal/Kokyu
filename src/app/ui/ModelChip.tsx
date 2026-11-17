@@ -87,6 +87,8 @@ export function ModelChip() {
   useEffect(() => {
     if (!open) return;
     const onDown = (e: MouseEvent) => {
+      // The in-app confirm (removing a key) sits on top of it: answering it is not "outside".
+      if ((e.target as Element).closest?.(".confirm-layer")) return;
       if (wrapper.current && !wrapper.current.contains(e.target as Node)) actions.closePicker();
     };
     document.addEventListener("mousedown", onDown);
@@ -261,9 +263,13 @@ function ApiKeyForm({ models }: { models: ModelListData }) {
     void run("set_api_key", { provider, key: input.current?.value ?? "" });
   };
   const remove = () => {
-    if (status && window.confirm(`Remove the saved ${status.label} key from this PC?`)) {
-      void run("delete_api_key", { provider: status.id });
-    }
+    if (!status) return;
+    // UI1-09: asked in the window, not in the browser's confirm box
+    void actions
+      .confirm({ title: `Remove the saved ${status.label} key?`, body: "It is deleted from this PC. You can paste it again later.", action: "Remove", danger: true })
+      .then((yes) => {
+        if (yes) void run("delete_api_key", { provider: status.id });
+      });
   };
 
   const source =

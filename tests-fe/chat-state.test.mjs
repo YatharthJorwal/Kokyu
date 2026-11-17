@@ -9,6 +9,7 @@ import {
   currentMode,
   editableKey,
   fromStored,
+  MAX_TOASTS,
   initialState,
   lastExchange,
   reduce,
@@ -555,4 +556,24 @@ test("New roleplay opens only when a new thread could start, and always closes (
   const offline = reduce(reduce(s, close), { kind: "status", status: "offline" });
   assert.equal(canStartThread(offline), false);
   assert.equal(reduce(offline, open).roleplayOpen, false);
+});
+
+// UI1-09: toasts and the in-app confirm
+
+test("toasts queue up to a few, the oldest giving way, and each goes by its id", () => {
+  let s = initialState;
+  for (const text of ["a", "b", "c", "d"]) s = reduce(s, { kind: "toast", text });
+  assert.equal(s.toasts.length, MAX_TOASTS);
+  assert.deepEqual(s.toasts.map((t) => t.text), ["b", "c", "d"]);
+  s = reduce(s, { kind: "toast_gone", id: s.toasts[1].id });
+  assert.deepEqual(s.toasts.map((t) => t.text), ["b", "d"]);
+});
+
+test("a confirm is asked and answered without closing what it sits on", () => {
+  const ask = { title: "Remove the key?", action: "Remove", danger: true };
+  let s = { ...initialState, pickerOpen: true };
+  s = reduce(s, { kind: "confirm", ask });
+  assert.deepEqual([s.confirm, s.pickerOpen], [ask, true]);
+  s = reduce(s, { kind: "confirm", ask: null });
+  assert.equal(s.confirm, null);
 });

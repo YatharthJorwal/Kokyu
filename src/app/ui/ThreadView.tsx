@@ -12,6 +12,7 @@ import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from
 import {
   canPickModel,
   canRegenerate,
+  canSend,
   currentMode,
   editableKey,
   lastExchange,
@@ -191,6 +192,41 @@ function TurnFailure() {
   );
 }
 
+/** Ways to begin a new chat, one click each (UI1-09). Plain openers that suit any
+ * companion; what she says back is hers. */
+const STARTERS = ["How was your day?", "Tell me about yourself", "I could use some advice", "Let's play a game"];
+
+/** A new chat (UI1-09): her face, her name and a few ways to begin. */
+function EmptyChat() {
+  const companion = useChat((s) => s.companion);
+  const ready = useChat(canSend);
+  return (
+    <div className="empty">
+      {companion ? (
+        <Portrait
+          id={companion.id}
+          name={companion.name}
+          portrait={companion.portrait}
+          className="empty-face"
+          title={`${companion.name}'s profile`}
+          onClick={() => actions.openProfile(companion.id)}
+        />
+      ) : null}
+      <p className="empty-title">{companion ? `Talk to ${companion.name}` : "Start a conversation"}</p>
+      <p className="muted">Your conversations are saved on this PC.</p>
+      {ready ? (
+        <div className="starters">
+          {STARTERS.map((line) => (
+            <button key={line} type="button" className="starter" onClick={() => actions.send(line)}>
+              {line}
+            </button>
+          ))}
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
 /** While she thinks, her reply's place says so (UI1-07, D-063's changing line). The
  * waking-up card speaks while the model loads, so this waits for it. */
 function ThinkingReply({ id, name }: { id: string | null; name: string | null }) {
@@ -294,10 +330,7 @@ export function ThreadView() {
               <p className="muted">Write *actions* in asterisks, and (OOC …) to step out of the story.</p>
             </div>
           ) : (
-            <div className="empty">
-              <p className="empty-title">{companion ? `Talk to ${companion}` : "Start a conversation"}</p>
-              <p className="muted">Your conversations are saved on this PC.</p>
-            </div>
+            <EmptyChat />
           )
         ) : (
           // A short thread sits on the input box, like a messenger; a long one scrolls as usual.
