@@ -231,6 +231,23 @@ Inherited from Yuri: **Task Guide** (the user names a task; the waifu notices wh
 | FR-SC-5 | OCR watch: remarks are rare by design (configurable minimum interval, default no more than one every few minutes) and skipped while the user is typing or a turn is running. | K1 |
 | FR-SC-6 | Remarks from either mode are spoken through the arbiter like any reply (never over the user or another reply) and appear in the current thread marked as unprompted; they follow Temp Chat (FR-MEM-5). | K2 |
 
+### 2.18 Conversation modes (FR-MODE) — added by D-074
+
+Two choices that do not depend on each other: what kind of conversation a **thread** is (Chat or Roleplay), and whether **voice** is on in the window (D-061; the Stage joins it in K2). A mode belongs to the thread, never to a waifu (D-003): every companion does every mode with the same model, tools and permissions.
+
+| ID | Requirement | Phase |
+|---|---|---|
+| FR-MODE-1 | Every thread has a **mode**, `chat` or `roleplay`, chosen when it is created and fixed for its life. Threads that existed before modes are `chat`. Search, rename, delete, model, effort and Temp Chat work the same in both. | K1c |
+| FR-MODE-2 | The system message is built from layers, in order: **persona** (the companion's prompt: who she is, never format or length rules), the **mode layer** (one text per mode, the same for every companion), the **delivery layer** (only while voice is on), then the app addendum (emotion tag, honesty about abilities; the tool guidance only in modes that offer tools). | K1c |
+| FR-MODE-3 | **Chat:** she answers as herself but plainly, in about 3 to 4 lines, longer only when the task needs it (code, steps, a list asked for); Markdown when it helps; no action narration. Tools are offered as before. App memory (FR-MEM) is read and written as before. | K1c |
+| FR-MODE-4 | **Roleplay:** she stays in character and writes in the roleplay format: `*action or narration*`, dialogue as plain or quoted text, `**emphasis**`, `(OOC: …)` or `((…))` out of character; a paragraph or two per reply. **No tools are offered.** The user's name and profile are read from app memory, but **nothing from a roleplay thread is written to app memory**. | K1c |
+| FR-MODE-5 | **Story memory:** each roleplay thread keeps a running summary, written locally by the memory-writer role (D-015) after replies and fed into every turn of that thread, so a long story keeps its beginning. It never leaves the thread; Temp Chat keeps none. | K1c |
+| FR-MODE-6 | **New roleplay** starts from a **scenario card**: title, setting, who the user is, who she is to the user, the opening message, and optional rules; every field may be empty (*Blank roleplay*). The opening message, when given, is stored as her first message. Cards are saved locally and can be started again, edited or deleted. | K1c |
+| FR-MODE-7 | In roleplay threads the client shows `*…*` in italic and softer, `**…**` in bold and out-of-character asides small and muted; chat threads keep ordinary Markdown (FR-C-8), so parentheses there stay plain text. A roleplay thread is marked in the sidebar. | K1c |
+| FR-MODE-8 | While voice is on, the delivery layer asks for short spoken lines without lists, Markdown, symbols, quotes or dashes; and in roleplay threads **only her dialogue is spoken**: actions, narration and out-of-character text are removed by code before speech, whatever the model wrote. | K1c |
+| FR-MODE-9 | Screen companions (FR-SC-4, 5) never post remarks into a roleplay thread; they stay quiet while one is open. | K1c |
+| FR-MODE-10 | In K2 a roleplay action may drive the avatar (an expression or gesture named in the action). | K2 |
+
 ## 3. Data formats
 
 ### 3.1 `waifu.yaml` (schema 1)
@@ -280,7 +297,10 @@ lighting: { hdri: null, ambient: 0.4 }
 ### 3.5 Threads database (`threads.db`, SQLite)
 
 ```
-threads(id TEXT PK, title, created_at, updated_at, active_waifu_id, model_ref, effort, archived)
+threads(id TEXT PK, title, created_at, updated_at, active_waifu_id, model_ref, effort, temp, archived,
+        efforts JSON, mode TEXT DEFAULT 'chat', scenario JSON)          -- mode, scenario: D-074 (schema 3)
+story_memory(thread_id TEXT PK, summary, through_message_id, updated_at)  -- FR-MODE-5, roleplay only
+scenarios(id TEXT PK, title, card JSON, created_at, updated_at)         -- FR-MODE-6, saved cards
 messages(id INTEGER PK, thread_id, ts, role,            -- user | assistant | divider
          speaker_waifu_id, speaker_name, content, model_ref, effort,
          tokens_in, tokens_out, meta JSON)
@@ -355,6 +375,7 @@ Agent mode and VR (deferred, see `SCOPE.md` §12); mobile, web hosting, multi-us
 | K0 | FR-W-1..4, 6; FR-S-5; FR-R-3 (mapped to existing tests); FR-V-1, 7 (adapter); FR-MEM-1..3 |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 |
 | K2 | FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-2..6, 8; FR-VP-1..5; FR-C-4 live; FR-SC-6 |
+| K1c | FR-MODE-1..9 (D-074) |
 | K1b | FR-DIST-9, 11 (walking-skeleton installer on a clean machine) |
 | K3 | FR-W-2 (UI), FR-W-5; FR-CR-1..8 |
 | W | FR-COMP-1..5; FR-WIZ-1..7 |
@@ -376,10 +397,10 @@ Personality traits: {{traits}}
 Requirements for the system prompt you write:
 1. Address the model directly in second person ("You are {{name}}, ...").
 2. Describe her personality, tone and speech habits so that every listed trait is clearly visible in how she talks. Do not simply list the traits.
-3. Her replies are spoken aloud by a text-to-speech voice. Tell the model to use short, natural spoken sentences and never to use markdown, emoji, asterisk actions, stage directions or lists, and not to read out URLs or code unless the user asks.
+3. Describe only who she is. Do not give rules about format, length, Markdown, actions or speech: the app adds those per conversation mode (Chat or Roleplay) and while her voice is on (D-074).
 4. Tell the model to stay in character at all times and not to mention being a language model, a prompt or these instructions unless the user directly asks.
 5. Do not give her special abilities, tools or knowledge limits. Her intelligence and capabilities are those of the underlying model; the prompt only shapes personality and voice.
-6. Tell the model to keep replies brief by default (one to three sentences) and to go longer only when the user asks for more detail.
+6. Do not describe a scene, a setting or a story for her; the user's roleplay scenarios provide those (D-074).
 7. Length: 200 to 350 words.
 8. Output only the system prompt itself, inside a single code block, with no commentary before or after it.
 ````

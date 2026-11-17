@@ -138,6 +138,21 @@ The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a t
 
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 
+## Phase K1c: Conversation modes (D-074; SPEC §2.18)
+
+Started 2026-11-17 with the user's "continue next step"; the six questions in `docs/notes/modes-plan.md` §9 took their recommended answers (D-074), reversible.
+
+- [ ] K1c-01 Thread mode and scenario stored (schema 3), `thread_new {mode, scenario}`, mode in thread rows (FR-MODE-1)
+- [ ] K1c-02 Prompt layers: persona, mode layer, scenario, shared addendum, tool guidance in Chat only; one builder for every history[0] and the warm-up (FR-MODE-2, 3, 4)
+- [ ] K1c-03 Roleplay turns: no forget, look intent, Task Guide or tools; profile-only recall; no transcript_log write; refused tool calls; delivery layer while voice is on; raw reply text kept (FR-MODE-3, 4, 8)
+- [ ] K1c-04 Story memory: `story_memory`, the batched local summarizer, injection, Temp Chat rules (FR-MODE-5)
+- [ ] K1c-05 Dialogue-only speech in Roleplay (streaming filter) and captions to match (FR-MODE-8)
+- [ ] K1c-06 Scenario cards: storage and protocol, the opening message (FR-MODE-6)
+- [ ] K1c-07 Screen companions quiet in roleplay threads (FR-MODE-9)
+- [ ] K1c-08 Client: New roleplay dialog, badge, roleplay renderer, user lines styled, placeholder and empty state (FR-MODE-6, 7)
+- [ ] K1c-09 Persona-only `persona.md` for Luna and Yuri (untracked assets, D-041); SPEC Appendix A rules 3 and 6 (D-074)
+- **Gate K1c:** the user starts a roleplay from a card and from blank, talks with voice on and hears only dialogue, checks a chat thread still answers plainly with tools, and confirms or reverses the assumed answers in D-074.
+
 ## Phase K1b: Installer walking skeleton (D-035)
 
 Goal: find packaging problems in week one of the product, not the last week.
