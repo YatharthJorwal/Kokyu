@@ -443,3 +443,134 @@ class DialogueFilter:
             i += 1
         self._pending = text[i:]
         return "".join(out)
+
+
+# ---------------------------------------------------------------------------
+# A whole finished reply, as she says it aloud (D-097, FR-V-2).
+#
+# Read aloud speaks a reply once it has finished, so the cut can see the whole
+# text: a code fence or a table is dropped in one piece, never half read because
+# a streamed clause split it. Fixed rules, no model: nothing here can change her
+# words, add delay or take graphics memory (D-072). Order matters:
+#   1. blocks: fenced code (an unclosed fence runs to the end), tables, rules;
+#   2. lines: heading, quote and list marks go, and every line ends as a sentence;
+#   3. inline: images, link addresses, bare URLs and inline code go, a link's
+#      words stay; before the roleplay cut, so a "*" or a quote in them is not
+#      mistaken for an action or her line;
+#   4. roleplay: DialogueFilter keeps only her dialogue (FR-MODE-8);
+#   5. the shared rules of normalize_spoken: Markdown marks, [tags], dashes to a
+#      comma pause, quote marks, emoji;
+#   6. tidy the punctuation the earlier steps left doubled.
+
+SPEAKABLE_MODES = ("chat", "roleplay")
+
+_FENCE_OPEN = re.compile(r"^\s*(`{3,}|~{3,})")
+_TABLE_RULE_CELL = re.compile(r"^:?-+:?$")
+_PIPE_ROW = re.compile(r"^\s*\|.*\|\s*$")
+_RULE_LINE = re.compile(r"^\s{0,3}([-*_])(\s*\1){2,}\s*$")
+_LINE_MARKS = (
+    re.compile(r"^\s{0,3}(?:>\s?)+"),                 # quotes, nested too
+    re.compile(r"^\s{0,3}#{1,6}\s+"),                  # headings
+    re.compile(r"^\s*(?:[-*+]|\d{1,9}[.)])\s+"),       # list items, any depth
+)
+_IMAGE = re.compile(r"!\[[^\]\n]*\]\([^)\n]*\)")
+_LINK = re.compile(r"\[([^\]\n]*)\]\((?:[^()\s]|\([^()\s]*\))*\)")
+_AUTOLINK = re.compile(r"<(?:https?://|mailto:)[^>\s]*>", re.IGNORECASE)
+_BARE_URL = re.compile(r"(?:https?://|www\.)[^\s<>]+", re.IGNORECASE)
+_ANY_INLINE_CODE = re.compile(r"(`+)[^\n]*?\1")
+_ESCAPED = re.compile(r"\\([\\`*_{}\[\]()#+\-.!>~|])")
+_STRIKE = re.compile(r"~~")
+# What steps 1 to 5 leave behind: "list:." "here?." ", ." "word ." ",,"
+_SPACE_BEFORE_MARK = re.compile(r"\s+([,.;:!?])")
+_PAUSE_BEFORE_END = re.compile(r"[,;:]+(?=[.!?])")
+_AFTER_END = re.compile(r"([.!?])[.,;:]+")
+_PAUSE_RUN = re.compile(r"([,;:])[,;:]+")
+_TRAILING_PAUSE = re.compile(r"[\s,;:]+$")
+
+
+def _is_table_rule(line: str) -> bool:
+    """`|---|:--:|` (GitHub's rule line). A lone `---` is a horizontal rule instead."""
+    s = line.strip()
+    if "-" not in s or ("|" not in s):
+        return False
+    s = s.removeprefix("|").removesuffix("|")
+    return all(_TABLE_RULE_CELL.match(cell.strip()) for cell in s.split("|"))
+
+
+def _drop_blocks(lines: list[str]) -> list[str]:
+    """Step 1: fenced code, tables and horizontal rules are not read at all."""
+    out: list[str] = []
+    fence: str | None = None
+    i = 0
+    while i < len(lines):
+        line = lines[i]
+        if fence is not None:
+            if re.fullmatch(rf"\s*{re.escape(fence[0])}{{{len(fence)},}}\s*", line):
+                fence = None
+            i += 1
+            continue
+        opened = _FENCE_OPEN.match(line)
+        if opened:
+            fence = opened.group(1)
+            i += 1
+            continue
+        if "|" in line and i + 1 < len(lines) and _is_table_rule(lines[i + 1]):
+            i += 2
+            while i < len(lines) and "|" in lines[i] and lines[i].strip():
+                i += 1
+            continue
+        if _PIPE_ROW.match(line) or _RULE_LINE.match(line):
+            i += 1
+            continue
+        out.append(line)
+        i += 1
+    return out
+
+
+def _as_sentence(line: str) -> str:
+    """Step 2: a line without its block marks, ended as a sentence. The added
+    period is tidied away in step 6 when the line already ended in one."""
+    for mark in _LINE_MARKS:
+        line = mark.sub("", line, count=1)
+    line = line.strip()
+    return f"{line}." if line else ""
+
+
+def _drop_inline(text: str) -> str:
+    """Step 3: the words of a link stay; addresses and code do not."""
+    text = _IMAGE.sub(" ", text)
+    text = _LINK.sub(r"\1", text)
+    text = _AUTOLINK.sub(" ", text)
+    # A sentence's own punctuation after an address is not the address.
+    text = _BARE_URL.sub(lambda m: " " + m.group(0)[len(m.group(0).rstrip(".,;:!?'\")")):], text)
+    text = _ANY_INLINE_CODE.sub(" ", text)
+    # An escaped mark is not read either: "\*" must not open an action in step 4.
+    text = _ESCAPED.sub(lambda m: "" if m.group(1) in "*_`\\" else m.group(1), text)
+    return _STRIKE.sub("", text)
+
+
+def _tidy(text: str) -> str:
+    """Step 6."""
+    text = _SPACE_BEFORE_MARK.sub(r"\1", text)
+    text = _PAUSE_BEFORE_END.sub("", text)
+    text = _AFTER_END.sub(r"\1", text)
+    text = _PAUSE_RUN.sub(r"\1", text)
+    text = _LEADING_JUNK.sub("", text)
+    text = _TRAILING_PAUSE.sub("", text)
+    return _WHITESPACE.sub(" ", text).strip()
+
+
+def speakable(text: str, mode: str = "chat", cfg: SpeechConfig | None = None) -> str:
+    """What she says aloud of one finished reply (D-097): fixed rules, the same for
+    every companion. "" when nothing in it is speakable (a reply that is only code,
+    or a roleplay line with no dialogue). `mode` is the thread's (FR-MODE-1)."""
+    if mode not in SPEAKABLE_MODES:
+        raise ValueError(f"unknown conversation mode: {mode!r}")
+    lines = (text or "").replace("\r\n", "\n").replace("\r", "\n").split("\n")
+    sentences = [s for s in (_as_sentence(line) for line in _drop_blocks(lines)) if s]
+    out = _drop_inline("\n".join(sentences))
+    if mode == "roleplay":
+        cut = DialogueFilter()
+        out = cut.feed(out) + cut.finish()
+    out, _dropped = normalize_spoken(out.replace("\n", " "), cfg)
+    return _tidy(out)
