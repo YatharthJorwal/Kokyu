@@ -76,6 +76,17 @@ class ThreadNew(_Data):
     scenario: Scenario | None = None
 
 
+class ScenarioSave(_Data):
+    """FR-MODE-6: save a scenario card; with `id`, the saved card with that id is replaced."""
+
+    id: str | None = Field(default=None, min_length=1, max_length=64)
+    card: Scenario
+
+
+class ScenarioRef(_Data):
+    id: str = Field(min_length=1, max_length=64)
+
+
 class ScreenCompanion(_Data):
     """K1-05b (FR-SC-1..4): turn Task Guide or OCR watch on or off; Task Guide may
     carry the task in the user's words."""
@@ -221,6 +232,9 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "memory_restore": FactRef,        # bring a forgotten fact back
     "settings_get": Empty,            # K1-13b (FR-SET-2): the editable settings
     "settings_set": SettingsChange,   # change them; saved to settings.json, applied at once
+    "scenario_list": Empty,           # FR-MODE-6: the saved scenario cards
+    "scenario_save": ScenarioSave,    # save a card (new, or replacing the one with its id)
+    "scenario_delete": ScenarioRef,   # delete a saved card
 }
 
 # Kernel -> client, versioned.
@@ -245,6 +259,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "doctor_report",  # K1-13 (FR-SET-3): one row per component, with a fix hint
     "memory_facts",   # K1-13 (FR-MEM-4): live facts, then forgotten ones
     "settings",       # K1-13b (FR-SET-2): the editable settings in effect
+    "scenarios",      # FR-MODE-6: the saved scenario cards, newest first
 )
 
 ERROR_CODES: tuple[str, ...] = (

@@ -23,7 +23,7 @@ from typing import Any
 
 import paths
 from config import CONFIG
-from threads import Message, StoryMemory, Thread, ThreadStore
+from threads import Message, ScenarioCard, StoryMemory, Thread, ThreadStore
 
 log = logging.getLogger("kokyu.conversation")
 
@@ -51,15 +51,24 @@ def prompt_layers(thread: Thread | None) -> dict[str, Any]:
     return {"mode": thread.mode, "scenario": dict(thread.scenario) or None}
 
 
+def _aside(message: Message) -> bool:
+    """A stored assistant line that no user line asked for: a screen companion's remark
+    (meta.ambient) or a roleplay's opening (meta.opening, FR-MODE-6). Neither is part
+    of an exchange, so neither goes to a model as history nor is regenerated."""
+    return bool(message.meta.get("ambient") or message.meta.get("opening"))
+
+
 def history_from(messages: list[Message], system_message: str, max_messages: int) -> list[dict[str, str]]:
     """The turn loop's `history` list: the system prompt, then the latest user and
     assistant lines. Dividers are UI markers, not something anyone said, so they stay out.
     So do screen companion remarks: they came from a screen capture, and a reloaded
-    thread may run on an API model (FR-SC-3, FR-R-7)."""
+    thread may run on an API model (FR-SC-3, FR-R-7). A roleplay's opening line stays
+    out too: it is already in the system message's scenario block (FR-MODE-6, D-074),
+    and it would be a leading assistant line anyway."""
     turns = [
         {"role": m.role, "content": m.content}
         for m in messages
-        if m.role in ("user", "assistant") and m.content and not m.meta.get("ambient")
+        if m.role in ("user", "assistant") and m.content and not _aside(m)
     ]
     if max_messages >= 0 and len(turns) > max_messages:
         turns = turns[-max_messages:] if max_messages else []
@@ -210,10 +219,12 @@ class ConversationManager:
         the message ids a new reply replaces (the line, and the reply if one came) and
         the user line's meta (see record_exchange).
         A failed turn left only the line. Dividers after it are skipped: a companion
-        switch does not end the exchange. None when the thread does not end in one."""
+        switch does not end the exchange. None when the thread does not end in one.
+        A roleplay's opening line is never part of an exchange (FR-MODE-6): a thread
+        holding only the opening has nothing to regenerate."""
         # A few dozen messages cover any run of dividers a user could click together.
         recent = await self._run(self.store.messages, thread_id, limit=50)
-        tail = [m for m in recent if m.role != "divider" and not m.meta.get("ambient")][-2:]
+        tail = [m for m in recent if m.role != "divider" and not _aside(m)][-2:]
         if tail and tail[-1].role == "user":
             drop = tail[-1:]
         elif len(tail) == 2 and tail[0].role == "user" and tail[1].role == "assistant":
@@ -234,8 +245,33 @@ class ConversationManager:
             meta={"ambient": True},
         )
 
+    async def record_opening(self, thread_id: str, text: str, *, speaker: Speaker) -> Message:
+        """A roleplay's opening line from its card (FR-MODE-6, D-074): her first message,
+        flagged `opening`. Written by the user, not a model, so it has no model or effort.
+        history_from and last_exchange leave it out; the system message carries it."""
+        return await self._run(
+            self.store.add_message,
+            thread_id,
+            "assistant",
+            text,
+            speaker_waifu_id=speaker.waifu_id,
+            speaker_name=speaker.name,
+            meta={"opening": True},
+        )
+
     async def delete_messages(self, ids: list[int]) -> None:
         await self._run(self.store.delete_messages, ids)
+
+    # -- saved scenario cards (FR-MODE-6, D-074) -------------------------------
+
+    async def scenarios(self) -> list[ScenarioCard]:
+        return await self._run(self.store.list_scenarios)
+
+    async def save_scenario(self, card: dict[str, Any], *, scenario_id: str | None = None) -> ScenarioCard:
+        return await self._run(self.store.save_scenario, card, scenario_id=scenario_id)
+
+    async def delete_scenario(self, scenario_id: str) -> bool:
+        return await self._run(self.store.delete_scenario, scenario_id)
 
     # -- story memory (FR-MODE-5, D-074) ---------------------------------------
 

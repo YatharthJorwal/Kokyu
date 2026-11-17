@@ -49,6 +49,7 @@ DRIVER_ONLY = frozenset({"send", "send_file", "regenerate"})
 
 BUSY = "Wait for the reply to finish, or press Stop."
 NO_THREADS = "Conversation history is unavailable right now."
+NO_SCENARIOS = "Saved scenarios are unavailable right now."
 GONE = "That conversation no longer exists."
 
 
@@ -552,18 +553,55 @@ class Session:
 
         async def new() -> None:
             active = companions.waifu_of(self.ws)
-            await self.load_thread(
-                await self.manager.new_thread(
-                    waifu_id=active.id if active else None,
-                    model_ref=self.thread.model_ref if self.thread else None,
-                    effort=self.thread.effort if self.thread else None,
-                    mode=data.mode,
-                    scenario=scenario,
-                    title=(scenario or {}).get("title", ""),
-                )
+            thread = await self.manager.new_thread(
+                waifu_id=active.id if active else None,
+                model_ref=self.thread.model_ref if self.thread else None,
+                effort=self.thread.effort if self.thread else None,
+                mode=data.mode,
+                scenario=scenario,
+                title=(scenario or {}).get("title", ""),
             )
+            # FR-MODE-6 (D-074): the card's opening line is her first message, shown by
+            # thread_opened below. It stays out of the model's history; the scenario block
+            # of the system message carries it.
+            opening = (scenario or {}).get("opening")
+            if opening:
+                await self.manager.record_opening(thread.id, opening, speaker=companions.speaker_record(self.ws))
+            await self.load_thread(thread)
 
         await self._change_thread("thread_new", new)
+
+    # ── saved scenario cards (FR-MODE-6, D-074): app-level, any window ──────
+
+    async def send_scenarios(self) -> None:
+        cards = await self.manager.scenarios()
+        await self.ws.send_json(protocol.frame("scenarios", {"cards": [c.to_dict() for c in cards]}))
+
+    async def _change_scenarios(self, what: str, change: Callable[[], Awaitable[Any]] | None = None) -> None:
+        """Runs `change` (if any), then answers with the fresh list."""
+        try:
+            if change is not None:
+                await change()
+            await self.send_scenarios()
+        except Exception as exc:  # noqa: BLE001 -- report, keep the connection
+            log.warning(f"scenario request {what} failed: {exc}")
+            await self.refuse("threads_unavailable", NO_SCENARIOS)
+
+    async def on_scenario_list(self, msg: Any) -> None:
+        await self._change_scenarios("scenario_list")
+
+    async def on_scenario_save(self, msg: Any) -> None:
+        """Saves the card's filled-in fields; an empty title is named from its setting,
+        else "Untitled scenario". Answered with the fresh list."""
+        data = msg.data
+        await self._change_scenarios(
+            "scenario_save", lambda: self.manager.save_scenario(data.card.model_dump(), scenario_id=data.id)
+        )
+
+    async def on_scenario_delete(self, msg: Any) -> None:
+        """Deleting a card leaves the threads started from it as they are. A card that is
+        already gone is not an error: the fresh list answers either way."""
+        await self._change_scenarios("scenario_delete", lambda: self.manager.delete_scenario(msg.data.id))
 
     async def on_thread_open(self, msg: Any) -> None:
         async def open_it() -> None:

@@ -19,10 +19,12 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 4   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074);
-                     # 4: the story_memory table (FR-MODE-5, D-074)
+SCHEMA_VERSION = 5   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074);
+                     # 4: the story_memory table (FR-MODE-5, D-074); 5: the scenarios table (FR-MODE-6, D-074)
 TITLE_MAX = 80
 SEARCH_LIMIT = 50
+# FR-MODE-6: what a saved card is called when its title was left empty and it has no setting.
+UNTITLED_SCENARIO = "Untitled scenario"
 
 ROLES = ("user", "assistant", "divider")
 # FR-MODE-1 (D-074): what kind of conversation a thread is, fixed when it is created.
@@ -75,6 +77,13 @@ CREATE TABLE IF NOT EXISTS story_memory (
     summary            TEXT NOT NULL DEFAULT '',
     through_message_id INTEGER NOT NULL DEFAULT 0,
     updated_at         REAL
+);
+CREATE TABLE IF NOT EXISTS scenarios (
+    id         TEXT PRIMARY KEY,
+    title      TEXT NOT NULL DEFAULT '',
+    card       TEXT NOT NULL,
+    created_at REAL,
+    updated_at REAL
 );
 """
 
@@ -165,6 +174,22 @@ class StoryMemory:
     updated_at: float | None = None
 
 
+@dataclass(frozen=True)
+class ScenarioCard:
+    """A saved scenario card (FR-MODE-6, D-074): the user's, app-level, never tied to a
+    companion. `card` holds the filled-in fields (title, setting, user_role, her_role,
+    rules, opening); `title` is what the list shows."""
+
+    id: str
+    title: str
+    card: dict[str, Any] = field(default_factory=dict)
+    created_at: float | None = None
+    updated_at: float | None = None
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"id": self.id, "title": self.title, "card": dict(self.card), "updated_at": self.updated_at}
+
+
 class ThreadNotFound(KeyError):
     pass
 
@@ -175,6 +200,17 @@ def title_from(text: str) -> str:
     if len(line) <= TITLE_MAX:
         return line
     return line[: TITLE_MAX - 1].rstrip() + "…"
+
+
+def scenario_title(card: dict[str, Any]) -> str:
+    """A saved card's name in the list (FR-MODE-6): its own title, else the start of its
+    setting, else UNTITLED_SCENARIO."""
+    for key in ("title", "setting"):
+        value = card.get(key)
+        text = title_from(value) if isinstance(value, str) else ""
+        if text:
+            return text
+    return UNTITLED_SCENARIO
 
 
 def _thread(row: sqlite3.Row) -> Thread:
@@ -200,6 +236,13 @@ def _json_dict(text: str | None) -> dict[str, Any]:
     except json.JSONDecodeError:
         value = {}
     return value if isinstance(value, dict) else {}
+
+
+def _scenario(row: sqlite3.Row) -> ScenarioCard:
+    return ScenarioCard(
+        id=row["id"], title=row["title"], card=_json_dict(row["card"]),
+        created_at=row["created_at"], updated_at=row["updated_at"],
+    )
 
 
 def _message(row: sqlite3.Row) -> Message:
@@ -447,6 +490,37 @@ class ThreadStore:
                 " through_message_id = excluded.through_message_id, updated_at = excluded.updated_at",
                 (thread_id, summary, int(through_message_id), self._now(), thread_id),
             )
+        return cur.rowcount > 0
+
+    # -- saved scenario cards (FR-MODE-6, D-074) -------------------------------
+
+    def list_scenarios(self) -> list[ScenarioCard]:
+        """Every saved card, the most recently saved first."""
+        with self._connect() as db:
+            rows = db.execute("SELECT * FROM scenarios ORDER BY updated_at DESC, created_at DESC, id").fetchall()
+        return [_scenario(r) for r in rows]
+
+    def save_scenario(self, card: dict[str, Any], *, scenario_id: str | None = None) -> ScenarioCard:
+        """Inserts a card, or replaces the one with `scenario_id` (a new one is made with
+        that id when it is not there). Only filled-in fields are kept; the list's title
+        comes from scenario_title. Returns the saved card."""
+        kept = {key: value for key, value in card.items() if isinstance(value, str) and value.strip()}
+        card_id = scenario_id or uuid.uuid4().hex
+        now = self._now()
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO scenarios (id, title, card, created_at, updated_at) VALUES (?, ?, ?, ?, ?)"
+                " ON CONFLICT(id) DO UPDATE SET title = excluded.title, card = excluded.card,"
+                " updated_at = excluded.updated_at",
+                (card_id, scenario_title(kept), json.dumps(kept), now, now),
+            )
+            row = db.execute("SELECT * FROM scenarios WHERE id = ?", (card_id,)).fetchone()
+        return _scenario(row)
+
+    def delete_scenario(self, scenario_id: str) -> bool:
+        """False when there was no such card. Threads started from it keep their own copy."""
+        with self._connect() as db:
+            cur = db.execute("DELETE FROM scenarios WHERE id = ?", (scenario_id,))
         return cur.rowcount > 0
 
     # -- small key/value (last opened thread) ----------------------------------

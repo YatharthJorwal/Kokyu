@@ -581,10 +581,162 @@ def test_a_roleplay_thread_keeps_its_story_out_of_the_transcript_and_regenerates
         _chat(ws, "1 + 1?")
     assert done["data"]["text"] == "*She waves.*\n\n\"Over here!\""
     stored = conversation.get_manager().store.messages(thread["id"])
-    assert [(m.role, m.content) for m in stored] == [("user", "Hello?"), ("assistant", "*She waves.*\n\n\"Over here!\"")]
+    # Since K1c-06 (FR-MODE-6) CARD's opening line is stored first as her opening
+    # message; Regenerate replaced only the exchange after it.
+    assert [(m.role, m.content) for m in stored] == [
+        ("assistant", "*She waves.*"), ("user", "Hello?"), ("assistant", "*She waves.*\n\n\"Over here!\""),
+    ]
+    assert stored[0].meta == {"opening": True}
     assert "log_id" not in (stored[-1].meta or {})
     assert logged == ["1 + 1?"] and dropped == []          # only the chat thread's turn reached the transcript
     assert seen[0]["tools"] == [] and seen[0]["role"] == "chat" and seen[0]["notes"] == [
         prompting.ROLEPLAY_PROFILE_FRAMING.format(card="Sam.")
     ]
     assert seen[2]["tools"]                                # the chat thread offers tools again
+
+
+# -- the opening line and saved scenario cards (FR-MODE-6, K1c-06; D-074) -----
+
+
+@pytest.mark.asyncio
+async def test_the_opening_line_is_her_first_message_but_never_history_or_an_exchange(manager):
+    """FR-MODE-6: the opening is stored as her first message, flagged; history_from leaves
+    it out (the system message carries it) and Regenerate never targets it."""
+    alpha = Speaker("alpha", "Alpha")
+    t = await manager.new_thread(waifu_id="alpha", mode="roleplay", scenario={"opening": "*She waves.*"})
+    opening = await manager.record_opening(t.id, "*She waves.*", speaker=alpha)
+    assert opening.role == "assistant" and opening.meta == {"opening": True}
+    assert opening.speaker_name == "Alpha" and opening.model_ref is None and opening.effort is None
+    assert await manager.last_exchange(t.id) is None                           # nothing to regenerate
+    assert await manager.history(t, "sys") == [{"role": "system", "content": "sys"}]
+    await manager.record_exchange(t.id, "Hi!", "", speaker=alpha)              # a failed turn
+    again, ids, _ = await manager.last_exchange(t.id)
+    assert again == "Hi!" and opening.id not in ids and len(ids) == 1
+    await manager.delete_messages(ids)
+    await manager.record_exchange(t.id, "Hi!", "Hello. *smiles*", speaker=alpha)
+    again, ids, _ = await manager.last_exchange(t.id)
+    assert again == "Hi!" and opening.id not in ids and len(ids) == 2
+    history = await manager.history(t, "sys")
+    assert [m["content"] for m in history[1:]] == ["Hi!", "Hello. *smiles*"]
+
+
+def test_history_leaves_out_an_opening_wherever_it_sits():
+    """FR-MODE-6: dropped by its flag, not only because it leads, so it never takes a
+    slot in the history window either."""
+
+    class M:
+        def __init__(self, role, content, meta=None):
+            self.role, self.content, self.meta = role, content, meta or {}
+
+    msgs = [M("assistant", "*waves*", {"opening": True}), M("user", "u1"), M("assistant", "a1")]
+    assert [m["content"] for m in history_from(msgs, "S", max_messages=2)[1:]] == ["u1", "a1"]
+
+
+def _model_messages(monkeypatch):
+    """Records every message list the model is given."""
+    seen = []
+
+    async def recording(role, messages, tools, **kwargs):
+        seen.append([dict(m) for m in messages])
+        yield {"type": "content", "text": "Mm. [happy]"}
+
+    monkeypatch.setattr(router, "stream_with_tools", recording)
+    return seen
+
+
+def test_a_roleplay_opening_is_shown_stored_and_in_the_system_message_only(kernel, monkeypatch):
+    """FR-MODE-6 over the socket: thread_opened shows the opening as her first message;
+    the model gets it in the scenario block, never as a history line; Regenerate with
+    only the opening is refused, and later replaces only the exchange."""
+    seen = _model_messages(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": CARD}})
+        opened, _ = _until(ws, "thread_opened")
+        thread_id = opened["data"]["thread"]["id"]
+        [first] = opened["data"]["messages"]
+        assert (first["role"], first["content"], first["speaker_name"]) == ("assistant", "*She waves.*", "Alpha")
+        assert first["meta"] == {"opening": True}
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        err, _ = _until(ws, "error")
+        assert err["data"]["code"] == "bad_message"                     # the opening is not a reply to redo
+        _temp_on(ws)
+        _chat(ws, "Hi!")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        _until(ws, "turn_done")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
+        _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": thread_id}})
+        reopened, _ = _until(ws, "thread_opened")
+        _chat(ws, "Again")
+    assert len(seen) == 3
+    for messages in seen:
+        assert "The scene opened with your line: *She waves.*" in messages[0]["content"]
+        assert all(m["content"] != "*She waves.*" for m in messages[1:])
+        assert messages[1]["role"] == "user"
+    assert [m["content"] for m in seen[1][1:]] == ["Hi!"]                # the regenerate: the opening stays out
+    stored = conversation.get_manager().store.messages(thread_id)
+    assert [(m.role, m.content) for m in stored] == [
+        ("assistant", "*She waves.*"), ("user", "Hi!"), ("assistant", "Mm."), ("user", "Again"), ("assistant", "Mm."),
+    ]
+    assert [m["content"] for m in reopened["data"]["messages"]][:1] == ["*She waves.*"]
+
+
+def test_no_opening_line_without_one_in_the_card(kernel):
+    """FR-MODE-6: a card without an opening, a blank roleplay and a chat thread sent a
+    card all start empty."""
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        for data in (
+            {"mode": "roleplay", "scenario": {"title": "Quiet", "opening": "   "}},
+            {"mode": "roleplay"},
+            {"mode": "chat", "scenario": CARD},
+        ):
+            ws.send_json({"v": 1, "type": "thread_new", "data": data})
+            opened, _ = _until(ws, "thread_opened")
+            assert opened["data"]["messages"] == []
+
+
+def _scenarios(ws, type_, data=None):
+    ws.send_json({"v": 1, "type": type_, "data": data or {}})
+    frame, _ = _until(ws, "scenarios")
+    return frame["data"]["cards"]
+
+
+def test_scenario_cards_are_listed_saved_edited_and_deleted_over_the_socket(kernel):
+    """FR-MODE-6: every save and delete answers with the fresh list, newest first; an
+    empty title is named from the setting, else "Untitled scenario"; the card keeps
+    only its filled-in fields."""
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        assert _scenarios(ws, "scenario_list") == []
+        cards = _scenarios(ws, "scenario_save", {"card": CARD})
+        assert len(cards) == 1 and cards[0]["title"] == "Rain at the station"
+        rain = cards[0]
+        assert rain["card"] == {"title": "Rain at the station", "setting": "A station at night.", "opening": "*She waves.*"}
+        assert set(rain) == {"id", "title", "card", "updated_at"}
+        cards = _scenarios(ws, "scenario_save", {"card": {"setting": "A library at dusk."}})
+        assert [c["title"] for c in cards] == ["A library at dusk.", "Rain at the station"]
+        cards = _scenarios(ws, "scenario_save", {"card": {}})
+        assert cards[0]["title"] == "Untitled scenario" and cards[0]["card"] == {}
+        cards = _scenarios(ws, "scenario_save", {"id": rain["id"], "card": {"title": "Rain, later"}})
+        assert len(cards) == 3 and cards[0]["id"] == rain["id"] and cards[0]["card"] == {"title": "Rain, later"}
+        cards = _scenarios(ws, "scenario_delete", {"id": rain["id"]})
+        assert rain["id"] not in [c["id"] for c in cards] and len(cards) == 2
+        assert len(_scenarios(ws, "scenario_delete", {"id": rain["id"]})) == 2   # already gone: the list still answers
+    # saved in threads.db, not kept by the window
+    saved = conversation.get_manager().store.list_scenarios()
+    assert [c.title for c in saved] == ["Untitled scenario", "A library at dusk."]
+
+
+def test_a_scenario_store_failure_is_reported_not_fatal(kernel, monkeypatch):
+    async def broken(*_a, **_k):
+        raise RuntimeError("disk full")
+
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        monkeypatch.setattr(conversation.get_manager(), "save_scenario", broken)
+        ws.send_json({"v": 1, "type": "scenario_save", "data": {"card": CARD}})
+        err, _ = _until(ws, "error")
+        assert err["data"]["code"] == "threads_unavailable"
+        assert _scenarios(ws, "scenario_list") == []                       # the connection is still fine

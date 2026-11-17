@@ -71,6 +71,18 @@ def test_thread_new_takes_a_mode_and_a_scenario_card():
     assert blank.data.mode == "roleplay" and blank.data.scenario is None
 
 
+def test_scenario_card_messages_parse():
+    """FR-MODE-6 (K1c-06): list, save (new, or replacing an id) and delete saved cards."""
+    assert protocol.parse_client({"v": 1, "type": "scenario_list", "data": {}}).data.model_dump() == {}
+    new = protocol.parse_client({"v": 1, "type": "scenario_save", "data": {"card": {"setting": " A pier. "}}})
+    assert new.data.id is None and new.data.card.setting == "A pier." and new.data.card.title == ""
+    edit = protocol.parse_client({"v": 1, "type": "scenario_save", "data": {"id": "abc", "card": {}}})
+    assert edit.data.id == "abc"
+    assert protocol.parse_client({"v": 1, "type": "scenario_delete", "data": {"id": "abc"}}).data.id == "abc"
+    cards = [{"id": "abc", "title": "A pier.", "card": {"setting": "A pier."}, "updated_at": 1.0}]
+    assert protocol.frame("scenarios", {"cards": cards})["data"]["cards"] == cards
+
+
 @pytest.mark.parametrize(
     "raw, code",
     [
@@ -88,6 +100,16 @@ def test_thread_new_takes_a_mode_and_a_scenario_card():
         ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"opening": "o" * 4001}}}, "bad_message"),
         ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"genre": "noir"}}}, "bad_message"),
         ({"v": 1, "type": "thread_new", "data": {"mode": "chat", "extra": 1}}, "bad_message"),
+        # FR-MODE-6 (K1c-06): saved cards. A save needs a card; ids are bounded and non-empty.
+        ({"v": 1, "type": "scenario_save", "data": {}}, "bad_message"),
+        ({"v": 1, "type": "scenario_save", "data": {"id": "", "card": {}}}, "bad_message"),
+        ({"v": 1, "type": "scenario_save", "data": {"id": "x" * 65, "card": {}}}, "bad_message"),
+        ({"v": 1, "type": "scenario_save", "data": {"card": {"genre": "noir"}}}, "bad_message"),
+        ({"v": 1, "type": "scenario_save", "data": {"card": {"opening": "o" * 4001}}}, "bad_message"),
+        ({"v": 1, "type": "scenario_save", "data": {"card": {}, "mode": "roleplay"}}, "bad_message"),
+        ({"v": 1, "type": "scenario_delete", "data": {}}, "bad_message"),
+        ({"v": 1, "type": "scenario_delete", "data": {"id": "  "}}, "bad_message"),
+        ({"v": 1, "type": "scenario_list", "data": {"all": True}}, "bad_message"),
     ],
 )
 def test_bad_frames_are_typed_errors(raw, code):

@@ -38,6 +38,9 @@ export const CLIENT_TYPES = [
   "memory_restore",
   "settings_get",
   "settings_set",
+  "scenario_list",
+  "scenario_save",
+  "scenario_delete",
 ] as const;
 
 export const SERVER_TYPES = [
@@ -61,6 +64,7 @@ export const SERVER_TYPES = [
   "doctor_report",
   "memory_facts",
   "settings",
+  "scenarios",
 ] as const;
 
 export const ERROR_CODES = [
@@ -126,6 +130,14 @@ export interface ThreadInfo {
   mode: ThreadMode;
   /** The filled-in fields of the card; empty for chat threads and blank roleplays. */
   scenario: Scenario;
+}
+
+/** A saved scenario card (FR-MODE-6): `title` is the card's own, else derived from its setting. */
+export interface SavedScenario {
+  id: string;
+  title: string;
+  card: Scenario;
+  updated_at: number | null;
 }
 
 export interface ThreadMessage {
@@ -238,6 +250,8 @@ export interface ServerData {
   doctor_report: { checks: DoctorCheck[] };
   memory_facts: { facts: MemoryFact[] };
   settings: SettingsData;
+  /** FR-MODE-6: every saved card, the most recently saved first. */
+  scenarios: { cards: SavedScenario[] };
 }
 
 /** K1-13b (FR-SET-2, D-070): the editable settings in effect. `saved` names the ones
@@ -318,6 +332,10 @@ export interface ClientData {
   memory_restore: { id: number };
   settings_get: Record<string, never>;
   settings_set: SettingsChange;
+  scenario_list: Record<string, never>;
+  /** With `id`, replaces that saved card; without, saves a new one. */
+  scenario_save: { id?: string; card: Scenario };
+  scenario_delete: { id: string };
 }
 
 export type Effort = "off" | "low" | "medium" | "high" | "max";

@@ -24,6 +24,17 @@ test("thread_new carries the mode and the scenario card as given (FR-MODE-1, FR-
   assert.deepEqual(clientFrame("thread_new", {}).data, {}); // the kernel reads {} as a chat thread
 });
 
+test("saved scenario cards: list, save, delete out; the scenarios list back (FR-MODE-6)", () => {
+  assert.deepEqual(clientFrame("scenario_list", {}).data, {});
+  assert.deepEqual(clientFrame("scenario_save", { card: { setting: "A pier." } }).data, { card: { setting: "A pier." } });
+  assert.deepEqual(clientFrame("scenario_save", { id: "c1", card: {} }).data, { id: "c1", card: {} });
+  assert.deepEqual(clientFrame("scenario_delete", { id: "c1" }).data, { id: "c1" });
+  const cards = [{ id: "c1", title: "A pier.", card: { setting: "A pier." }, updated_at: 1 }];
+  const back = parseFrame({ v: 1, type: "scenarios", id: "x", thread: null, data: { cards } });
+  assert.equal(back.kind, "frame");
+  assert.deepEqual(back.frame.data.cards, cards);
+});
+
 test("v1 frames parse; anything else, a flat message included, is a stated problem (D-062)", () => {
   assert.equal(parseFrame({ type: "speak", text: "hi" }).kind, "error");
   assert.equal(parseFrame("nope").kind, "error");

@@ -205,12 +205,13 @@ def test_a_version_2_database_gains_mode_and_scenario_and_old_threads_are_chat(t
     assert store.create_thread(mode="roleplay", scenario=CARD).scenario == CARD
     with sqlite3.connect(db) as conn:
         # Schema 4 (K1c-04, FR-MODE-5) added the story_memory table on top of schema 3's
-        # columns, so an old database now lands on 4 and gains that table too.
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
+        # columns, and schema 5 (K1c-06, FR-MODE-6) the scenarios table, so an old
+        # database now lands on 5 and gains both tables too.
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 5
         columns = {row[1] for row in conn.execute("PRAGMA table_info(threads)")}
         tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"efforts", "mode", "scenario"} <= columns
-    assert "story_memory" in tables
+    assert {"story_memory", "scenarios"} <= tables
     ThreadStore(db)   # opening it again is a no-op, not a duplicate column
 
 
@@ -225,3 +226,47 @@ def test_a_version_1_database_gains_every_later_column(tmp_path):
         )
     old = ThreadStore(db).get_thread("old")
     assert old.mode == "chat" and old.scenario == {} and old.efforts == {}
+
+
+# -- saved scenario cards (FR-MODE-6, D-074) ---------------------------------
+
+
+def test_a_scenario_card_is_saved_listed_replaced_and_deleted(store):
+    """FR-MODE-6: cards are saved locally, newest first; saving with an id replaces that
+    card in place; deleting one leaves the others."""
+    first = store.save_scenario({"title": "Rain", "setting": "A station at night.", "rules": "  "})
+    assert first.title == "Rain" and first.card == {"title": "Rain", "setting": "A station at night."}
+    second = store.save_scenario({"title": "Snow"})
+    assert [c.id for c in store.list_scenarios()] == [second.id, first.id]
+    edited = store.save_scenario({"title": "Rain again", "opening": "*waves*"}, scenario_id=first.id)
+    assert edited.id == first.id and edited.created_at == first.created_at and edited.updated_at > first.updated_at
+    assert edited.card == {"title": "Rain again", "opening": "*waves*"}   # replaced, not merged
+    assert [c.id for c in store.list_scenarios()] == [first.id, second.id]   # the edit moved it up
+    assert store.delete_scenario(second.id) is True and store.delete_scenario(second.id) is False
+    assert [c.to_dict() for c in store.list_scenarios()] == [
+        {"id": first.id, "title": "Rain again", "card": edited.card, "updated_at": edited.updated_at}
+    ]
+
+
+def test_a_card_with_no_title_is_named_from_its_setting_or_untitled(store):
+    """FR-MODE-6: the list's title comes from the setting when the title is empty; the
+    card itself is kept as written."""
+    from_setting = store.save_scenario({"title": "", "setting": "  A quiet  library\nat dusk.  "})
+    assert from_setting.title == "A quiet library at dusk." and "title" not in from_setting.card
+    long = store.save_scenario({"setting": "x" * 200})
+    assert len(long.title) == 80 and long.title.endswith("…")
+    assert store.save_scenario({}).title == "Untitled scenario"
+    assert store.save_scenario({"opening": "Hi."}).title == "Untitled scenario"
+
+
+def test_an_unknown_id_saves_a_new_card_with_it_and_cards_outlive_threads(store):
+    """Saving with an id that is not there inserts it; a thread started from a card keeps
+    its own copy, so deleting either leaves the other (FR-MODE-6)."""
+    card = store.save_scenario({"title": "Rain"}, scenario_id="mine")
+    assert card.id == "mine" and [c.id for c in store.list_scenarios()] == ["mine"]
+    thread = store.create_thread(mode="roleplay", scenario=card.card)
+    store.delete_thread(thread.id)
+    assert [c.id for c in store.list_scenarios()] == ["mine"]
+    other = store.create_thread(mode="roleplay", scenario=card.card)
+    store.delete_scenario("mine")
+    assert store.get_thread(other.id).scenario == {"title": "Rain"}
