@@ -40,7 +40,7 @@ export function ThinkingRow() {
       {line !== "off" ? (
         <span className={line === "fading" ? "thinking-line fading" : "thinking-line"} role="status">
           {/* Screen readers hear it once; the changing words are for the eyes. */}
-          <span className="sr-only">{name ?? "Your waifu"} is thinking</span>
+          <span className="sr-only">{name ?? "She"} is thinking</span>
           <span aria-hidden="true" key={text}>
             {text}
           </span>
