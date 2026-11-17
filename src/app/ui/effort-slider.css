@@ -54,18 +54,20 @@
   opacity: 0;
 }
 
+/* Ticks for the inner levels only: the track's own ends mark the first and last.
+   (End dots were 6 px on a 6 px track, half outside its caps, in near-black ink.) */
 .effort-stop {
   position: absolute;
   top: 50%;
-  width: 6px;
-  height: 6px;
+  width: 4px;
+  height: 4px;
   border-radius: 50%;
-  background: var(--line);
+  background: color-mix(in srgb, var(--text) 26%, transparent);
   transform: translate(-50%, -50%);
 }
 
 .effort-stop.on {
-  background: var(--accent-ink);
+  background: rgb(255 255 255 / 0.6); /* light on the fill whatever the accent's ink */
 }
 
 .effort-thumb {

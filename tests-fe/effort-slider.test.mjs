@@ -94,8 +94,9 @@ test("the slider is an accessible slider over detent indexes", () => {
   assert.match(html, /aria-valuenow="2"/);
   assert.match(html, /aria-valuetext="Medium"/);
   assert.match(html, /data-level="medium"/);
-  assert.equal((html.match(/class="effort-stop/g) ?? []).length, 4);
-  assert.equal((html.match(/effort-stop on/g) ?? []).length, 3);
+  // ticks for the inner levels only: no dots at the track's ends (D-097)
+  assert.equal((html.match(/class="effort-stop/g) ?? []).length, 2);
+  assert.equal((html.match(/effort-stop on/g) ?? []).length, 2); // low and medium
   assert.match(html, /effort-thumb/);
   assert.doesNotMatch(html, / still/); // medium pulses
 });
@@ -106,6 +107,7 @@ test("the model default shows no thumb and no value, and off does not pulse", ()
   assert.match(unset, /aria-valuetext="Model default"/);
   assert.doesNotMatch(unset, /effort-thumb/);
   assert.match(render({ supported: ["off", "high"], value: "off" }), /effort-slider still/);
+  assert.doesNotMatch(render({ supported: ["off", "high"], value: "high" }), /effort-stop/); // two levels: no ticks
 });
 
 test("reduced motion is a class the CSS turns static", () => {

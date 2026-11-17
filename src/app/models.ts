@@ -141,6 +141,8 @@ export const THINKING_WORDS = [
   "Blushing", "Pouting", "Swooning", "Fluttering", "Melting", "Nuzzling", "Teasing", "Yearning",
   "Giggling", "Whimpering", "Cuddling", "Sparkening", "Heart-fluttering", "Softening", "Clinging",
   "Blush-loading", "Affectioning", "Flustered-thinking", "Headpatting-self",
+  // the user's own, kept as an approved exception to D-082 (D-097)
+  "Waifu-mode-engaging",
   // more in the same voice
   "Daydreaming", "Twirling-hair", "Humming", "Doodling-hearts", "Kicking-feet", "Starry-eyeing",
   "Swaying", "Peeking", "Fidgeting", "Pillow-hugging", "Lovestruck-loading", "Squealing-softly",

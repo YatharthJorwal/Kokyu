@@ -262,7 +262,12 @@ function ThinkingReply({ id, name }: { id: string | null; name: string | null })
         <Heart />
       </span>
       {/* keyed on the word, so each new one plays its entrance */}
-      <span className="thinking-word" key={word} aria-hidden="true">
+      <span
+        className="thinking-word"
+        key={word}
+        aria-hidden="true"
+        style={{ "--step": `${THINKING_STEP_S}s` } as CSSProperties}
+      >
         {Array.from(word).map((ch, i) => (
           <span key={i} className="letter" style={{ "--i": i } as CSSProperties}>
             {ch}

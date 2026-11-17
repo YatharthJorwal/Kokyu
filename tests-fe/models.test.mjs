@@ -208,7 +208,11 @@ test("thinking words: each once a turn in a fresh order, short, and none from th
   assert.equal(new Set(order).size, THINKING_WORDS.length);
   assert.notDeepEqual(order, THINKING_WORDS);
   assert.deepEqual([...order].sort(), [...THINKING_WORDS].sort());
-  assert.ok(THINKING_WORDS.every((w) => w.length <= 20 && !/\s/.test(w) && !/waifu|kernel/i.test(w)));
+  // "Waifu-mode-engaging" is the user's word, approved as the one exception to D-082 (D-097).
+  const ordinary = THINKING_WORDS.filter((w) => w !== "Waifu-mode-engaging");
+  assert.equal(ordinary.length, THINKING_WORDS.length - 1);
+  assert.ok(THINKING_WORDS.every((w) => w.length <= 20 && !/\s/.test(w)));
+  assert.ok(ordinary.every((w) => !/waifu|kernel/i.test(w)));
   assert.ok(THINKING_WORDS.every((w) => !WAKING_LINES.some((l) => l.toLowerCase().includes(w.toLowerCase()))));
 });
 

@@ -118,14 +118,17 @@ export function EffortSlider({ supported, value, onChange, reducedMotion = false
       <div className="effort-track" ref={track}>
         <span className="effort-glow" aria-hidden="true" />
         <span className="effort-fill" aria-hidden="true" />
-        {stops.map((stop, i) => (
-          <span
-            key={stop}
-            className={`effort-stop${index >= 0 && i <= index ? " on" : ""}`}
-            style={{ left: `${positionFor(i, stops.length) * 100}%` }}
-            aria-hidden="true"
-          />
-        ))}
+        {/* inner levels only; the track's ends are the first and last (D-097) */}
+        {stops.map((stop, i) =>
+          i === 0 || i === stops.length - 1 ? null : (
+            <span
+              key={stop}
+              className={`effort-stop${index >= 0 && i <= index ? " on" : ""}`}
+              style={{ left: `${positionFor(i, stops.length) * 100}%` }}
+              aria-hidden="true"
+            />
+          ),
+        )}
         {index >= 0 || drag !== null ? <span className="effort-thumb" aria-hidden="true" /> : null}
       </div>
       <div className="effort-labels" aria-hidden="true">

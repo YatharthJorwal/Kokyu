@@ -145,6 +145,7 @@ button:disabled {
 }
 
 .thread-title {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
 }
@@ -161,15 +162,16 @@ button:disabled {
   font-weight: 700;
 }
 
-/* Rename and Delete show on hover or keyboard focus. Transparent, not display:none,
-   so Tab still reaches them. */
+/* The ⋯ button shows on hover or keyboard focus. Transparent, not display:none,
+   so Tab still reaches it. No backdrop of its own (it read as a hard square): the
+   row makes room for it instead, so a long title ends before it (D-097). */
 .thread-actions {
   position: absolute;
-  right: 4px;
+  top: 0;
+  right: 6px;
+  bottom: 0;
   display: flex;
-  gap: 2px;
-  padding-left: 6px;
-  background: var(--panel-2);
+  align-items: center;
   opacity: 0;
 }
 
@@ -178,17 +180,30 @@ button:disabled {
   opacity: 1;
 }
 
+.thread-row:hover .thread-item,
+.thread-row:focus-within .thread-item {
+  padding-right: 38px;
+}
+
 .thread-actions button {
-  padding: 2px 6px;
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
   border: 0;
   border-radius: 6px;
   background: transparent;
   color: var(--muted);
+  transition:
+    background-color 120ms ease,
+    color 120ms ease;
 }
 
-.thread-actions button:hover:not(:disabled) {
+.thread-actions button:hover:not(:disabled),
+.thread-actions button[aria-expanded="true"] {
   color: var(--text);
-  background: var(--line);
+  background: color-mix(in srgb, var(--text) 9%, transparent);
 }
 
 .thread-rename {
@@ -371,7 +386,9 @@ button:disabled {
   text-overflow: ellipsis;
 }
 
-.thread-item:hover:not(:disabled) {
+/* the whole row, so it stays lit while the pointer is on its ⋯ button */
+.thread-row:hover .thread-item:not(:disabled),
+.thread-row:has(.thread-actions :focus-visible) .thread-item {
   background: var(--panel-2);
 }
 
@@ -1131,13 +1148,13 @@ button:disabled {
   letter-spacing: 0.01em;
 }
 
-/* each letter rises into place, then the word keeps a soft wave */
+/* One slow lift travels across the letters (D-097): transform only, no fade.
+   A cycle lasts one word (--step, THINKING_STEP_S), and the lift takes its
+   first 3/8, so even the 19th letter is back down before the next word. */
 .thinking-word .letter {
   display: inline-block;
   white-space: pre;
-  animation:
-    letter-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i) * 32ms) both,
-    letter-wave 1.8s ease-in-out calc(600ms + var(--i) * 70ms) infinite;
+  animation: letter-lift var(--step, 2.4s) ease-in-out calc(var(--i) * 70ms) infinite both;
 }
 
 .thinking-dots {
@@ -1162,22 +1179,14 @@ button:disabled {
   animation-delay: 0.3s;
 }
 
-@keyframes letter-in {
-  from {
-    opacity: 0;
-    transform: translateY(7px) scale(0.8);
-    filter: blur(3px);
-  }
-}
-
-@keyframes letter-wave {
+@keyframes letter-lift {
   0%,
-  60%,
+  37.5%,
   100% {
-    transform: translateY(0);
+    transform: translate3d(0, 0, 0);
   }
-  30% {
-    transform: translateY(-2.5px);
+  18.75% {
+    transform: translate3d(0, -2.5px, 0);
   }
 }
 
