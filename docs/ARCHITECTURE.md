@@ -222,9 +222,9 @@ A role is a capability slot in `config.yaml` `roles`. A `local_only` role whose 
 - **VRAM check before a load** (D-065). `vram.py` reads the GPU through NVML (the driver's `nvml.dll`), else `nvidia-smi`, else "unknown". It remembers what each model really took. `router/listing.py` `load_check` refuses a local model that would not fit beside the embedding model once the other chat model is gone, and names what holds the memory. An unknown answer never refuses.
 - **Measured on the dev PC:** Qwen3.6-35B-A3B Q4 on llama.cpp with every expert in RAM takes about 3 GB VRAM and 19.5 GB RAM (`docs/STATE.md`). GPT-SoVITS and the renderer are not measured yet.
 
-### 7.4 Model names (Planned, D-084, FR-M-12)
+### 7.4 Model names (D-084, FR-M-12)
 
-Today `router/listing.py` `label_for` gives a preset's label or the raw model id, and the client shortens refs again (`src/app/models.ts` `shortRef`). **Planned:** `router/names.py` computes one short name per model in the kernel. Rows carry `label`, `full` and `facts`, shown muted on hover or focus. Precedence: a `names:` override in `models.yaml`, then a llama.cpp preset label, then a deterministic derivation. `shortRef` then goes away.
+`router/names.py` names every model in the kernel; `listing.label_for` delegates to it, so the picker, the chip, the waking card, *Unload X* and the VRAM messages agree. Precedence: a `names:` override in `models.yaml` (fnmatch on the lowercased ref, the user's file first), then a llama.cpp preset label (a trailing "(...)" moves to the details), then a derivation from the id (drop `hf.co/<org>/`, `-GGUF`, a doubled vendor prefix, dates, quant, "instruct"/"it" and context; families keep their own spelling: "Qwen3.5", "Llama 3.2", "GPT-4o", "o3"). `listing._distinct` appends the quant when two local rows share a name. Rows carry `label`, `full` (the backend id, or a preset's file) and `detail`; API groups use `names.vendor` ("Meta", "xAI"). The client shows `full` and `models.ts` `modelFacts(row)` muted: a hover/focus card on the chip, a strip under the picker's list for the hovered or highlighted row. `shortRef` remains only as the fallback before the model list arrives.
 
 ## 8. Voice
 

@@ -2,10 +2,10 @@
 
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-17, session 5 (K1c finished, then the docs reset, D-076)
-- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **Next: UI-1, chat app polish, model names first** (D-084, D-085 provisional).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `7c16e95`; the docs reset commit follows.
-- **Last green run (the user's PC, 2026-11-17, after `97de53a`):** `npm run check`: tsc, frontend tests 140, vite build, cargo check, pytest 1209. pytest 1209 and test:fe 140 again after `2b99262`.
+- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, then UI1-01 model names)
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 started** (the user said yes to model names, which starts the D-085 order): UI1-01 is done (`883f4f7`). **Next: UI1-02**, only working controls and plain words (D-082).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `5e82558` (the docs reset). `883f4f7` (model names) and its docs commit are local, not pushed.
+- **Last green run (the user's PC, 2026-11-17, at `883f4f7`):** `npm run check`: tsc, frontend tests 141, vite build, cargo check, pytest 1240.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
@@ -19,6 +19,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Threads (history, search, rename, delete, Temp Chat), Markdown replies, Copy, Regenerate, Stop | T, B |
 | Lazy boot (D-060), voice only when voice mode is on (D-061, 47 s to start GPT-SoVITS) | T, B; no audible playback checked |
 | Model picker: Local and API sections, fits hints, capability badges, effort slider per model (D-064), "waking up" card | T, B (real Ollama and GPU) |
+| Short model names; full id and details muted on hover or focus (D-084, FR-M-12) | T, B (injected rows named by the kernel's code); not seen in the desktop app with the real list |
 | One chat model in memory, helpers follow the pick (D-072) | T only (fakes) |
 | VRAM check before a load, refusal naming the blockers (D-065), *Unload X* (D-071) | T, B (refusal card); *Unload X* T only |
 | Failure card with Retry / Switch model (D-066) | T, B (Ollama pointed at a dead port); no live API failure |
@@ -62,8 +63,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 
 ## 4. Known issues and risks
 
-- **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, raw model ids, emoji glyphs, developer words in the UI. That is phase UI-1.
-- **Raw model ids everywhere** (`hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L` in the chip). Fixed by UI1-01 (D-084).
+- **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, emoji glyphs, developer words in the UI. That is phase UI-1 (model names are done).
 - **Disabled placeholders** (the mic, "arrives in K2/K3" tooltips) break D-082. Fixed by UI1-02.
 - **Unpriced models are refused while a cap is on** until UI1-03 lands (D-083 allows them).
 - **Two files set the same keys (D-070):** `settings.json` wins over `config/config.yaml`.

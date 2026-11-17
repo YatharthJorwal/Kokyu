@@ -81,7 +81,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-M-9 | Motion is short and consistent: the slider and the chip show the level (a glow on the chip while generating); reduced motion makes all of it static. | K1 |
 | FR-M-10 | Effort support is data (D-064): catalog tags for API models (`reasoning_effort` for low, medium, high), `config/models.yaml` over `config/models.example.yaml` for local models (thinking on or off, or a level). No thinking-token budget: neither local backend takes one. | K1 |
 | FR-M-11 | Effort is remembered per model per thread. Reasoning text is never spoken and is not shown in the chat. | K1 |
-| FR-M-12 | **Model names (D-084):** every model shows a short name ("Qwen3.5 9B", "Claude Sonnet 5.5") on every surface (chip, picker, loading card, VRAM messages, "Sent to"), computed in the kernel (`router/names.py`, planned) so all surfaces agree. Rows carry `label` (short), `full` (the exact id) and `facts` (backend, quant, parameters, file size, context, price, date). Name precedence: a `names:` override in `models.yaml`, then a llama.cpp preset label, then a deterministic derivation (strip `hf.co/<org>/`, `-GGUF` and the vendor prefix; quant, date, "instruct" and context move to facts; the API vendor is the group header). Two rows in one section with the same name get the quant appended. The full id and facts appear only on hover or keyboard focus, in muted text. | UI-1 |
+| FR-M-12 | **Model names (D-084):** every model shows a short name ("Qwen3.5 9B", "Claude Sonnet 5.5") on every surface (chip, picker, loading card, VRAM messages, "Sent to"), computed in the kernel (`router/names.py`) so all surfaces agree. Rows carry `label` (short), `full` (the exact id, or a llama.cpp preset's file) and `detail` (the facts: backend, quant, parameters, context; the client adds file size, price and why a row cannot be picked). Name precedence: a `names:` override in `models.yaml`, then a llama.cpp preset label, then a deterministic derivation (strip `hf.co/<org>/`, `-GGUF` and the vendor prefix; quant, date, "instruct" and context move to facts; the API vendor is the group header). Two rows in one section with the same name get the quant appended. The full id and facts appear only on hover or keyboard focus, in muted text. | UI-1 |
 
 ### 2.5 Routing, API and privacy (FR-R)
 
@@ -354,7 +354,7 @@ In delivery order (D-085, provisional). A checkpoint is open until the user tick
 | K0 | FR-W-1..4, 6, 7; FR-S-5; FR-R-1, 3; FR-V-1 (gpt_sovits per companion), FR-V-7 (text-only); FR-MEM-1..3 | Open (window and voice not run) |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 | Open |
 | K1c | FR-MODE-1..9 (D-074, D-075) | Open (the user ran the build 2026-11-17; items not ticked) |
-| UI-1 | FR-M-12; FR-C-4 (only working controls, copy rule); FR-R-2 (unpriced models, D-083); §5 connection banner | Not started |
+| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule); FR-R-2 (unpriced models, D-083); §5 connection banner | Not started |
 | K1b | FR-DIST-1, 9, 11 (walking-skeleton installer on a clean machine) | Not started |
 | K2 | FR-C-4 (camera, screenshot, paste image), FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-1 (provider interface), 2..6, 8; FR-VP-1..5; FR-SC-6; FR-MODE-10; FR-SET-1 (Voice) | Not started |
 | K3 | FR-W-2 (UI), FR-W-5; FR-CR-1..8; FR-SET-1 (Companions) | Not started |
