@@ -128,7 +128,7 @@ npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest 
 
 ## 7. Things that bite on this machine
 
-- **The user may be running the app** (`npm run tauri dev`: the kernel on 8780, Vite on 1420). Never start a kernel on 8780 or a page on 1420 then. Claude's browser preview runs on **1421** (`.claude/launch.json`). With the kernel offline, state can be injected through the store module: `import('/src/app/store.ts')`, using the URL the page actually loaded (check `performance.getEntriesByType('resource')`, since HMR adds `?t=`).
+- **The user may be running the app** (`npm run tauri dev`: the kernel on 8780, Vite on 1420). Never start a kernel on 8780 or a page on 1420 then. Claude's browser preview runs on **1421** (`.claude/launch.json`). The kernel only accepts window origins on 1420, so the preview never connects to one (the socket gets 403; its plain HTTP GETs, such as portraits, still work). State is injected through the store module: `import('/src/app/store.ts')`, using the URL the page actually loaded (check `performance.getEntriesByType('resource')`, since HMR adds `?t=`).
 - **A scratch kernel for live checks:** `KOKYU_DATA_DIR=<scratch>/live .venv/Scripts/python.exe KASANE/app.py` in the background, only when 8780 is free. Copy `config/config.yaml` into the scratch dir first (`KOKYU_DATA_DIR` moves where config is read). Stop it with `curl -X POST http://127.0.0.1:8780/shutdown`.
 - **Never touch the user's Ollama service** beyond read-only GETs. `conftest.py` stubs `boot.unload_ollama`, and gives story memory a keeper that always finds the model busy.
 - **Two config files (D-070):** `settings.json` (app data folder) wins over `config/config.yaml`. Read `CONFIG` at call time; `config.install` swaps it live.
@@ -137,7 +137,7 @@ npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest 
 - **Edits:** single-match replacements in a Python script (`assert s.count(old) == 1`, normalize CRLF). **Never bulk-replace** (it once replaced every "a" with "w" in five files). The Bash tool refuses some heredocs with `${…}` or triple quotes: write the script to a file, then run it.
 - **Vite can keep a stale transform** of a briefly empty file: restart the preview.
 - **The model popover's lists are CSS grids with subgrid rows** (check, name, meta, fit, badges); a new row element must keep the five cells.
-- **`build_premade.py --force` rewrites the packs' `waifu.yaml`**, dropping the `prompt: persona.md` pointer (D-074).
+- **`build_premade.py --force` rebuilds a pack from its sources**; it carries over only the hand-written `about` and `persona.md` (with its pointer). Anything else edited by hand in `waifu.yaml` is lost.
 - `WinError 10048` on startup: a leftover `python.exe` holds the port.
 - Quit through the **tray Quit item** (or `POST /shutdown`); killing the process skips the memory pass.
 - faster-whisper on CUDA failed here (missing `cublas64_12.dll`); **STT runs on CPU**.

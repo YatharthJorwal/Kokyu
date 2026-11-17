@@ -44,7 +44,7 @@ The `KASANE/` folder is on `sys.path` and modules import each other by top-level
 
 | Module | Responsibility |
 |---|---|
-| `app.py` | The FastAPI server: `/ws` (origin-checked), `GET /waifus/{id}/vrm`, `POST /shutdown`; the lifespan starts boot and the memory writer and stops every child. |
+| `app.py` | The FastAPI server: `/ws` (origin-checked), `GET /waifus/{id}/vrm`, `GET /waifus/{id}/portrait`, `POST /shutdown`; the lifespan starts boot and the memory writer and stops every child. |
 | `session.py` | One `Session` per window; one `on_<type>` handler per client message type (a test checks every type has one). |
 | `hub.py` | Open windows, which one drives turns (the first; others observe), broadcasts, the shutdown event. |
 | `turns.py` | One model turn: memory reads, the ephemeral note, the router stream, tool calls, speech, saving. |
@@ -131,7 +131,7 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 
 ### 5.2 Errors
 
-`error {code, message, reply_to}` with the codes `bad_message`, `protocol_version`, `unknown_thread`, `unknown_waifu`, `turn_running`, `threads_unavailable`, `model_blocked`, `model_failed`, `vision_unavailable`, `observer`. A failed chat model (FR-R-5) adds `reason`, `model_ref`, `detail` and `actions: ["retry", "switch_model"]`.
+`error {code, message, reply_to}` with the codes `bad_message`, `protocol_version`, `unknown_thread`, `unknown_waifu`, `turn_running`, `threads_unavailable`, `model_blocked`, `model_failed`, `vision_unavailable`, `observer`, `price_unknown` (a notice; the turn goes on, D-083), `picture_unreadable` (D-091). A failed chat model (FR-R-5) adds `reason`, `model_ref`, `detail` and `actions: ["retry", "switch_model"]`.
 
 ### 5.3 Message types (C→K: client to kernel; K→C: kernel to client)
 
@@ -145,7 +145,7 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `turn_start`, `token`, `turn_done` | K→C | A reply: start, streamed text, final text and whether it was stopped (FR-C-2) |
 | `speak` | K→C | One spoken clause: caption text and a WAV; empty audio when voice is off or down (FR-V-7) |
 | `thread_list`, `thread_search` | both | The sidebar history, or threads matching a query; answered with `thread_list` |
-| `thread_new` | C→K | A new thread: `mode` chat or roleplay, fixed for its life, and a roleplay's scenario card (FR-MODE-1, 6) |
+| `thread_new` | C→K | A new thread: `mode` chat or roleplay, fixed for its life, and a roleplay's scenario card (FR-MODE-1, 6); `waifu_id` starts it with her, from her profile, with no divider in the open thread (D-091) |
 | `thread_open`, `thread_delete`, `thread_rename` | C→K | Change, delete or rename a thread; refused with `turn_running` during a reply |
 | `thread_opened` | K→C | The open thread and its messages, on connect and after every open, new or delete |
 | `thread_updated` | K→C | The open thread's row after a change of model, effort or Temp Chat |
@@ -154,7 +154,8 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `model_list` | both | The picker's rows, local and API, with the spend footer; `refresh` re-fetches the catalog (FR-M-3, 4, 7) |
 | `model_load`, `model_unload` | C→K | Try again after a failed load; *Unload X* on the graphics-memory card, then try again (D-071) |
 | `model_status` | K→C | The chat model's load state: idle, loading, ready, failed (FR-M-6, D-054) |
-| `switch_waifu`, `waifu_state` | both | Change the active companion, persona and voice only (FR-S-1); the roster, the active one, a switch waiting for the running turn |
+| `switch_waifu`, `waifu_state` | both | Change the active companion, persona and voice only (FR-S-1); the roster (with `about`, the portrait's version stamp and `portrait_chosen`), the active one, a switch waiting for the running turn |
+| `set_portrait`, `waifu_roster` | both | Her picture from a file, or null for the model's face (D-091, FR-W-9); every window then gets the roster alone, active and pending untouched |
 | `surface_status` | K→C | Whether this window drives turns or observes |
 | `voice_mode`, `voice_status` | both | Voice on or off, started only when turned on (D-061); its state and how its start is going |
 | `screen_companion`, `screen_companions` | both | Task Guide or OCR watch on or off (FR-SC-1..4); what is watching the screen |
@@ -166,7 +167,7 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `settings_get`, `settings_set`, `settings` | both | The editable settings; a change is saved to `settings.json` and applied at once (FR-SET-2, D-070) |
 | `scenario_list`, `scenario_save`, `scenario_delete`, `scenarios` | both | Saved scenario cards, app-level, never tied to a companion (FR-MODE-6); every answer is the full list, newest first, and a save's answer names the saved card |
 
-HTTP beside the socket: `GET /waifus/{id}/vrm` (a registered companion's avatar; loopback page origins, GET only) and `POST /shutdown` (the shell's Quit).
+HTTP beside the socket: `GET /waifus/{id}/vrm` (a registered companion's avatar; loopback page origins, GET only), `GET /waifus/{id}/portrait?v=` (her face: the chosen picture, else the VRM thumbnail cut to a 512 px square; 404 without one; cacheable, since the version is in the URL) and `POST /shutdown` (the shell's Quit).
 
 **Planned** with the features that need them: voice input frames (K2), pets (K4), the apartment (K5), the creator (K3).
 
@@ -184,6 +185,7 @@ data/
   active_waifu.txt      the companion used last
   <endpoint>_models.json  cached API catalogs
   waifus/<id>/          user-made companions (the creator is K3)
+  portraits/<id>.png    a picture the user chose for her (D-091); portraits/cache/ holds the VRM thumbnails, cut square
 logs/                   kasane.log, llama-server.log, gpt_sovits.log, audit.jsonl, latency.jsonl
 assets/premade/<id>/    Luna and Yuri: waifu.yaml, prompt.md, model.vrm, voice/ref.wav (read-only, untracked, D-041)
 ```
@@ -245,7 +247,7 @@ model stream ─> token frames (the chat shows the raw text)
 
 ## 9. Client
 
-- **`src/app/`**: the React window (D-053). `store.ts` is a Zustand store (D-013) around the pure reducer in `chat-state.ts`; components read with `useChat(selector)` and act through `actions.*`. `ui/` holds 15 components (Sidebar, TopBar, ThreadView, Composer, ModelChip, EffortSlider, SettingsDialog, RoleplayDialog, …). `theme.ts` holds the themes, kept in the window's localStorage (D-073). `markdown.ts` is an in-house parser that returns a tree, so model output never reaches the page as HTML (D-055). `voice.ts` plays `speak` clips. Other pure helpers: `models.ts`, `history.ts`, `scenario.ts`, `file-upload.ts`, `effort-slider.ts`.
+- **`src/app/`**: the React window (D-053). `store.ts` is a Zustand store (D-013) around the pure reducer in `chat-state.ts`; components read with `useChat(selector)` and act through `actions.*`. `ui/` holds 15 components (Sidebar, TopBar, ThreadView, Composer, ModelChip, EffortSlider, SettingsDialog, RoleplayDialog, ProfileDialog, Portrait, …). `theme.ts` holds the themes, kept in the window's localStorage (D-073). `markdown.ts` is an in-house parser that returns a tree, so model output never reaches the page as HTML (D-055). `voice.ts` plays `speak` clips. Other pure helpers: `models.ts`, `history.ts`, `scenario.ts`, `file-upload.ts`, `effort-slider.ts`.
 - **`src/net/`**: `kernel.ts` (one WebSocket with reconnect backoff; no state) and `protocol.ts` (the typed mirror of §5).
 - **`src/engine/`**: pure-logic avatar parts from Yuri waiting for the K2 Stage (idle motion, eyes, expression life, lip-sync, framing, a VRM report), plus mic and camera capture. The VRM loader and the stage itself are not in the repo yet.
 - **Rule:** clients hold no business logic. The window renders kernel state and sends intents; decisions about models, memory and speech are the kernel's.

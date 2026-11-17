@@ -2,10 +2,10 @@
 
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models)
-- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) and UI1-03 unpriced models under the cap (`3e552e7`) are done. **Next: UI1-06**, her face, then UI1-06b her profile (D-091). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `0a6cdb8`; `a9ab16d` (the age research, 18+) and the UI1-03 commits are not pushed yet.
-- **Last green run (the user's PC, 2026-11-17, at `3e552e7`):** `npm run check`: tsc, frontend tests 142, vite build, cargo check, pytest 1243.
+- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models, UI1-06 her face and profile)
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done. **Next: UI1-07**, the message list. The design standard is its own phase, UI-2, planned from references before it is built (D-086).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `0a6cdb8`; `a9ab16d` (the age research, 18+), the UI1-03 and UI1-06 commits and their docs are not pushed yet.
+- **Last green run (the user's PC, 2026-11-17, at `e62374f`):** `npm run check`: tsc, frontend tests 145, vite build, cargo check, pytest 1259.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
@@ -19,6 +19,8 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Threads (history, search, rename, delete, Temp Chat), Markdown replies, Copy, Regenerate, Stop | T, B |
 | Lazy boot (D-060), voice only when voice mode is on (D-061, 47 s to start GPT-SoVITS) | T, B; no audible playback checked |
 | Model picker: Local and API sections, fits hints, capability badges, effort slider per model (D-064), "waking up" card | T, B (real Ollama and GPU) |
+| Her face from the VRM thumbnail in the chip, the conversation list, her messages and the companion menu; her initial without one (D-091, FR-W-8) | T, B (real thumbnails from a scratch engine, injected roster); not seen in the desktop app |
+| Her profile: About, traits, Chat (a new chat with her, no divider), Change picture, Use the model's face (D-091, FR-W-9) | T; picture change and reset live against a scratch engine; B with injected state; Chat not run against a live engine |
 | Short model names; full id and details muted on hover or focus (D-084, FR-M-12) | T, B (injected rows named by the kernel's code); not seen in the desktop app with the real list |
 | Only working controls; disconnect banner after 6 s offline with Reconnect, which restarts a stopped engine (D-082) | T (cargo check only for `restart_kernel`), B (banner and its states); Reconnect after a killed engine not run in the desktop app |
 | One chat model in memory, helpers follow the pick (D-072) | T only (fakes) |
@@ -34,7 +36,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Dialogue-only speech in roleplay (`DialogueFilter`) | T; not confirmed heard |
 | Saved scenario cards, opening line as her first message | T, B (injected state) |
 | New roleplay dialog, Roleplay badge, `*action*` and `(OOC …)` rendering | T, B (injected state) |
-| Persona-only `persona.md` for Luna and Yuri | Written; packs load; untracked (open question 4) |
+| Persona-only `persona.md` and a drafted About for Luna and Yuri | Written; packs load; untracked (open question 4); the About drafts await the user |
 | App icon | Not looked at in the taskbar or tray |
 
 ## 2. Environment
@@ -72,7 +74,6 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 - **The user's `config/config.yaml` still has `budget.on_exhausted`:** ignored now (unknown keys are skipped); delete the line when convenient.
 - **Two files set the same keys (D-070):** `settings.json` wins over `config/config.yaml`.
 - **Helper roles run on the picked chat model** (D-072): Task Guide's classifier on the 9B is slower per call than the 4B was.
-- **`build_premade.py --force`** rewrites the packs' `waifu.yaml`, dropping the `prompt: persona.md` pointer.
 - **The kernel port 8780 is hard-coded in several places** (`app.py`, `kernel.ts`, `lib.rs`, the CSP, dev scripts; `ARCHITECTURE.md` §12); a packaging risk (K7-08).
 - **Tests read the user's `config/config.yaml`** when it exists; the suite passes, but it is not isolated from local config.
 - **K1c follow-ups** (D-075, TODO backlog), none blocking.

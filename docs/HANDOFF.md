@@ -35,17 +35,20 @@ A solo developer who wants direct commands, no manual file shuffling, phases wit
 7. **KASANE as a quiet credit** (`d765a4e`, D-089): the Doctor row "Engine (KASANE)", About, `logs/kasane.log`.
 8. **Age research** (a side session, TODO B-9): the report is `docs/research-age-content-2026-11.md`. The user chose 18+ (`a9ab16d`, D-090, FR-WIZ-8); explicit premades and the payment provider stay open (TODO B-10..12).
 9. **UI1-03 unpriced models** (`3e552e7`, D-083, FR-R-2): a model with no catalog price runs while a cap is on and is not counted against it. The picker shows "price unknown"; a notice comes once per model per run (an error frame with the non-ending code `price_unknown`, styled as info). A reached cap still stops it; helper roles stay local without a price. `budget.on_exhausted` is gone.
+10. **Her face** (`04e0296`, D-091, FR-W-8): the user's answer to open question 6 was "just a vrm face", with a way to change it in her profile. Both VRMs carry a VRoid face shot as `meta.thumbnailImage`; the engine reads only that image, cuts a 512 px square and caches it in `data/portraits/cache`. `GET /waifus/<id>/portrait?v=` serves it; the roster carries a version stamp. Shown in the companion chip, the conversation list, her messages and the companion menu; her initial without one.
+11. **Her profile** (`e62374f`, D-091, FR-W-9): About, traits, Chat (a new chat with her, no divider in the open one), Change picture and Use the model's face. Opens from Profile in the companion menu or her face beside a message. Packs gain `about`; Claude drafted Luna's and Yuri's in the untracked packs for the user to edit. `build_premade.py --force` used to delete `persona.md` too; it now keeps it and `about`.
 
 ## 3. Where we stopped
 
-Everything is committed; pushed through `0a6cdb8`, and `a9ab16d` plus the UI1-03 commits wait for the user's word to push. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
+Everything is committed; pushed through `0a6cdb8`. `a9ab16d`, the UI1-03 commits, D-091 (`8ca5b1d`) and UI1-06 (`04e0296`, `e62374f`) wait for the user's word to push. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
 
 ## 4. Next session: start here
 
 1. `git status`, `git log -5 --oneline`, `npm run check`.
 2. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect), and, if they have an unpriced endpoint, its "price unknown" row and notice.
-3. Next item: **UI1-06**, her face, which needs open question 6 (a portrait from the VRM thumbnail) settled first. Also open: question 3 (explicit premades, D-090).
-4. Their `config/config.yaml` still has `on_exhausted`: harmless, can go.
+3. Ask the user to read Luna's and Yuri's About drafts (`assets/premade/<id>/waifu.yaml`) and to try her profile in the desktop app: Chat, Change picture, Use the model's face.
+4. Next item: **UI1-07**, the message list. Also open: question 3 (explicit premades, D-090).
+5. Their `config/config.yaml` still has `on_exhausted`: harmless, can go.
 
 **KASANE: decided, option B** (D-089): the Doctor row, About, `logs/kasane.log`; `kasane.exe` waits for packaging (K1b-02). The options were: It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
 - A. Internal only: folder, logs, code. The UI keeps "Kōkyū's engine" (today).
@@ -61,4 +64,7 @@ Everything is committed; pushed through `0a6cdb8`, and `a9ab16d` plus the UI1-03
 - Chrome and React: a `disabled` button inside the picker's subgrid rows is unhoverable (above); the banner's grace timer depends on the online boolean, so connecting/offline flapping does not reset it.
 - An injected `notice` needs every `Notice` field (`code`, `text`, `actions`); a missing `actions` blanks the page.
 - The 1421 preview can stall at "starting" with nothing listening: stop it and start it again.
-- With a kernel running on 8780, the 1421 preview connects to it and its reconnects wipe injected store state; inject with a `useChat.subscribe` that re-applies it. Never pick a model there: it is the user's kernel.
+- The 1421 preview never connects to a kernel: `/ws` accepts only 1420 origins (403). Its failed reconnects still wipe injected state; inject with a `useChat.subscribe` that re-applies it. HTTP GETs (portraits) do reach a scratch kernel.
+- A scratch kernel's `thread_new` loads the thread's model, which would touch the user's Ollama: live checks avoid it.
+- Two `websocket_connect` contexts in one TestClient test break on `hub.shutdown_event`'s loop; fake the second window in `hub.connections` instead.
+- The Windows console is cp1252: a Python script printing "Kōkyū" needs `PYTHONIOENCODING=utf-8`.
