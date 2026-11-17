@@ -282,7 +282,9 @@ async def run_turn(
     mode: the thread's conversation mode (FR-MODE-1, D-074), from the THREAD only.
     A roleplay turn reads only the profile card, runs no forget, Task Guide or look
     intent, offers no tools and is not written to transcript_log, so nothing from a
-    story reaches app memory (FR-MODE-4). The router role is "chat" in both modes."""
+    story reaches app memory (FR-MODE-4). Its voice and captions get only her
+    dialogue (speech.DialogueFilter, FR-MODE-8); history keeps the whole reply.
+    The router role is "chat" in both modes."""
     if mode not in prompting.MODE_LAYERS:
         raise ValueError(f"unknown conversation mode: {mode!r}")
     roleplay = mode == "roleplay"
@@ -376,6 +378,10 @@ async def run_turn(
 
     buffer = ""
     reply_parts: list[str] = []
+    # FR-MODE-8: in a roleplay only her dialogue is spoken. The raw stream goes
+    # through this cut first, and `buffer` (the speech side) holds what is left;
+    # raw_text below keeps everything she wrote. None in chat: buffer is the stream.
+    dialogue = speech.DialogueFilter() if roleplay else None
     # Everything the model wrote, untouched (D-074): history, the saved message and
     # turn_done use it, so Markdown and paragraph breaks survive the stream.
     # reply_parts and spoken_parts are the speech side, clause by clause.
@@ -459,7 +465,7 @@ async def run_turn(
                 if event["type"] == "usage":
                     usage = event
                     continue
-                buffer += event["text"]
+                buffer += dialogue.feed(event["text"]) if dialogue is not None else event["text"]
                 raw_text += event["text"]
                 if event["text"]:
                     await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
@@ -476,8 +482,12 @@ async def run_turn(
                 # done now, not mid-flight, so this is the only safe point
                 # to check for a trailing [emotion] tag (see
                 # extract_emotion_tag()'s own docstring on why mid-stream
-                # would risk a false match).
-                buffer, detected_emotion = extract_emotion_tag(buffer)
+                # would risk a false match). The emotion is read from the raw
+                # text: in a roleplay the dialogue cut has already dropped the tag.
+                if dialogue is not None:
+                    buffer += dialogue.finish()
+                buffer = extract_emotion_tag(buffer)[0]
+                detected_emotion = extract_emotion_tag(raw_text)[1]
                 for chunk in flush(buffer):
                     reply_parts.append(chunk)
                     styled = apply_persona_pass(chunk)

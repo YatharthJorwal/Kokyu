@@ -298,6 +298,84 @@ async def test_a_simple_chat_reply_is_unchanged(waifu, side_effects, monkeypatch
     assert history[-1]["content"] == "It was fine. How about yours?" == ws.sent[-1]["data"]["text"]
 
 
+# -- FR-MODE-8 (K1c-05): in a roleplay only her dialogue is spoken -----------------
+
+
+def _speak_texts(ws) -> list[str]:
+    return [f["data"]["text"] for f in ws.sent if f["type"] == "speak"]
+
+
+@pytest.mark.asyncio
+async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(waifu, side_effects, monkeypatch):
+    # The deltas split an action, a "**" and an "(OOC" mid-token on purpose.
+    pieces = ["*She looks up from her book, then sets it down. She smi", "les.*\n\n",
+              "\"Oh, it is you. I was **wait", "ing** for you all afternoon,\" she says.",
+              " *She stands.* (O", "OC: short reply, sorry) \"Come in, then.\" [happy]"]
+    calls = _model(monkeypatch, [_text(p) for p in pieces])
+    spoken: list[str] = []
+
+    async def fake_synth(websocket, text):
+        spoken.append(text)
+        return b""
+
+    monkeypatch.setattr(turns, "synthesize_for", fake_synth)
+    saved = []
+
+    async def on_finished(user_text, reply, stopped, meta):
+        saved.append(reply)
+
+    ws = Socket(waifu)
+    history = [{"role": "system", "content": "sys"}]
+    await turns.run_turn(ws, history, "Hi.", True, [], on_finished=on_finished, mode="roleplay")
+    captions = " ".join(_speak_texts(ws))
+    assert captions == "Oh, it is you. I was waiting for you all afternoon, Come in, then."
+    for gone in ("*", "smiles", "She", "says", "OOC", "sorry", "[happy]", "\""):
+        assert gone not in captions and all(gone not in s for s in spoken), gone
+    assert spoken   # the voice got the dialogue clauses
+    # History, the saved reply and turn_done keep the full formatted text (D-074).
+    full = "".join(pieces).removesuffix(" [happy]")
+    assert history[-1] == {"role": "assistant", "content": full} and saved == [full]
+    done = ws.sent[-1]
+    assert done["type"] == "turn_done" and done["data"]["text"] == full and done["data"]["emotion"] == "happy"
+    # The model still saw nothing different: the router role is chat (FR-MODE-3).
+    assert calls[0]["role"] == "chat"
+
+
+@pytest.mark.asyncio
+async def test_an_action_only_roleplay_reply_speaks_nothing_and_is_still_kept(waifu, side_effects, monkeypatch):
+    _model(monkeypatch, [_text("*She just smiles and nods.* [teasing]")])
+    ws = Socket(waifu)
+    history = [{"role": "system", "content": "sys"}]
+    await turns.run_turn(ws, history, "Well?", True, [], mode="roleplay")
+    assert _speak_texts(ws) == []
+    assert not [f for f in ws.sent if f["type"] == "error"]
+    assert ws.sent[-1]["data"]["text"] == "*She just smiles and nods.*" and ws.sent[-1]["data"]["emotion"] == "teasing"
+
+
+@pytest.mark.asyncio
+async def test_a_chat_turn_speaks_actions_words_as_before(waifu, side_effects, monkeypatch):
+    # The cut is roleplay-only: a chat reply's speech is unchanged (prepare drops the
+    # markers and keeps the words, as it always did).
+    _model(monkeypatch, [_text("*grins* Sure, that works for me. \"Quoted\" too. [happy]")])
+    ws = Socket(waifu)
+    await turns.run_turn(ws, [{"role": "system", "content": "sys"}], "Ok?", True, [])
+    captions = " ".join(_speak_texts(ws))
+    assert "grins" in captions and "Quoted" in captions and "[happy]" not in captions
+
+
+@pytest.mark.asyncio
+@pytest.mark.parametrize("mode", ["chat", "roleplay"])
+async def test_a_tag_after_a_short_last_sentence_is_never_spoken_and_sets_the_emotion(waifu, side_effects, monkeypatch, mode):
+    # The chunker used to emit "... now. [happy]." mid-stream as one ready chunk.
+    _model(monkeypatch, [_text("Sure thing, I can definitely do it now."), _text(" [happy]"), _text(".")])
+    ws = Socket(waifu)
+    history = [{"role": "system", "content": "sys"}]
+    await turns.run_turn(ws, history, "Can you?", True, [], mode=mode)
+    assert _speak_texts(ws) == ["Sure thing, I can definitely do it now."]
+    assert history[-1]["content"] == "Sure thing, I can definitely do it now."
+    assert ws.sent[-1]["data"]["emotion"] == "happy"
+
+
 @pytest.mark.asyncio
 async def test_a_reply_that_is_only_an_emotion_tag_is_still_an_empty_reply(waifu, side_effects, monkeypatch):
     _model(monkeypatch, [_text("  [happy]")])

@@ -24,14 +24,25 @@ MIN_CHUNK_CHARS = 40
 
 _SENTENCE_BOUNDARY = re.compile(r"[.!?]+(?=\s|$)")
 
+# A `[word]` (maybe with a stray period) at the end of what has arrived so far may
+# be the reply's emotion tag, which persona.extract_emotion_tag reads only once the
+# stream ends. Held back until more text proves it is not the end: without this,
+# "Sure thing, I can definitely do it now. [happy]." was one ready chunk, so the
+# tag was spoken and the emotion lost (D-074, FR-MODE-8).
+_TRAILING_TAG = re.compile(r"\s*\[\w+\]\.?\s*$")
+
 
 def extract_ready_chunks(buffer: str) -> tuple[list[str], str]:
     """Given the buffer so far (previous remainder + newly arrived text),
     returns (chunks ready to speak, new remainder to keep buffering)."""
     chunks: list[str] = []
     start = 0
+    tag = _TRAILING_TAG.search(buffer)
+    limit = tag.start() if tag else len(buffer)
     for match in _SENTENCE_BOUNDARY.finditer(buffer):
         end = match.end()
+        if end > limit:
+            break
         candidate = buffer[start:end].strip()
         if len(candidate) >= MIN_CHUNK_CHARS:
             chunks.append(candidate)

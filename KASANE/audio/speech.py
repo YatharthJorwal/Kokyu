@@ -257,3 +257,183 @@ BANNED_CHARS: frozenset[str] = frozenset(
 
 def banned_chars_in(text: str) -> set[str]:
     return BANNED_CHARS & set(text)
+
+
+# ---------------------------------------------------------------------------
+# Roleplay: only her dialogue is spoken (FR-MODE-8, D-074).
+#
+# A roleplay reply is written like a story: `*she smiles*`, "quoted lines",
+# `(OOC: ...)` asides and the trailing `[emotion]` tag. The voice reads only the
+# dialogue, and that is decided here by code, whatever the model wrote. The cut
+# runs on the raw stream, before the sentence chunker, because an action or an
+# aside can span several sentences and so several chunks; a per-chunk filter
+# would see an unbalanced `*`. `prepare()` still runs on every chunk afterwards.
+
+# Double quotes that open or close her line: straight and curly. Single quotes
+# are not dialogue markers here: they are apostrophes far more often (`don't`).
+_DIALOGUE_QUOTES = frozenset('"\N{LEFT DOUBLE QUOTATION MARK}\N{RIGHT DOUBLE QUOTATION MARK}')
+# How many spaces may sit between "(" and "OOC" and still count as an aside.
+_OOC_MAX_GAP = 4
+
+
+def _classify_paren(text: str, final: bool) -> str | None:
+    """`text` starts with "(". Returns "double" for `((`, "ooc" for `(OOC`
+    (any case, not followed by a letter), "plain" for any other parenthesis,
+    or None while the text so far could still become either (held back)."""
+    if len(text) < 2:
+        return "plain" if final else None
+    if text[1] == "(":
+        return "double"
+    rest = text[1:]
+    word = rest.lstrip(" ")
+    if len(rest) - len(word) > _OOC_MAX_GAP:
+        return "plain"
+    if not "ooc".startswith(word[:3].lower()):
+        return "plain"
+    if len(word) < 3:
+        return "plain" if final else None
+    if len(word) == 3:
+        return "ooc" if final else None
+    return "plain" if word[3].isalpha() else "ooc"
+
+
+class DialogueFilter:
+    """Streaming cut of a roleplay reply down to her dialogue (FR-MODE-8, D-074).
+
+    `feed(delta)` takes the next piece of the raw stream and returns the
+    dialogue that is certain so far; `finish()` returns what was held back.
+    The concatenated output is the same however the stream was split.
+
+    Dropped: `*action*` spans (a single asterisk; `**bold**` keeps its words and
+    loses the markers), `(OOC ...)` and `((...))` asides (nested parentheses
+    counted), and `[...]` spans (the emotion tag; a newline also ends one; a
+    period right after one that follows a finished sentence is the tag's own).
+    Narration: text outside actions and asides counts as dialogue until the
+    reply's first double quote; from then on only quoted text is spoken. Inside
+    a quote an asterisk is emphasis: the words stay, the markers go.
+
+    Each dropped span and each quote mark becomes one space, so sentence
+    boundaries survive for the chunker, and whitespace is collapsed to single
+    spaces. An `*` left open at the end is an action and is dropped. Pure: no
+    model, disk or clock."""
+
+    def __init__(self) -> None:
+        self._state = "text"      # text | quote | action | ooc | bracket
+        self._outer = "text"      # where an aside or bracket returns to
+        self._depth = 0           # open parentheses inside an aside
+        self._seen_quote = False
+        self._pending = ""        # raw text not decided yet (a trailing "*" or "(OOC")
+        self._last = ""           # last character emitted; "" means nothing yet
+        self._last_mark = ""      # last non-space character emitted
+        self._after_tag = False   # the previous character closed a [...] span
+
+    def feed(self, delta: str) -> str:
+        self._pending += delta or ""
+        return self._run(final=False)
+
+    def finish(self) -> str:
+        return self._run(final=True)
+
+    def _put(self, char: str, out: list[str]) -> None:
+        if char.isspace():
+            if self._last and self._last != " ":
+                out.append(" ")
+                self._last = " "
+            return
+        out.append(char)
+        self._last = char
+        self._last_mark = char
+
+    def _enter(self, state: str, out: list[str], depth: int = 0) -> None:
+        self._outer = self._state
+        self._state = state
+        self._depth = depth
+        self._put(" ", out)
+
+    def _leave(self, out: list[str]) -> None:
+        self._state = self._outer
+        self._outer = "text"
+        self._put(" ", out)
+
+    def _run(self, final: bool) -> str:
+        out: list[str] = []
+        text = self._pending
+        size = len(text)
+        i = 0
+        while i < size:
+            char = text[i]
+            state = self._state
+            if state == "action":
+                if char == "*":
+                    if i + 1 >= size and not final:
+                        break   # "**" may be split across deltas
+                    if i + 1 < size and text[i + 1] == "*":
+                        i += 2  # bold inside an action is still the action
+                        continue
+                    self._leave(out)
+                i += 1
+                continue
+            if state == "ooc":
+                if char == "(":
+                    self._depth += 1
+                elif char == ")":
+                    self._depth -= 1
+                    if self._depth <= 0:
+                        self._leave(out)
+                i += 1
+                continue
+            if state == "bracket":
+                if char in "]\n":
+                    self._leave(out)
+                    self._after_tag = char == "]"
+                i += 1
+                continue
+            # state is "text" or "quote"
+            if self._after_tag:
+                self._after_tag = False
+                if char == "." and self._last_mark in ".!?":
+                    i += 1      # "now. [happy]." -- the tag's stray period, not a sentence
+                    continue
+            if char == "[":
+                self._enter("bracket", out)
+                i += 1
+                continue
+            if char == "(":
+                kind = _classify_paren(text[i:], final)
+                if kind is None:
+                    break
+                if kind == "double":
+                    self._enter("ooc", out, depth=2)
+                    i += 2
+                    continue
+                if kind == "ooc":
+                    self._enter("ooc", out, depth=1)
+                    i += 1
+                    continue
+                # a plain parenthesis is text like any other
+            elif char in _DIALOGUE_QUOTES:
+                if state == "quote":
+                    self._state = "text"
+                else:
+                    self._state = "quote"
+                    self._seen_quote = True
+                self._put(" ", out)
+                i += 1
+                continue
+            elif char == "*":
+                if state == "quote":
+                    i += 1      # emphasis inside her line: keep the words
+                    continue
+                if i + 1 >= size and not final:
+                    break
+                if i + 1 < size and text[i + 1] == "*":
+                    i += 2      # bold: keep the words, drop the markers
+                    continue
+                self._enter("action", out)
+                i += 1
+                continue
+            if state == "quote" or not self._seen_quote:
+                self._put(char, out)
+            i += 1
+        self._pending = text[i:]
+        return "".join(out)
