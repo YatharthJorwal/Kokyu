@@ -49,6 +49,7 @@ Development only (not shipped):
 | `pyyaml` | 6.0.3 | Config | MIT |
 | `pydantic` | 2.14.3 | Schemas | MIT |
 | `faster-whisper` | 1.2.1 | Speech to text (CPU) | MIT |
+| `av` (PyAV) | below 19 (capped, D-097) | faster-whisper's decoder; reads dictation's WebM/Opus. Already installed with faster-whisper; named only for the cap | BSD-3-Clause; the wheels bundle FFmpeg libraries (LGPL): **review before release** |
 | `sqlite-vec` | 0.1.9 | Vector search in SQLite | MIT OR Apache-2.0 |
 | `Pillow` | 10.4.0 | Screen capture and images | HPND (permissive) |
 | `pyperclip` | 1.11.0 | Clipboard | BSD |

@@ -2,82 +2,49 @@
 
 **Read this at the start of every session; rewrite it at the end.** Short by design (D-076): status is in `STATE.md`, the plan in `TODO.md`, decisions in `DECISIONS.md`. If the date is old, trust `git log` and ask the user.
 
-- **Last updated:** 2026-11-18, session 5
-- **Written by:** Claude, with the user (Yatharth)
+- **Last updated:** 2026-11-18, session 6
+- **Written by:** Claude (a cloud session, autonomous mode, the user asleep)
 
 ## 1. How the user works
 
 A solo developer who wants direct commands, no manual file shuffling, phases with checkpoints, and honesty about what was verified. They want a clean, fast, flexible codebase and an uncluttered tree. They watch the browser pane, send short UI notes mid-task, and often say "continue while I'm away" (that is autonomous mode: CLAUDE.md §2). They run other Claude sessions in parallel and test builds on their own PC. They push, or tell Claude to push. Kōkyū is primarily a **roleplay character app** to them (D-079).
 
-## 2. What happened in session 5
+## 2. What happened in session 6
 
-1. **K1c, conversation modes** (`470a05e..2b99262`): Chat and Roleplay per thread, layered prompts, story memory, scenario cards, dialogue-only voice. Built on six assumed answers (D-074), reviewed adversarially, and fixed (D-075). The user then ran and tested the build on their PC and asked for the push (done: `8c204e7..7c16e95`).
-2. **Review of all docs and the frontend** (the user asked "whats genuinely a trash idea"). Saved at `docs/archive/refinement-proposal-2026-11-17.md`. The user's answers became D-076 to D-085:
-   - **Creator:** traits in, the model writes the persona, the user edits it (D-077).
-   - **3D apartment:** stays planned for 1.1, from Luna's apartment code; two-companion turn-taking is to be designed later (D-078).
-   - **Agent mode** is not planned and **VR** is deferred long term (D-079).
-   - **Voice setup:** automatic at first run, with no separate agent (D-080).
-   - **Distribution:** one per-user NSIS `.exe` (D-081).
-   - **UI controls:** only working ones (D-082).
-   - **Pricing:** unpriced models are allowed under the cap (D-083).
-   - **Model names:** short names, with details muted on hover (D-084).
-   - **Phase order:** proposed UI-1 → K1b → K2 → K3 → W (D-085, provisional).
-3. **Docs reset** (D-076):
-   - Rewrote SCOPE, PRODUCT, README, THIRD-PARTY, SPEC v1.1, ARCHITECTURE, CLAUDE.md, RULES, TODO, STATE and this file.
-   - Compacted `DECISIONS.md` into an index; its full original text is in `docs/archive/decisions-log-2026-11-17.md`.
-   - Archived the vision handoff, yuri-inventory, the modes plan and the TTS brief.
-   - Replaced the three stacked manual gates with one checkpoint list (`STATE.md` §5).
+The user tested UI-1 on their PC (2026-11-18): everything passed. They asked for polish items and a voice rework; the earlier session agreed the shape with them (D-097). This session built it on the branch **`claude/trusting-galileo-6hmr3x`**, cut from `main` at `ac987e1`, one commit per item (TODO UI1-12):
 
-4. **UI1-01 model names** (`883f4f7`, D-084, FR-M-12): the user said "Yes, start model names", which also starts the D-085 order. `router/names.py` names every model in the kernel (override, preset label, derivation; 26 cases from the proposal's table pass); the chip has a muted hover/focus card with the full id and facts; the picker has a muted strip for the hovered or highlighted row. Rows use the existing `detail` for the facts rather than a new `facts` field (SPEC FR-M-12 rewritten to match).
+1. `88ae626` "Waifu-mode-engaging" back (the one approved exception to D-082); the thinking word's letters now share one slow ease-in-out lift (their two animations fought over `transform`, and the word's 2.4 s remount cut late letters mid-lift); the effort slider's end dots gone (6 px `.effort-stop` circles in near-black ink, half outside the track's caps); the ⋯ hover in the conversation list no longer a hard square (the row lit on `.thread-item:hover`, which ends on the sibling button).
+2. `510d629` Her `[emotion]` tags shown muted and italic like `*actions*`, in Chat and Roleplay; never links, `[1]`, `[x]`, `items[index]` or code.
+3. `1562135` `speech.speakable(text, mode)`: fixed rules over the whole finished reply before TTS (blocks, lines, inline, the roleplay dialogue cut, the shared rules, a punctuation tidy). Pytest on the user's own example.
+4. `c29500e` **Read aloud** replaces voice mode: the `＋` menu item with a speaker icon, kept in settings.json, her voice (GPT-SoVITS) only while on, a chip counting to about 47 s. The turn streams text only; the session speaks the finished reply as its own task, in the voice of who wrote it. The spoken-delivery prompt layer is gone. Also fixed: the voice chip shared the bare class `waking` with D-096's loading strip.
+5. `6a254cf` **Dictation**: a mic button beside Send and F9 (changeable in Settings → Voice) record; faster-whisper on the CPU writes it down; the words go in at the caret, never sent. `requirements.txt` caps PyAV below 19 (PyAV 19 breaks faster-whisper 1.2.1; found when this machine's fresh install picked 19.0.2).
 
-5. **UI1-02 only working controls** (`a412120`, `c575b72`, D-082): the mic, the "soon" attach items and New waifu are gone; no "kernel", "waifu" or phase codes in UI text. The sidebar status line became a banner shown after 6 s offline; its Reconnect calls a new shell command, `restart_kernel`, that starts the engine again only if it exited.
-6. **The user's notes, recorded:** the design standard is its own phase UI-2, planned from real references before building (D-086); Luna and Yuri are paid content shipped complete inside the app, never exported or open-sourced, and users' own characters come from a step-by-step creator with their own assets (D-087); the audience was 16+ pending research (D-088).
-7. **KASANE as a quiet credit** (`d765a4e`, D-089): the Doctor row "Engine (KASANE)", About, `logs/kasane.log`.
-8. **Age research** (a side session, TODO B-9): the report is `docs/research-age-content-2026-11.md`. The user chose 18+ (`a9ab16d`, D-090, FR-WIZ-8); explicit premades and the payment provider stay open (TODO B-10..12).
-9. **UI1-03 unpriced models** (`3e552e7`, D-083, FR-R-2): a model with no catalog price runs while a cap is on and is not counted against it. The picker shows "price unknown"; a notice comes once per model per run (an error frame with the non-ending code `price_unknown`, styled as info). A reached cap still stops it; helper roles stay local without a price. `budget.on_exhausted` is gone.
-10. **Her face** (`04e0296`, D-091, FR-W-8): the user's answer to open question 6 was "just a vrm face", with a way to change it in her profile. Both VRMs carry a VRoid face shot as `meta.thumbnailImage`; the engine reads only that image, cuts a 512 px square and caches it in `data/portraits/cache`. `GET /waifus/<id>/portrait?v=` serves it; the roster carries a version stamp. Shown in the companion chip, the conversation list, her messages and the companion menu; her initial without one.
-11. **Her profile** (`e62374f`, D-091, FR-W-9): About, traits, Chat (a new chat with her, no divider in the open one), Change picture and Use the model's face. Opens from Profile in the companion menu or her face beside a message. Packs gain `about`; Claude drafted Luna's and Yuri's in the untracked packs for the user to edit. `build_premade.py --force` used to delete `persona.md` too; it now keeps it and `about`.
-
-12. **The rest of UI-1** (the user: "finish phase ui-1, … commit locally"; autonomous mode, answers Assumed):
-   - **UI1-07** `0fac211` (D-092): grouped messages, a hover bar (time · model, Copy, Regenerate, Edit), edit-and-resend of the last line via `regenerate {text}`, the thinking line in the reply slot, a caret, a jump-to-latest pill.
-   - **UI1-08** `12af2b8` (D-093): tables, nested lists, code with a header and in-house colouring (`highlight.ts`).
-   - **UI1-09** `cb24949` (D-094): one slim header, split New, a thread menu with pins (`thread_pin`, schema 6), toasts, in-app confirms, an empty chat with her face and starters.
-   - **UI1-10** `77af8c0` (D-095): Ctrl+N, Ctrl+K palette, Ctrl+, and Esc to stop.
-
-13. **The user's notes after UI1-10** (2026-11-18, D-096): `tauri dev` warned that the Tauri packages mismatched (an npm update had moved `@tauri-apps/api` to 2.12, the crate stayed 2.11): the crate is now 2.12.6, both pinned to 2.12, and `package-lock.json` is committed with that update (`514e5c6`). The effort slider follows the pointer (`3565673`). While she thinks, her face, the heart and an animated word from the user's list sit in the reply slot; replies type out letter by letter; the model loading card is one line above the input box (`7203bb0`).
+A sibling session relayed a **task 10** from the user: a per-model context-length ("memory") slider; see §4 and `TODO.md` for whether it was finished.
 
 ## 3. Where we stopped
 
-UI-1 is code-complete. **Nothing from items 12 and 13 is pushed**: the user said "dont push yet". Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`.
+Tasks 1 to 9 are committed with their docs (D-097, SPEC, TODO, STATE, this file). **The branch did not push from the cloud session**: GitHub answered that Claude has no access to `YatharthJorwal/Kokyu` for the organization (HTTP 403). Nothing is half-done in the code. Untracked and staying so: `assets/premade/`, `.claude/`.
 
 ## 4. Next session: start here
 
-1. `git status`, `git log -5 --oneline`, `npm run check`.
-2. Ask whether the user reviewed `0fac211..` (UI1-07..10 and the docs) and wants them pushed; confirm or reverse D-092..D-095 (open question 10).
-3. **Checkpoint UI-1** is the user's: a while in the desktop app with a local model (edit the last line, pin and delete a thread, the palette, Esc, the window buttons).
-4. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect), and, if they have an unpriced endpoint, its "price unknown" row and notice.
-5. Ask the user to read Luna's and Yuri's About drafts (`assets/premade/<id>/waifu.yaml`) and to try her profile in the desktop app: Chat, Change picture, Use the model's face.
-6. After the checkpoint: phase UI-2 (D-086) or K1b, the user's call (D-085). Also open: question 3 (explicit premades, D-090).
-7. Their `config/config.yaml` still has `on_exhausted`: harmless, can go.
+1. Get the branch: if it reached GitHub, `git fetch origin claude/trusting-galileo-6hmr3x`; if not, the user fixes GitHub access for Claude (reconnect GitHub at claude.ai, or install the Claude GitHub App on the repo) and the cloud session pushes it.
+2. `git status`, `git log -8 --oneline`, then `.\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt` (the PyAV cap) and `npm run check`.
+3. With the user, in the desktop app (`STATE.md` §5): Read aloud with Luna and Yuri, in a chat and a roleplay (the 47 s start, code and tables never spoken, only dialogue in a roleplay, Stop silences her, still on after a restart); F9 dictation (Windows may ask for the microphone); the tags' style; the letter animation; the slider's ends; the ⋯ hover.
+4. Ask the user to confirm or reverse D-097's assumed parts and D-092..D-095 (open question 10).
+5. Ask whether the branch merges into `main` (never without their word), then Checkpoint UI-1, then UI-2 or K1b (D-085).
 
-**KASANE: decided, option B** (D-089): the Doctor row, About, `logs/kasane.log`; `kasane.exe` waits for packaging (K1b-02). The options were: It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
-- A. Internal only: folder, logs, code. The UI keeps "Kōkyū's engine" (today).
-- B. A quiet credit (Claude's recommendation): the sidecar is `kasane.exe` (Task Manager shows something better than `python.exe`), the Doctor row reads "Engine (KASANE)", About shows "Engine: KASANE 1.0" with one line on the name, logs are `kasane.log`. Banners still say "Kōkyū's engine".
-- C. A visible brand ("powered by KASANE", the banner naming it): a second name buyers must learn; not for 1.0.
+## 5. Traps
 
-## 5. Traps found this session
-
-- The HMR-stamped module URL matters when injecting state in the browser pane (CLAUDE.md §7).
-- The Workflow tool's script must be plain JS; an escaped `\\'` inside a single-quoted string fails to parse.
-- Luna's apartment GLB is a Sketchfab download, gitignored there. A shipped room needs its own rights record (R-51).
-- A `disabled` button gets no mouse events in Chrome, not even its parent's `mouseenter`; the picker's `<li>` is `display: contents` (subgrid) and has no box either. Rows that cannot be picked are `aria-disabled` with a guarded click.
-- Chrome and React: a `disabled` button inside the picker's subgrid rows is unhoverable (above); the banner's grace timer depends on the online boolean, so connecting/offline flapping does not reset it.
-- An injected `notice` needs every `Notice` field (`code`, `text`, `actions`); a missing `actions` blanks the page.
-- The 1421 preview can stall at "starting" with nothing listening: stop it and start it again.
-- The 1421 preview never connects to a kernel: `/ws` accepts only 1420 origins (403). Its failed reconnects still wipe injected state; inject with a `useChat.subscribe` that re-applies it. HTTP GETs (portraits) do reach a scratch kernel.
-- A scratch kernel's `thread_new` loads the thread's model, which would touch the user's Ollama: live checks avoid it.
-- Two `websocket_connect` contexts in one TestClient test break on `hub.shutdown_event`'s loop; fake the second window in `hub.connections` instead.
-- The browser pane is often hidden: scroll events and animations are throttled there. Dispatch `scroll` by hand and wait before a screenshot. The injection code for the 1421 preview was kept in the page's `localStorage.__injectCode` (run with `await eval(...)`); it is gone if the pane's storage is cleared.
+- **Bare class names collide:** `.waking` is the model loading strip's (D-096); a modifier named the same on another element takes its width and margins. Prefix modifiers or check `grep -n '^\.name'` first.
+- `test_vram`'s Windows-path test fails on Linux (backlog); `npm run check -- --skip-cargo` is red there for that alone.
+- In a cloud session the venv is not `.venv\Scripts`: set `KOKYU_PYTHON` to the interpreter, and keep it in the same shell command (environment variables do not carry between tool calls).
+- `ReadAloud.on` reads `CONFIG` at call time and `set()` rebuilds the config from the files: a test that installs a config by hand loses it at the next `set()`; put overrides in settings.json (`settings_file.write` + `apply_saved`). The conftest's `read_aloud_on` fixture turns it on for one test.
+- `run_turn` returns the reply to speak and sends no `speak` frames; tests that want speech call `turns.speak_reply` after it.
+- A headless Chromium has a fake microphone: `--use-fake-ui-for-media-stream --use-fake-device-for-media-stream`.
+- The HMR-stamped module URL matters when injecting state in the browser pane (CLAUDE.md §7); the 1421 preview never connects to a kernel; inject with a fake socket or `useChat.setState`.
+- A `disabled` button gets no mouse events in Chrome; the picker's `<li>` is `display: contents`.
+- An injected `notice` needs every `Notice` field (`code`, `text`, `actions`).
+- Two `websocket_connect` contexts in one TestClient test break on `hub.shutdown_event`'s loop.
 - A menu's `onClose` passed inline re-runs its effect on every render: keep it in a ref (`Menu.tsx`).
-- Shortcuts listen on `document`, registered first, so a dialog's own Escape is still open when the shortcut sees it; handlers that consume Escape call `preventDefault`, and `shortcutFor` ignores a prevented one.
+- Shortcuts listen on `document`; a dialog that consumes Escape calls `preventDefault`. Settings' key capture listens in the capture phase and stops propagation, so neither the dialog nor a shortcut sees that press.
 - The Windows console is cp1252: a Python script printing "Kōkyū" needs `PYTHONIOENCODING=utf-8`.

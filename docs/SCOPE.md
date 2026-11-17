@@ -37,7 +37,7 @@ K0, K1 and K1c are code-complete. `docs/STATE.md` holds what is verified and how
 - **Modes (K1c):** Chat and Roleplay, fixed per thread; layered system prompt; saved scenario cards with an opening line; dialogue-only speech in Roleplay; story memory folded by the local memory writer (D-074, D-075).
 - **Model picker:** Local and API sections, fits / won't-fit hints from the VRAM manager, capability badges, an effort slider where the model supports one, a "waking up" card; picking a model unloads the rest (D-054, D-064, D-065, D-072).
 - **Settings:** Models (Ollama address, API endpoint and key in the Windows Credential Manager, spending caps), Screen, Memory (correct, forget, restore), Appearance (themes), Doctor, About; `settings.json` applied live (D-059, D-067, D-070, D-073).
-- **Voice (development only):** GPT-SoVITS started from the tray when voice mode is on (D-061). No stage, no mic input yet.
+- **Voice (development only):** Read aloud speaks each finished reply with GPT-SoVITS, started only while it is on; dictation (mic button or F9) writes into the input box with faster-whisper on the CPU (D-097). No stage, no live voice yet.
 - **Screen companions:** Task Guide and OCR watch (D-048). Off by default; they need a local vision model, so they are a GPU-only extra, not a 1.0 headline.
 
 ## 5. Release train

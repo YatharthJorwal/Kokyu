@@ -29,14 +29,14 @@ Tauri window (React, src/app) ⇄ WebSocket, protocol v1 ⇄ KASANE kernel on 12
 | Kernel (`KASANE/app.py` on `.venv` Python) | the shell, on its own thread | launch, after a stale-kernel sweep | `127.0.0.1:8780` (D-027). Hidden window, log `logs/kasane.log`; packaged, the process is `kasane.exe` (D-089). |
 | Ollama | the user (external service) | already running | `11434`. The kernel only talks HTTP to it. |
 | `llama-server` | the kernel (`router/providers/llamacpp.py`) | only when the user picks a llama.cpp model or messages a thread that uses one (D-060) | `8080` (`llamacpp.port`). One at a time, for the picked preset; the binary is configured, else the one inside Ollama. Log `logs/llama-server.log`. |
-| GPT-SoVITS (`api_v2.py`) | the kernel (`audio/tts.py` `ensure_server`) | when the user turns voice mode on (D-061); stopped `tts.idle_stop_s` (300 s) after it goes off | `9880`, from `tts.gpt_sovits.api_url`; folder in `tts.gpt_sovits.launch`. A server already answering on the port is used, never a second. Log `logs/gpt_sovits.log`. |
+| GPT-SoVITS (`api_v2.py`) | the kernel (`audio/tts.py` `ensure_server`) | only while Read aloud is on (D-097): when it is turned on, or after the chat model at launch if it was left on; stopped `tts.idle_stop_s` (300 s) after it goes off | `9880`, from `tts.gpt_sovits.api_url`; folder in `tts.gpt_sovits.launch`. A server already answering on the port is used, never a second. Log `logs/gpt_sovits.log`. |
 | Vite | `npm run tauri dev` (`dev:ui`) or `npm run dev` | development only | `1420`, `strictPort`. |
 
 **Job Object.** Before any child starts, the shell puts itself in a kill-on-close Job Object. Every child (kernel, `llama-server`, GPT-SoVITS) ends with the app, however it ends.
 
-**Startup (D-060).** The shell sweeps a stale `python.exe` holding 8780, then starts the kernel with the saved API key in `KOKYU_API_KEYS` and a stdin pipe for later key changes (D-059). The kernel also takes over a stale kernel through `logs/kernel.pid`. It lays `settings.json` over `config.yaml` (D-070), opens its port at once and reads the router's cached catalog. After the first window connects, one at a time: the chat model (Ollama or API; a llama.cpp model waits to be picked), the screen companions set to start with the app, the memory catch-up pass. Voice is not part of boot (D-061). Code: `KASANE/boot.py`.
+**Startup (D-060).** The shell sweeps a stale `python.exe` holding 8780, then starts the kernel with the saved API key in `KOKYU_API_KEYS` and a stdin pipe for later key changes (D-059). The kernel also takes over a stale kernel through `logs/kernel.pid`. It lays `settings.json` over `config.yaml` (D-070), opens its port at once and reads the router's cached catalog. After the first window connects, one at a time: the chat model (Ollama or API; a llama.cpp model waits to be picked), her voice if Read aloud was left on (started, not awaited, D-097), the screen companions set to start with the app, the memory catch-up pass. Speech-to-text loads only when a dictation starts recording. Code: `KASANE/boot.py`.
 
-**Shutdown.** Tray Quit sends `POST /shutdown`. Every window's session closes and runs its memory pass (`/shutdown` waits for windows still closing, D-062). The kernel then stops the memory writer with a final pass, voice mode, GPT-SoVITS, the model loader and `llama-server`. The shell kills the kernel if it has not exited after 5 s. There is no HTTP health endpoint: the Doctor runs over the socket (`doctor` → `doctor_report`, `KASANE/doctor.py`, D-067).
+**Shutdown.** Tray Quit sends `POST /shutdown`. Every window's session closes and runs its memory pass (`/shutdown` waits for windows still closing, D-062). The kernel then stops the memory writer with a final pass, Read aloud's voice loader, GPT-SoVITS, the model loader and `llama-server`. The shell kills the kernel if it has not exited after 5 s. There is no HTTP health endpoint: the Doctor runs over the socket (`doctor` → `doctor_report`, `KASANE/doctor.py`, D-067).
 
 ## 3. Kernel modules
 
@@ -49,7 +49,7 @@ The `KASANE/` folder is on `sys.path` and modules import each other by top-level
 | `hub.py` | Open windows, which one drives turns (the first; others observe), broadcasts, the shutdown event. |
 | `turns.py` | One model turn: memory reads, the ephemeral note, the router stream, tool calls, speech, saving. |
 | `boot.py` | Start-up order (D-060), loading a chat model with the VRAM check and the unloads (D-072), stale-kernel takeover. |
-| `model_loader.py` | One background loader for the chat model; newest request wins; `model_status` to every window (D-054). Voice mode reuses it. |
+| `model_loader.py` | One background loader for the chat model; newest request wins; `model_status` to every window (D-054). Read aloud reuses it for her voice. |
 | `companions.py` | The window's active companion: persona text and voice parameters, nothing more. |
 | `conversation.py` | Threads for a window: history from stored messages, the thread's prompt layers, recording each exchange. |
 | `prompting.py` | The system prompt layers and the per-turn note texts (D-074). |
@@ -67,7 +67,7 @@ The `KASANE/` folder is on `sys.path` and modules import each other by top-level
 | `router/` | The only way to a model: `decision.py` (pure rules), providers (`ollama_native`, `llamacpp`, `airouter`), `capabilities.py` (effort), `discovery.py` (API catalog), `listing.py` (picker rows, load check), `budget.py`, `audit.py`, `redact.py`, `model_ref.py`. |
 | `memory/` | `memory.db`: facts, episodes, events, the profile card, `transcript_log`; the writer pass, recall, forget, decay, contradiction, embeddings, the Settings viewer, migrations, a CLI (`python -m memory`). |
 | `threads/` | `threads.db`, the store behind the sidebar. |
-| `audio/` | Speech out: `chunking`, `speech` (speech-safe text, `DialogueFilter`), `speech_stream`, `tts`, `voice_mode`, `arbiter`, `latency`. Speech in: `vad`, `stt`, `voice` (built and tested, not wired to the protocol). |
+| `audio/` | Speech out: `speech` (`speakable`, the speech-safe rules, `DialogueFilter`), `speech_stream`, `tts`, `read_aloud` (D-097), `arbiter`, `chunking` (ambient remarks), `latency`. Speech in: `stt` (dictation, D-097); `vad`, `voice` (built and tested, not wired to the protocol; K2). |
 | `senses/` | `camera`, `look_intent` (deterministic "look at X"), `ocr_watch`, `task_guide`. |
 | `tools/` | The tools a chat turn may offer: `capture_screen`, `read_clipboard`, `set_active_task`, `capture_camera`. |
 | `waifus/` | Pack parsing and validation (`pack.py`), the registry of premade and user packs. |
@@ -103,13 +103,13 @@ history   = earlier user and assistant lines (no dividers, screen remarks or rol
 ephemeral = forget, task and look hints (chat only)
           + recall (chat: facts and episodes; roleplay: the profile card alone)
           [+ the story so far]  roleplay only
-          [+ delivery layer]    while voice mode is on
 user      = the new line (with an attachment's text or image description)
 ```
 
 - The system message is `prompting.build_system_prompt()`, reached through `companions.system_message()`. Only the persona differs between companions; the mode and the scenario come from the thread. It stays the same for the life of a thread, so `llama-server`'s cached prefix holds (D-074).
 - The ephemeral note is one system message spliced before the last user message and never stored. The llama.cpp provider moves it into that user message, for the same cache (D-051). Temp Chat reads nothing: no recall, no profile card, no story.
-- The reply ends with an emotion tag (`[happy]` … `[neutral]`). It is cut from history, the saved message and `turn_done.text`, and is never spoken.
+- The reply ends with an emotion tag (`[happy]` … `[neutral]`). It is cut from history, the saved message and `turn_done.text`, and is never spoken. Tags the model writes mid-reply stay in the text (the Luna and Yuri shells read them) and the window shows them like a roleplay action (D-097).
+- Read aloud adds nothing to the prompt: it never changes what she writes (D-097).
 
 ### 4.2 What differs in a roleplay (details: D-074, D-075)
 
@@ -158,7 +158,8 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `switch_waifu`, `waifu_state` | both | Change the active companion, persona and voice only (FR-S-1); the roster (with `about`, the portrait's version stamp and `portrait_chosen`), the active one, a switch waiting for the running turn |
 | `set_portrait`, `waifu_roster` | both | Her picture from a file, or null for the model's face (D-091, FR-W-9); every window then gets the roster alone, active and pending untouched |
 | `surface_status` | K→C | Whether this window drives turns or observes |
-| `voice_mode`, `voice_status` | both | Voice on or off, started only when turned on (D-061); its state and how its start is going |
+| `read_aloud`, `read_aloud_status` | both | Read aloud on or off, kept in `settings.json`; her voice's start state (idle, loading, ready, failed) to every window (D-097) |
+| `dictate_start`, `dictate`, `dictation` | both | Dictation (D-097): recording began (load speech-to-text meanwhile); the recording (WebM/Opus, base64, at most 4 MB); its words or why not, to that window only. Never a turn |
 | `screen_companion`, `screen_companions` | both | Task Guide or OCR watch on or off (FR-SC-1..4); what is watching the screen |
 | `typing` | C→K | The user is typing; OCR watch keeps quiet (FR-SC-5) |
 | `camera_request`, `camera_frame` | both | The kernel asks for one webcam frame and the window answers; the window side is not wired yet (K2-08) |
@@ -232,16 +233,22 @@ A role is a capability slot in `config.yaml` `roles`. A `local_only` role whose 
 ## 8. Voice
 
 ```
-model stream ─> token frames (the chat shows the raw text)
-             └> [roleplay: DialogueFilter] → chunker (clauses; holds back a trailing [tag])
-                → persona pass → speech.prepare (speech-safe text) → SpeechStream (one clause ahead)
-                → tts.synthesize → speak {text, audio_b64, mime} → src/app/voice.ts plays in order
+model stream ─> token frames (the chat shows the raw text) ─> turn_done; run_turn returns the reply
+session ─> [Read aloud on] speak_reply task, in the voice of who wrote it:
+           speech.speakable(reply, mode)   blocks, lines, inline, [roleplay: DialogueFilter], shared rules
+           → persona pass → split_segments → SpeechStream (one clause ahead)
+           → tts.synthesize → speak {text, audio_b64, mime} → src/app/voice.ts plays in order
+
+mic button / F9 ─> MediaRecorder (WebM/Opus) ─> dictate ─> stt.transcribe (CPU, off the loop)
+                ─> dictation {text, error} ─> inserted at the caret, never sent
 ```
 
-- **Voice mode** (D-061) is kernel-wide and starts off. Turning it on starts GPT-SoVITS (or uses one already answering) and loads faster-whisper on the CPU; every window sees the start like a model load. While it is off, `speak` frames carry empty audio.
+- **Read aloud** (D-097, replaces D-061's voice mode) is kernel-wide and kept in `settings.json`. The reply is spoken once it has finished, as its own task in the session, so the user can send meanwhile; a new line, Stop, another thread, turning it off or closing the window cancels it. `ReadAloud.ready()` waits while the voice wakes up and does not retry a failed start. While it is off, `speak` frames (ambient remarks) carry empty audio.
+- **`speakable(text, mode)`** (`audio/speech.py`) is the one cut of what is said: fixed rules, no model, so it adds no delay, takes no graphics memory (D-072) and cannot change her words.
+- **Dictation** (D-097): the page records with MediaRecorder; faster-whisper reads WebM/Opus through PyAV (capped below 19, `requirements.txt`). The key lives in the page's `localStorage` (`kokyu.dictationKey`, default F9), like Appearance.
 - **GPT-SoVITS contract.** `audio/tts.py` sends `POST {tts.gpt_sovits.api_url}` (default `http://127.0.0.1:9880/tts`) with a JSON body of five fields: `text`, `text_lang`, `ref_audio_path`, `prompt_text`, `prompt_lang`. It expects whole WAV bytes per clause. The reference clip and its transcript come from the speaking companion's pack on every request, so a switch changes parameters only (D-006). Any other answer counts as down. RULES R-12: depend only on this contract.
 - **Backend down.** The reply stays text-only and the caption still shows (FR-V-7). `tts.fallback_engine` is `none` by default; `pyttsx3` is opt-in.
-- **Cold start.** GPT-SoVITS took 47 s to answer after voice mode was turned on (dev PC, `docs/STATE.md`). A line spoken meanwhile waits up to 8 s, then goes caption-only. Audible playback in Kōkyū is not verified yet.
+- **Cold start.** GPT-SoVITS took 47 s to answer after it was started (dev PC, `docs/STATE.md`). The Read aloud chip counts towards it; a reply finished meanwhile waits for the voice, then is spoken. Audible playback in Kōkyū is not verified yet.
 - **Arbiter** (`audio/arbiter.py`): idle, listening, thinking, speaking, interrupting. The memory writer's timer pass and story folds wait for idle.
 - **Lip-sync** belongs to the client and comes with the Stage view (K2); `src/engine/lipsync.ts` exists but nothing uses it yet.
 - **Planned: automatic first-run setup** (D-080). On a fresh install, the first run sets up what voice needs, with progress and no terminal: GPT-SoVITS and the speech-to-text model. One small setup module per component the app installs itself, each with a pinned manifest (URLs, SHA-256, sizes, versions). Ollama goes through its official installer. Everything else is detected and repaired through the Doctor's checks with fix actions (open the installer, start, retry). No generic component framework. Development keeps the existing GPT-SoVITS install (D-042).

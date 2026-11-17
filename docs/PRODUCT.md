@@ -69,7 +69,7 @@ Per D-085 (provisional; the user confirms it next session).
 | STT | CPU | faster-whisper `small` |
 | Local LLM `qwen3.5:9b` | About 5.6 GB VRAM | Measured with NVML on the development PC (`STATE.md`) |
 | Qwen3.6-35B-A3B Q4 on llama.cpp | About 3 GB VRAM plus 19.5 GB RAM | Measured; about 23 tokens/s (D-051) |
-| GPT-SoVITS | NVIDIA GPU | VRAM not measured; 47 s to first answer after start (D-061) |
+| GPT-SoVITS | NVIDIA GPU | VRAM not measured; 47 s to first answer after start; runs only while Read aloud is on (D-097) |
 
 ## 7. Assets, legal and brand
 

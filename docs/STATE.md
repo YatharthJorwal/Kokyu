@@ -2,10 +2,10 @@
 
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-18, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls, KASANE credit, 18+, UI1-03 unpriced models, UI1-06 her face and profile, UI1-07..10 message list, Markdown, shell, keyboard)
-- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done, and so are UI1-07 the message list (`0fac211`, D-092), UI1-08 Markdown (`12af2b8`, D-093), UI1-09 the shell (`cb24949`, D-094) and UI1-10 the keyboard (`77af8c0`, D-095), built in autonomous mode on Assumed answers, and the user's notes of 2026-11-18 (D-096: Tauri versions, the slider, thinking beside her face, typed replies, the loading strip). **UI-1 is code-complete; next is Checkpoint UI-1** (the user, in the desktop app). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `599484c`. **Local only, waiting for the user's review:** `0fac211..` (UI1-07..10, the D-096 notes and their docs); the user said not to push yet.
-- **Last green run (the user's PC, 2026-11-18, at `7203bb0`):** `npm run check`: tsc, frontend tests 166, vite build, cargo check, pytest 1263.
+- **Last updated:** 2026-11-18, session 6 (UI1-12: the voice rework, D-097: Read aloud, dictation, `speakable`, her tags shown, the thinking word, the slider's ends, the ⋯ hover). Session 5: K1c, the docs reset, UI1-01..11.
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done, and so are UI1-07 the message list (`0fac211`, D-092), UI1-08 Markdown (`12af2b8`, D-093), UI1-09 the shell (`cb24949`, D-094) and UI1-10 the keyboard (`77af8c0`, D-095), built in autonomous mode on Assumed answers, and the user's notes of 2026-11-18 (D-096: Tauri versions, the slider, thinking beside her face, typed replies, the loading strip). The user tested UI-1 on their PC on 2026-11-18 and everything listed passed (npm, the slider drag, the loading strip, edit/resend/regenerate, pin/rename/delete, shortcuts, window buttons, code and table formatting). **UI1-12** (D-097, session 6, autonomous, on a branch): voice mode replaced by Read aloud and dictation, `speakable`, tags shown, three polish notes. **UI-1 is code-complete; next is Checkpoint UI-1** for the UI1-12 items (the user, in the desktop app). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, private (D-040). `main` is at `ac987e1` (pushed by the user before session 6). Session 6's work is on the branch **`claude/trusting-galileo-6hmr3x`**, cut from `ac987e1`, never merged into `main`; its push from the cloud session was refused (no GitHub access for the repo there), so it may exist only in that session until the user fetches it or access is fixed (see `HANDOFF.md`).
+- **Last green run (the user's PC, 2026-11-18, at `7203bb0`):** `npm run check`: tsc, frontend tests 166, vite build, cargo check, pytest 1263. **Session 6 (Linux cloud machine, no GPU, at `6a254cf`):** `npm run check -- --skip-cargo`: tsc, frontend tests 183, vite build; pytest 1306 passed, 1 failed (`test_vram`'s Windows-path test, which fails on Linux before any change); cargo check not run (no webkit/gtk there).
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
@@ -23,7 +23,11 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Thinking beside her face (heart, animated word), replies typed out, the loading strip above the input box, the dragged effort slider (D-096) | T (word order, typing pace), B (injected state and pointer events; the hidden pane runs at 2-30 fps, so the pace was not judged by eye); not seen in the desktop app |
 | Tauri crate and npm packages both 2.12 | `tauri info`, cargo check; `tauri dev` not started here |
 | Shortcuts and the Ctrl+K palette; Esc stops a reply, but not while a dialog is open (D-095) | T, B (keys dispatched in the page); not tried in the desktop webview, where Ctrl+N could behave differently |
-| Lazy boot (D-060), voice only when voice mode is on (D-061, 47 s to start GPT-SoVITS) | T, B; no audible playback checked |
+| Lazy boot (D-060); her voice only while Read aloud is on, kept in settings.json, the starting chip (D-097, 47 s to start GPT-SoVITS) | T, B (the menu item and three chip states, injected); no audible playback checked; not seen in the desktop app |
+| Read aloud speaks each finished reply through `speakable` (code, tables, links, tags, dashes, quotes, lists; roleplay dialogue only), in the voice of who wrote it; a new line, Stop or another thread silences her (D-097) | T (fakes); no audio anywhere yet |
+| Dictation: the mic button and F9 (changeable in Settings → Voice) record, faster-whisper on the CPU writes it down, the words go in at the caret, never sent (D-097) | T; B in headless Chromium with its fake mic and a fake socket (recording, F9, insertion, errors, the key change); the page's WebM/Opus decodes with faster-whisper's decoder; real speech, the WebView2 mic prompt and the desktop app not tried |
+| Her `[emotion]` tags shown muted and italic like actions, in Chat and Roleplay (D-097) | T, B (the user's example reply, injected) |
+| The thinking word's single letter lift, "Waifu-mode-engaging" back, no slider end dots, a soft ⋯ hover (D-097) | T, B (screenshots, dark theme); smoothness not judged at full frame rate |
 | Model picker: Local and API sections, fits hints, capability badges, effort slider per model (D-064), "waking up" card | T, B (real Ollama and GPU) |
 | Her face from the VRM thumbnail in the chip, the conversation list, her messages and the companion menu; her initial without one (D-091, FR-W-8) | T, B (real thumbnails from a scratch engine, injected roster); not seen in the desktop app |
 | Her profile: About, traits, Chat (a new chat with her, no divider), Change picture, Use the model's face (D-091, FR-W-9) | T; picture change and reset live against a scratch engine; B with injected state; Chat not run against a live engine |
@@ -39,7 +43,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Screen companions: Task Guide, OCR watch (D-048, D-056); quiet in roleplay | T; remarks not seen live |
 | **Modes:** Chat and Roleplay per thread, layered prompts, no tools in roleplay, fiction kept out of memory (D-074) | T; the user ran the build on their PC |
 | Story memory (`story.py`, folds logged as `story memory: folded …`) | T; no fold confirmed on real Ollama |
-| Dialogue-only speech in roleplay (`DialogueFilter`) | T; not confirmed heard |
+| Dialogue-only speech in roleplay (`DialogueFilter`, inside `speakable` since D-097) | T; not confirmed heard |
 | Saved scenario cards, opening line as her first message | T, B (injected state) |
 | New roleplay dialog, Roleplay badge, `*action*` and `(OOC …)` rendering | T, B (injected state) |
 | Persona-only `persona.md` and a drafted About for Luna and Yuri | Written; packs load; untracked (open question 4); the About drafts await the user |
@@ -54,7 +58,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Toolchain (measured) | Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5, Ollama 0.40.16 |
 | Ollama models | `hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L`, `qwen3.5:9b` (default chat model, D-060), `qwen3.5:4b`, `nomic-embed-text` |
 | llama.cpp | Qwen3.6-35B-A3B `UD-Q4_K_XL` (~21 GB) through the `llama-server.exe` inside Ollama; about 3.0 GB VRAM, 19.5 GB RAM, ~23 tok/s generation; 109 s to load (D-051) |
-| GPT-SoVITS (dev) | `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (a space in the path); 47 s to answer after start |
+| GPT-SoVITS (dev) | `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (a space in the path); 47 s to answer after start; started only while Read aloud is on (D-097) |
 | GPU at rest with the chat model up | 12,288 MB total, 394 MB free (9B 5,590 MB; 4B 3,207 MB; embeddings 320 MB; other programs ~2.7 GB), measured before D-072 |
 | API | An AI Router account; **no key on this PC** |
 | VR headset | None |
@@ -70,7 +74,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 7. The six assumed K1c answers (D-074): confirm or reverse.
 8. D-057: move the WebSocket token check earlier?
 9. C-1b: the user deletes `KASANE/vrm/`.
-10. D-092..D-095 (UI1-07..10) were Assumed in autonomous mode: confirm or reverse, including the four starter lines and pins stored by the engine.
+10. Assumed in autonomous mode, to confirm or reverse: D-092..D-095 (UI1-07..10, including the four starter lines and pins stored by the engine) and D-097's assumed parts: the dictation key works only while the window has focus and the page keeps it; Read aloud adds no spoken-delivery prompt layer (her replies are written as usual and cut by `speakable`); a reply finished while her voice starts waits for it; Settings has a Voice section.
 
 ## 4. Known issues and risks
 
@@ -84,6 +88,9 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 - **The kernel port 8780 is hard-coded in several places** (`app.py`, `kernel.ts`, `lib.rs`, the CSP, dev scripts; `ARCHITECTURE.md` §12); a packaging risk (K7-08).
 - **Tests read the user's `config/config.yaml`** when it exists; the suite passes, but it is not isolated from local config.
 - **K1c follow-ups** (D-075, TODO backlog), none blocking.
+- **PyAV 19 breaks faster-whisper 1.2.1** (it dropped an argument faster-whisper passes): a fresh install would read no recording. `requirements.txt` now caps `av<19` (16.1..18.1 checked); the user's venv may need `pip install -r KASANE/requirements.txt` again. PyAV bundles FFmpeg (LGPL): review before release.
+- **`test_vram`'s Windows-path test fails on Linux** (a `PosixPath('C:\\Windows')` is not absolute): passes on the user's PC; backlog.
+- **The WebView2 microphone permission** for dictation is unverified: if Windows or WebView2 blocks it, the box's line says so; nothing else breaks.
 - Inherited: faster-whisper on CUDA failed here (CPU STT); killing the process instead of tray Quit loses that session's memory pass.
 
 ## 5. Checkpoint (the user ticks; date each item)
@@ -93,7 +100,9 @@ This one list replaces the three stacked manual gates (K0, K1, K1c) (D-076). In 
 - [ ] The window opens; drag by the top bar, resize from the edges, minimize / maximize / close (close hides to the tray)
 - [ ] A chat: a plain short answer; a list when asked; a screenshot tool call works
 - [ ] A roleplay from a saved card and one blank: the opening line shows first; `*actions*` in italic; she never decides your character's actions
-- [ ] Voice mode on: Luna and Yuri sound different; in a roleplay only dialogue is spoken; the emotion tag is never spoken; with GPT-SoVITS stopped the reply still appears
+- [ ] Read aloud on (the `＋` menu): the chip counts while her voice starts (about 47 s); Luna and Yuri sound different; each reply is spoken once it has finished; code, tables, links and tags are never spoken; in a roleplay only dialogue is spoken; a new line or Stop silences her; it is still on after a restart; with GPT-SoVITS stopped the reply still appears
+- [ ] Dictation: the mic button and F9 record (Windows may ask for the microphone the first time); the words land in the box at the caret and are not sent; Settings → Voice changes the key and the tooltip follows
+- [ ] The UI1-12 polish: her `[tags]` muted and italic; the thinking word's slow lift; no dark dots at the slider's ends; the ⋯ hover in the conversation list
 - [ ] Change model, effort and companion mid-thread, each without changing the others
 - [ ] A forced failure (Ollama stopped, or later a wrong API key) shows the failure card with Retry / Switch model
 - [ ] After about a dozen roleplay lines the kernel log shows `story memory: folded …`, and Settings → Memory shows nothing from the story
@@ -104,5 +113,6 @@ This one list replaces the three stacked manual gates (K0, K1, K1c) (D-076). In 
 | K1 automated | 2026-11-15 | `npm run check` green after `89bdb95` | Claude |
 | K1c automated | 2026-11-17 | `npm run check` green after `97de53a` | Claude |
 | UI-1 automated | 2026-11-17 | `npm run check` green at `77af8c0` | Claude |
+| UI1-12 automated | 2026-11-18 | `npm run check -- --skip-cargo` at `6a254cf` (Linux): green but for the Windows-only `test_vram` test; cargo not run | Claude |
 | UI-1 in the desktop app (the look, with a local model) | | | |
 | K0 + K1 + K1c in the desktop app | | The user ran the K1c build on their PC (2026-11-17); the items above not yet ticked | |

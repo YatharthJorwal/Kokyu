@@ -23,6 +23,7 @@ The compact decision reference: what holds now, what is open, what was replaced.
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
 | 8 | D-057's per-launch WebSocket token. | K7 |
 | 9 | Delete `KASANE/vrm/` (C-1b, the user's action). | Nothing |
+| 10 | Assumed in autonomous mode, to confirm or reverse: D-092..D-095 (UI1-07..10), and D-097's assumed parts (the in-app dictation key, kept by the page; no delivery layer with Read aloud; a reply finished while her voice starts waits for it; Settings → Voice). | UI-1 checkpoint |
 
 ## In force
 
@@ -151,7 +152,7 @@ Providers `gpt_sovits` (local), `builtin` (small local default, chosen in a K2 s
 **D-042 GPT-SoVITS install for development** · Accepted · User · 2026-11-12
 Development uses `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (quote the space). Its path lives in `config.yaml` (D-060); Track T is retired (D-080).
 
-**D-061 Voice starts only when it is used** · Accepted · User · 2026-11-15
+**D-061 Voice starts only when it is used** · Superseded by D-097 (voice mode replaced; "starts only when needed" kept) · User · 2026-11-15
 "only boot up voice when its needed". Launch never starts GPT-SoVITS or faster-whisper. Voice mode is a kernel-wide switch, always off at start; the server stops after `tts.idle_stop_s` once voice is off.
 
 **D-080 Automatic setup at first run; small setup modules, no framework** · Accepted · User (automatic setup), Claude (shape) · 2026-11-17
@@ -212,7 +213,7 @@ Theme, accent, message style and text size, kept by the page in `localStorage`, 
 **D-078 3D apartment planned for 1.1, from Luna's apartment** · Accepted (direction) · User · 2026-11-17
 Takes over D-011's 3D scope (FR-3D). Base: Luna's GLB apartment (a user asset), BVH collision, spectator and WASD visitor cameras, her wandering, time-of-day lighting. Open: room data, asset rights, VRAM, two-companion turn-taking.
 
-**D-082 Only working controls** · Accepted · User · 2026-11-17
+**D-082 Only working controls** · Accepted; amended by D-097 (the mic is back, working; one copy exception) · User · 2026-11-17
 "We only put working buttons and add new ones with working scripts." Supersedes FR-C-4's "visibly disabled". No placeholders or phase codes in UI text; the mic is hidden until voice input works.
 
 ### Product, packaging and process
@@ -289,8 +290,11 @@ UI1-09. One slim header (companion chip, thread title, Temp, window buttons). Ne
 **D-095 Keyboard shortcuts and a palette** · Assumed · Claude · 2026-11-17
 UI1-10. Ctrl+N a new chat, Ctrl+K a palette, Ctrl+, Settings, Esc stops a reply. While a dialog or pop-up is open, it owns Escape and the shortcuts wait. The palette lists what works now: actions, companions (talk to, profile) and conversations, filtered by every typed word; it hides what a running reply forbids. Hints sit beside the controls (the New menu, Settings, Stop). No rebinding.
 
-**D-096 Thinking beside her face, typed replies, a compact loading strip, a dragged slider** · Accepted · User · 2026-11-18
+**D-096 Thinking beside her face, typed replies, a compact loading strip, a dragged slider** · Accepted; amended by D-097 ("Waifu-mode-engaging" restored, the letter animation, the slider's ends) · User · 2026-11-18
 "the heart must be right to her pfp in chat, must show animation when model thinks along with some more creative text … must stop when response comes in a typing animation (not fat chunks)". While she thinks, her face, the heart and one short animated word (the user's list plus more in its voice, none from the waking lines) sit where her reply will appear; nothing above the input box. Replies type out letter by letter, catching up with any model. The model loading card becomes one line above the input box ("compact and professional"). The effort slider follows the pointer and settles on the nearest level on release ("i need smoothness"; no new component). "Waifu-mode-engaging" is left out under D-082. Amends D-063, FR-C-5, FR-M-6, FR-M-8.
+
+**D-097 Read aloud and dictation replace voice mode; tags shown; UI notes** · Accepted · User, with Assumed parts · 2026-11-18
+The user's notes. Voice mode goes. **Read aloud** (speaker icon, `＋` menu) speaks each finished reply in Chat and Roleplay, kept in settings.json; GPT-SoVITS starts only while it is on, and the window shows it starting (about 47 s). What is said passes one deterministic `speakable(text, mode)`, **no second model**, as agreed with the user: one would add delay, compete for graphics memory (D-072) and could change her words. **Dictation:** a mic button and F9 (changeable in Settings) fill the input box, never send; STT stays on the CPU. Her `[emotion]` tags stay in the text for the Luna and Yuri shells and show like actions. "Waifu-mode-engaging" returns, the one approved D-082 exception. Assumed: the key works in-app only and the page keeps it (D-073 style); no spoken-delivery prompt layer; a reply waits while her voice starts; a Voice section in Settings. Live speech-to-speech comes later. Supersedes D-061; amends D-082, D-096.
 
 ## Superseded
 
@@ -307,3 +311,4 @@ UI1-10. Ctrl+N a new chat, Ctrl+K a palette, Ctrl+, Settings, Esc stops a reply.
 - D-046 Avatar swap by page reload → superseded by D-062 (widget deleted; K2 swaps in Stage)
 - D-049 Flat and v1 messages side by side → superseded by D-062 (v1 only)
 - D-052 Helpers kept loaded; boot warm-up → superseded by D-072 (one model in memory) and D-060 (lazy boot)
+- D-061 Voice mode, a kernel-wide switch → superseded by D-097 (Read aloud and dictation)

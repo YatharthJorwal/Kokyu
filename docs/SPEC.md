@@ -5,12 +5,12 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 - **MUST / SHOULD / MAY** follow RFC 2119 usage.
 - **TARGET** marks a number to be *measured and calibrated* in the named phase; it is not a verified fact.
 - **Phase** column: when the requirement is delivered. Release 1.0, in delivery order (D-085, provisional): K0, K1, K1c, UI-1, K1b, K2, K3, W, K6, K7. Release 1.1: K4, K5 (Appendix B). Each phase ends with one checkpoint in the desktop app, ticked by the user (D-076).
-- Version: **spec v1.1**, 2026-11-17. A decision that amends a row is rewritten into the row, with its D-ID; `DECISIONS.md` says why.
+- Version: **spec v1.1**, 2026-11-17, amended 2026-11-18 (D-097). A decision that amends a row is rewritten into the row, with its D-ID; `DECISIONS.md` says why.
 
 **Changelog v1.0 → v1.1**
 - Folded in: D-059 (one API endpoint), D-064 (effort data), D-065, D-071 (VRAM checks), D-066 (failure card), D-067, D-070, D-073 (Settings, settings.json, appearance), D-068 (window layout), D-072 (one chat model in memory).
 - Added: FR-MODE (D-074, D-075); FR-M-12 model names (D-084).
-- Changed: FR-C-5 thinking and typing, FR-M-6 loading strip, FR-M-8 dragged slider (D-096); FR-C-6 shell, FR-C-8 Markdown, FR-C-9 edit (D-092..D-094); FR-W-1, 3, 8, 9 her portrait and profile (D-091); FR-C-4 only working controls (D-082); FR-CR-5, 6 Write it for me (D-077); FR-R-2 unpriced models (D-083); FR-DIST one NSIS installer (D-081); FR-COMP, FR-WIZ automatic setup (D-080).
+- Changed: voice mode replaced by Read aloud and dictation: FR-V-2, 3, 6, 7, new FR-V-9, FR-S-3, FR-SET-1, FR-MODE-2, 8, §5; her emotion tags shown (FR-C-8); FR-C-4, 5, FR-M-8 (D-097). FR-C-5 thinking and typing, FR-M-6 loading strip, FR-M-8 dragged slider (D-096); FR-C-6 shell, FR-C-8 Markdown, FR-C-9 edit (D-092..D-094); FR-W-1, 3, 8, 9 her portrait and profile (D-091); FR-C-4 only working controls (D-082); FR-CR-5, 6 Write it for me (D-077); FR-R-2 unpriced models (D-083); FR-DIST one NSIS installer (D-081); FR-COMP, FR-WIZ automatic setup (D-080).
 - Moved to Appendix B: FR-P, FR-3D (now the apartment, D-078). Removed: agent mode, VR (D-079), Track T (D-080).
 
 ## 1. Definitions
@@ -50,11 +50,11 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-C-1 | Threads MUST be creatable, renamable, deletable and searchable (title and message text). Stored in SQLite. | K1 |
 | FR-C-2 | Replies MUST stream token by token. **Stop** MUST halt generation (TARGET ≤ 300 ms) and keep the partial reply. Audio stops with it (TARGET ≤ 200 ms). | K1 |
 | FR-C-3 | The input box MUST be centered, multi-line (`Enter` sends, `Shift+Enter` newline), and accept pasted images and dropped files. | K1 |
-| FR-C-4 | **Only working controls (D-082):** a control appears only when it works end to end, and a new control lands with its working code; no disabled placeholders or "coming soon". The `＋` tray (the paperclip, D-068) offers what works: upload file, Voice, Task Guide, OCR watch; camera, screenshot and paste image join when they work. The mic button stays hidden until voice input works. **Copy rule:** UI text uses plain words, never internal ones ("kernel", "waifu", phase codes such as K2). | K1, UI-1, K2 |
-| FR-C-5 | While she thinks, her face, the **heart** and a short changing word MUST show where her reply will appear, and go when the reply starts. The reply SHOULD type out letter by letter, never in network-sized lumps (D-096). All of it respects reduced motion. | K1, UI-1 |
+| FR-C-4 | **Only working controls (D-082):** a control appears only when it works end to end, and a new control lands with its working code; no disabled placeholders or "coming soon". The `＋` tray (the paperclip, D-068) offers what works: upload file, Read aloud, Task Guide, OCR watch; camera, screenshot and paste image join when they work. The mic button beside Send dictates (FR-V-6, D-097). **Copy rule:** UI text uses plain words, never internal ones ("kernel", "waifu", phase codes such as K2). One approved exception: the thinking word "Waifu-mode-engaging", the user's own (D-097). | K1, UI-1, K2 |
+| FR-C-5 | While she thinks, her face, the **heart** and a short changing word MUST show where her reply will appear, and go when the reply starts. One slow lift travels across the word's letters (transform only, no flicker, D-097). The reply SHOULD type out letter by letter, never in network-sized lumps (D-096). All of it respects reduced motion. | K1, UI-1 |
 | FR-C-6 | The sidebar MUST show New chat (split: Chat, and a menu with Chat / Roleplay…) and search at the top, history in the middle (Pinned first, then Today / Yesterday / Previous 7 days / Older, each with her badge), and **Settings** at the bottom. Each conversation has a menu (right-click or ⋯): Pin, Rename, Delete; pins are stored by the engine. Deletes ask in an in-app dialog; done actions confirm with a toast (D-094). It does not list companions; she is picked with the companion chip (FR-S-1, D-068). | K1, UI-1 |
 | FR-C-7 | A **Chat / Stage** toggle MUST switch views of the same thread without losing state. | K2 |
-| FR-C-8 | Replies MUST render Markdown, parsed in-house, never as HTML (D-055): tables, nested lists, and code blocks with a header (language, Copy) and in-house colouring (D-093). What is *spoken* is the speech-safe version (FR-V-2). | K1, UI-1 |
+| FR-C-8 | Replies MUST render Markdown, parsed in-house, never as HTML (D-055): tables, nested lists, and code blocks with a header (language, Copy) and in-house colouring (D-093). Her **emotion tags** (`[angry]`, `[teasing]`: a bracketed word or few) stay in the text, because the Luna and Yuri shells drive her expressions from them, and show muted and italic like a roleplay action, in every mode; a link `[x](url)` is never a tag (D-097). What is *spoken* is `speakable`'s cut (FR-V-2). | K1, UI-1 |
 | FR-C-9 | Each assistant message SHOULD offer *Copy*, and the last one *Regenerate* (run in the kernel, D-055). The last user line SHOULD offer *Edit*, which replaces it and its reply (`regenerate {text}`); a line sent with a file is not editable (D-092). Time and model show on hover. | K1, UI-1 |
 | FR-C-10 | Messages MUST record: speaker waifu id and name snapshot, model ref, effort, timestamps, token counts where known. | K1 |
 
@@ -64,7 +64,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 |---|---|---|
 | FR-S-1 | A chip in the top bar (D-068) MUST show the active companion's avatar and name. Its popover is a searchable list, plus **＋ New companion** once the creator works (K3, D-082). | K1 |
 | FR-S-2 | Switching MUST insert a visible divider ("Switched to Luna"), apply from the **next** turn (a turn in flight finishes with the old companion), and keep prior messages on screen tagged with their speaker. | K1 |
-| FR-S-3 | While voice is on, switching MUST send a short TTS **pre-warm** for the new companion so her first real line is not slower (D-061). | K2 |
+| FR-S-3 | While Read aloud is on, switching MUST send a short TTS **pre-warm** for the new companion so her first real line is not slower (D-061, D-097). A reply already being read keeps the voice of the companion who wrote it. | K2 |
 | FR-S-4 | The Stage is entered from the top bar (the Chat / Stage toggle, FR-C-7); the exact control is designed in K2. The sidebar has no companion list to enter it from (D-068). Opening a history entry opens Chat view. | K2 |
 | FR-S-5 | Switching MUST NOT alter the model chip, the effort slider or any permission (FR-W-3). | K0 |
 
@@ -79,7 +79,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-M-5 | The selection is **per thread**; new threads inherit the last selection. It is independent of the companion. | K1 |
 | FR-M-6 | **One chat model in memory (D-072):** picking a model unloads every other chat model (llama-server stops, other Ollama models unload); only the embedding model stays. With an Ollama pick the helper roles run on it; with a llama.cpp or API pick each helper loads for its call and leaves. Loading shows progress (one line above the input box: the model, a changing line, the time; D-054, D-096). A local model that will not fit is refused before anything unloads, naming what holds the memory, with *Unload X* where it helps (D-065, D-071). | K1 |
 | FR-M-7 | The chip MUST show a local or cloud icon. Spend so far against the cap appears in the popover footer. | K1 |
-| FR-M-8 | **Effort slider**, inside the popover, with a short label on the chip. Discrete detents from the canonical set `off, low, medium, high, max`, **restricted to what the selected model supports** (FR-M-10). Dragged, the thumb follows the pointer and settles on the nearest detent on release (D-096). If none are supported, no slider is shown. | K1, UI-1 |
+| FR-M-8 | **Effort slider**, inside the popover, with a short label on the chip. Discrete detents from the canonical set `off, low, medium, high, max`, **restricted to what the selected model supports** (FR-M-10). Dragged, the thumb follows the pointer and settles on the nearest detent on release (D-096). Only inner levels get a tick; the track's own ends mark the first and last (D-097). If none are supported, no slider is shown. | K1, UI-1 |
 | FR-M-9 | Motion is short and consistent: the slider and the chip show the level (a glow on the chip while generating); reduced motion makes all of it static. | K1 |
 | FR-M-10 | Effort support is data (D-064): catalog tags for API models (`reasoning_effort` for low, medium, high), `config/models.yaml` over `config/models.example.yaml` for local models (thinking on or off, or a level). No thinking-token budget: neither local backend takes one. | K1 |
 | FR-M-11 | Effort is remembered per model per thread. Reasoning text is never spoken and is not shown in the chat. | K1 |
@@ -102,12 +102,13 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | ID | Requirement | Phase |
 |---|---|---|
 | FR-V-1 | TTS MUST go through the provider interface (FR-VP-1). The `gpt_sovits` provider sends every request with the **speaking companion's** `ref_audio_path`, `prompt_text`, `prompt_lang` (contract in `ARCHITECTURE.md`). No weight swapping. Today `synthesize()` picks its engine from `tts.engine`, not from her `voice.provider`; the interface is K2. | K0, K2 |
-| FR-V-2 | Text sent to TTS MUST pass the speech-safe normalizer (`audio/speech.py`): no Markdown, emoji, URLs, code fences, reasoning text, stage directions. | K2 |
-| FR-V-3 | TTS SHOULD be pipelined one clause ahead of the model's output. | K2 |
+| FR-V-2 | Text sent to TTS MUST pass the speech-safe normalizer (`audio/speech.py`). A reply read aloud first passes **`speakable(text, mode)`**: fixed rules over the whole finished reply, **no model** (D-097): fenced code (an unclosed fence runs to the end), tables, inline code, URLs (a link keeps its words), Markdown marks, emoji and `[tags]` are dropped; em and en dashes become a comma pause; quote marks are dropped; list items, headings and quotes are read as sentences; in roleplay only her dialogue (FR-MODE-8). Same input, same output. | UI-1, K2 |
+| FR-V-3 | TTS SHOULD synthesize one clause ahead of playback. Read aloud speaks a reply once it has finished (D-097); speaking while she writes belongs to Live (FR-MODE-10, K2). | UI-1, K2 |
 | FR-V-4 | One audio **arbiter** MUST ensure only one voice plays at a time; later lines queue. | K2 |
 | FR-V-5 | **Barge-in:** speech from the user MUST cancel the current turn's audio and generation and tell the client to stop playback. | K2 |
-| FR-V-6 | STT MUST use faster-whisper (default `small`, **CPU**) behind a VAD. Inputs: push-to-talk, a mic button (shown only when it works, FR-C-4) and a hands-free **live voice** mode. Voice starts only when used (D-061). | K2 |
-| FR-V-7 | If voice cannot start or the TTS backend goes down, the UI MUST say so plainly and continue **text-only** (D-045, D-061). The `pyttsx3` fallback is an opt-in dev setting (`tts.fallback_engine`, default `none`) because it breaks voice identity. | K0, K2 |
+| FR-V-6 | STT MUST use faster-whisper (default `small`, **CPU**), on this PC, keeping no audio. **Dictation** (D-097): a mic button beside Send, or its key (**F9**, changeable in Settings → Voice; it works while the window has focus), starts and stops a recording; the words go into the input box at the caret and are **never sent by themselves**. Speech-to-text loads when a recording starts, never at launch. A system-wide key, push-to-talk with a VAD and hands-free live voice come later (K2). | UI-1, K2 |
+| FR-V-7 | If her voice cannot start or the TTS backend goes down, the Read aloud chip MUST say so plainly, with *Try again*, and replies continue **text-only** (D-045, D-097). A failed start is retried only by the user, never once per reply. The `pyttsx3` fallback is an opt-in dev setting (`tts.fallback_engine`, default `none`) because it breaks voice identity. | K0, UI-1, K2 |
+| FR-V-9 | **Read aloud** (D-097, replaces D-061's voice mode): one switch, in the `＋` menu and Settings → Voice, kept in `settings.json` (`tts.read_aloud`). While on, she speaks **each finished reply**, in Chat and Roleplay, in the voice of the companion who wrote it; it never changes what she writes (no delivery layer). GPT-SoVITS starts only while it is on: when turned on, or after the chat model at launch if it was left on; the chip shows it starting (about 47 s). A new line, Stop, another thread or turning it off silences her; she can be sent a line while she speaks. | UI-1 |
 | FR-V-8 | Latency TARGETS (warm, local 9B Q4, TTS up): first token ≤ 1.5 s after send; first audio ≤ 2.5 s after the first sentence is complete; companion switch ready (pre-warm done) ≤ 2 s. Calibrate in K2. | K2 |
 
 ### 2.7 Stage view (FR-ST)
@@ -155,7 +156,7 @@ Release 1.1, not specified in detail: Appendix B.
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-SET-1 | Sections: **Models** (default model, local rows, Ollama address, API key status, a custom endpoint, budget), **Appearance** (D-073), **Screen** (screen companions now and at start, D-070), **Memory**, **Doctor**, **About** (D-067). Voice and Companions arrive with K2 and K3; a section appears only when it works (D-082). | K1, K2, K3 |
+| FR-SET-1 | Sections: **Models** (default model, local rows, Ollama address, API key status, a custom endpoint, budget), **Appearance** (D-073), **Voice** (Read aloud; the dictation key, kept by the page like Appearance, D-097), **Screen** (screen companions now and at start, D-070), **Memory**, **Doctor**, **About** (D-067). Companions arrive with K3; a section appears only when it works (D-082). | K1, UI-1, K3 |
 | FR-SET-2 | Settings persist in `settings.json` in app data and apply at once, with no restart (D-070). It wins over `config/config.yaml`, which wins over the code defaults, key by key. Appearance is kept by the page, not in `settings.json` (D-073). | K1 |
 | FR-SET-3 | A **Doctor** panel MUST report, each with a fix hint: kernel, Ollama, default local model, embeddings, llama.cpp, voice, speech to text, GPU memory, API models (D-067). Checks are read-only; fix actions arrive with W (FR-COMP-4). | K1, W |
 
@@ -225,18 +226,18 @@ D-080: small setup modules, one per component the app installs itself; no generi
 
 ### 2.18 Conversation modes (FR-MODE) — D-074
 
-Two independent choices: what kind of conversation a **thread** is (Chat or Roleplay), and whether **voice** is on in the window (D-061; the Stage joins it in K2). A mode belongs to the thread, never to a companion (D-003): every companion does every mode with the same model, tools and permissions. Six answers in D-074 were assumed and await the user's confirmation.
+Two independent choices: what kind of conversation a **thread** is (Chat or Roleplay), and whether **Read aloud** is on (D-097; the Stage joins in K2). A mode belongs to the thread, never to a companion (D-003): every companion does every mode with the same model, tools and permissions. Six answers in D-074 were assumed and await the user's confirmation.
 
 | ID | Requirement | Phase |
 |---|---|---|
 | FR-MODE-1 | Every thread has a **mode**, `chat` or `roleplay`, chosen when it is created and fixed for its life. Threads that existed before modes are `chat`. Search, rename, delete, model, effort and Temp Chat work the same in both. | K1c |
-| FR-MODE-2 | The system message is built from layers, in order: **persona** (the companion's prompt: who she is, never format or length rules), the **mode layer** (one text per mode, the same for every companion), the **delivery layer** (only while voice is on), then the app addendum (emotion tag, honesty about abilities; the tool guidance only in modes that offer tools). | K1c |
+| FR-MODE-2 | The system message is built from layers, in order: **persona** (the companion's prompt: who she is, never format or length rules), the **mode layer** (one text per mode, the same for every companion), then the app addendum (emotion tag, honesty about abilities; the tool guidance only in modes that offer tools). | K1c |
 | FR-MODE-3 | **Chat:** she answers as herself but plainly, in about 3 to 4 lines, longer only when the task needs it (code, steps, a list asked for); Markdown when it helps; no action narration. Tools are offered as before. App memory (FR-MEM) is read and written as before. | K1c |
 | FR-MODE-4 | **Roleplay:** she stays in character and writes in the roleplay format: `*action or narration*`, dialogue as plain or quoted text, `**emphasis**`, `(OOC: …)` or `((…))` out of character; a paragraph or two per reply. **No tools are offered.** The user's name and profile are read from app memory, but **nothing from a roleplay thread is written to app memory**. | K1c |
 | FR-MODE-5 | **Story memory:** each roleplay thread keeps a running summary, written locally by the memory-writer role (D-015) after replies and fed into every turn of that thread, so a long story keeps its beginning. It never leaves the thread; Temp Chat keeps none. | K1c |
 | FR-MODE-6 | **New roleplay** starts from a **scenario card**: title, setting, who the user is, who she is to the user, the opening message, and optional rules; every field may be empty (*Blank roleplay*). The opening message, when given, is stored as her first message. Cards are saved locally and can be started again, edited or deleted. | K1c |
 | FR-MODE-7 | In roleplay threads the client shows `*…*` in italic and softer, `**…**` in bold and out-of-character asides small and muted; chat threads keep ordinary Markdown (FR-C-8), so parentheses there stay plain text. A roleplay thread is marked in the sidebar. | K1c |
-| FR-MODE-8 | While voice is on, the delivery layer asks for short spoken lines without lists, Markdown, symbols, quotes or dashes; and in roleplay threads **only her dialogue is spoken**: actions, narration and out-of-character text are removed by code before speech, whatever the model wrote. | K1c |
+| FR-MODE-8 | With Read aloud on, in roleplay threads **only her dialogue is spoken**: actions, narration and out-of-character text are removed by code before speech (`speakable` with the dialogue filter), whatever the model wrote. There is no delivery layer: Read aloud never changes what she writes (D-097). | K1c, UI-1 |
 | FR-MODE-9 | Screen companions (FR-SC-4, 5) never post remarks into a roleplay thread; they stay quiet while one is open. | K1c |
 | FR-MODE-10 | In K2 a roleplay action may drive the avatar (an expression or gesture named in the action). | K2 |
 
@@ -335,7 +336,8 @@ No absolute paths; all locations from `KASANE/paths.py`; no assumption that a re
 | No companion installed (a fresh clone: premade packs are untracked assets) | The chip says "No companion"; a neutral built-in persona answers (D-062) |
 | No local models | The Local section is empty with the reason; API works if a key is saved (D-054) |
 | No API key | API rows listed greyed, "needs an API key"; *Key* in the API heading saves one (D-059) |
-| Voice cannot start | The voice chip under the input box says why, with *Try again*; replies continue text-only (D-061, FR-V-7) |
+| Her voice cannot start | The Read aloud chip under the input box says why, with *Try again*; replies continue text-only (D-097, FR-V-7) |
+| The mic cannot start, or nothing was heard | The line above the input box says why (no permission, none found, busy, nothing caught, speech-to-text failed); nothing is sent (D-097, FR-V-6) |
 | Model will not fit or fails to load | The waking-up card names what holds the memory, with *Unload X* where offered, *Try again* and *Switch model* (D-065, D-071) |
 | API quota or error | A card under the turn in plain words, with *Details*, *Retry*, *Switch model* (FR-R-5, D-066) |
 | Thread on an endpoint that is not active | Blocked with its own message, never sent to another provider (D-059) |
@@ -357,7 +359,7 @@ In delivery order (D-085, amended by D-086; provisional). A checkpoint is open u
 | K0 | FR-W-1..4, 6, 7; FR-S-5; FR-R-1, 3; FR-V-1 (gpt_sovits per companion), FR-V-7 (text-only); FR-MEM-1..3 | Open (window and voice not run) |
 | K1 | FR-C-1..6, 8..10; FR-S-1, 2; FR-M-1..11; FR-R-1, 2, 4..7; FR-MEM-4, 5; FR-SET-1..3; FR-SC-1..5 | Open |
 | K1c | FR-MODE-1..9 (D-074, D-075) | Open (the user ran the build 2026-11-17; items not ticked) |
-| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`); FR-W-8, 9 (portrait and profile, D-091); FR-C-9 edit and the message list (D-092, `0fac211`); FR-C-8 (D-093, `12af2b8`); FR-C-6 shell (D-094, `cb24949`); shortcuts (D-095, `77af8c0`); FR-C-5, FR-M-6, FR-M-8 (D-096, `3565673`, `7203bb0`) | Code complete; the checkpoint is the user's |
+| UI-1 | FR-M-12 (done, `883f4f7`); FR-C-4 (only working controls, copy rule) and §5 connection banner (done, `a412120`); FR-R-2 (unpriced models, D-083, done, `3e552e7`); FR-W-8, 9 (portrait and profile, D-091); FR-C-9 edit and the message list (D-092, `0fac211`); FR-C-8 (D-093, `12af2b8`); FR-C-6 shell (D-094, `cb24949`); shortcuts (D-095, `77af8c0`); FR-C-5, FR-M-6, FR-M-8 (D-096, `3565673`, `7203bb0`); Read aloud, dictation, `speakable`, tags, polish (D-097, UI1-12) | Code complete; the checkpoint is the user's |
 | UI-2 | The design standard (D-086): `DESIGN.md`, tokens, primitives, applied to every surface | Not started |
 | K1b | FR-DIST-1, 9, 11 (walking-skeleton installer on a clean machine) | Not started |
 | K2 | FR-C-4 (camera, screenshot, paste image), FR-C-7; FR-S-3, 4; FR-ST-1..7; FR-V-1 (provider interface), 2..6, 8; FR-VP-1..5; FR-SC-6; FR-MODE-10; FR-SET-1 (Voice) | Not started |
@@ -381,7 +383,7 @@ Personality traits: {{traits}}
 Requirements for the system prompt you write:
 1. Address the model directly in second person ("You are {{name}}, ...").
 2. Describe her personality, tone and speech habits so that every listed trait is clearly visible in how she talks. Do not simply list the traits.
-3. Describe only who she is. Do not give rules about format, length, Markdown, actions or speech: the app adds those per conversation mode (Chat or Roleplay) and while her voice is on (D-074).
+3. Describe only who she is. Do not give rules about format, length, Markdown, actions or speech: the app adds those per conversation mode (Chat or Roleplay) (D-074), and cuts what is read aloud by code (D-097).
 4. Tell the model to stay in character at all times and not to mention being a language model, a prompt or these instructions unless the user directly asks.
 5. Do not give her special abilities, tools or knowledge limits. Her intelligence and capabilities are those of the underlying model; the prompt only shapes personality and voice.
 6. Do not describe a scene, a setting or a story for her; the user's roleplay scenarios provide those (D-074).

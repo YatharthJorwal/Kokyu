@@ -2,7 +2,7 @@
 
 The forward plan. Work top to bottom inside the current phase, one item at a time; tick an item with its commit hash. A phase ends with one **checkpoint**, run in the desktop app with a real model and ticked by the user (D-076). Requirement IDs refer to `SPEC.md`; decisions to `DECISIONS.md`.
 
-Last updated: 2026-11-17 (session 5: docs reset, D-076 to D-085).
+Last updated: 2026-11-18 (session 6: UI1-12, the voice rework and the user's notes, D-097).
 
 ## Phase order (D-085, amended by D-086; provisional)
 
@@ -45,6 +45,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [x] UI1-09 Shell (D-094, FR-C-6) `cb24949`: one slim header (portrait chip, thread title, Temp toggle, window buttons), a split New button (Chat / Roleplay…), a sidebar context menu and pinning (`thread_pin`, schema 6), an empty state with her face and starter chips, toasts, in-app confirms instead of `window.confirm`
 - [x] UI1-10 Keyboard (D-095) `77af8c0`: Ctrl+N, Ctrl+K palette, Ctrl+comma, Esc stops a reply
 - [x] UI1-11 The user's notes of 2026-11-18 (D-096): Tauri crate and npm on 2.12 `514e5c6`; the effort slider dragged smoothly `3565673`; thinking beside her face with animated words, replies typed out, a compact loading strip `7203bb0`
+- [x] UI1-12 The user's notes of 2026-11-18, part two (D-097): "Waifu-mode-engaging" back, one slow letter lift, no slider end dots, a soft ⋯ hover `88ae626`; emotion tags shown like actions (FR-C-8) `510d629`; `speakable(text, mode)`, fixed rules before TTS (FR-V-2) `1562135`; Read aloud replaces voice mode, kept in settings.json, her voice only while on, the starting chip (FR-V-9) `c29500e`; dictation, the mic button and F9 into the input box, Settings → Voice, PyAV capped below 19 (FR-V-6) `6a254cf`
 - **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
 
 ## Phase UI-2: Design standard (D-086)
@@ -70,10 +71,10 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [ ] K2-01 Stage view: auto-framing, backdrop, spring bones, idle motion, look-at, expression hooks (FR-ST-1..3, 5, 7)
 - [ ] K2-02 Lip-sync from played audio; captions; docked input; chat log slide-over; Chat | Stage toggle in the top bar (FR-ST-3, 4, FR-C-7, FR-S-4)
 - [ ] K2-03 The 1.0 voice for buyers (open question 2): a voice provider interface and a small `builtin` voice spike (licence, quality, CPU latency) (FR-VP-1, 5; D-036)
-- [ ] K2-04 Speech-safe normalizer, clause pipelining, arbiter, barge-in (FR-V-2..5)
-- [ ] K2-05 TTS pre-warm on switch (FR-S-3); a "voice warming up" state for the 47 s cold start; TTS-down banner (FR-V-7)
+- [ ] K2-04 Barge-in (FR-V-5); clause pipelining while she writes, for Live (FR-V-3). Done in UI1-12: `speakable` and one-ahead synthesis of a finished reply (D-097)
+- [ ] K2-05 TTS pre-warm on switch (FR-S-3) checked against real audio. Done in UI1-12: the starting chip for the 47 s cold start and the failure chip (D-097)
 - [ ] K2-06 `elevenlabs` provider: voice ID plus key, cloud badge, opt-in (FR-VP-3)
-- [ ] K2-07 Voice input: faster-whisper on CPU, VAD, push-to-talk, the mic button appears here (FR-V-6, D-082); keep STT off the asyncio loop
+- [ ] K2-07 Voice input beyond dictation (UI1-12 shipped the mic button and F9, D-097): a system-wide key, VAD, push-to-talk, hands-free live voice (FR-V-6); keep STT off the asyncio loop
 - [ ] K2-08 Camera and paste-image into the tray as working items (FR-C-4, FR-R-3, 4)
 - [ ] K2-09 Live (Stage plus voice) per window, from the modes work (FR-MODE-10)
 - [ ] K2-10 Measure latency and fps targets (FR-V-8, FR-ST-6); record in `STATE.md`
@@ -166,6 +167,11 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
   - a fold may start before `load_thread`'s model request;
   - Temp Chat lines in a roleplay can be folded into its summary;
   - `thread_list` sends full cards on every refresh.
+- D-097 follow-ups, none blocking:
+  - a system-wide dictation key (the Tauri global-shortcut plugin, with a THIRD-PARTY row);
+  - PyAV bundles FFmpeg (LGPL): review before release (THIRD-PARTY.md);
+  - `test_vram`'s Windows-path test fails on a non-Windows machine (PosixPath of `C:\Windows` is not absolute): build the expected paths with PureWindowsPath;
+  - dictation inserts at the caret where the box last had it; typing during the write-down moves nothing.
 - Companion export/import as one file
 - Stage backdrops and lighting presets
 - A collapsible *Thoughts* block for reasoning models
