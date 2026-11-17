@@ -4,7 +4,8 @@
 
 import type { ModelRow } from "../net/protocol";
 
-/** `local:ollama/qwen3.5:9b` -> `qwen3.5:9b`. */
+/** `local:ollama/qwen3.5:9b` -> `qwen3.5:9b`: the id, for when the kernel has not
+ * named the model yet (the names come with the model list, D-084). */
 export function shortRef(ref: string): string {
   const m = /^[a-z]+:[a-z][a-z0-9_]*\/(.+)$/.exec(ref);
   return m ? m[1] : ref;
@@ -19,7 +20,7 @@ export function filterRows(rows: ModelRow[], query: string): ModelRow[] {
   const words = query.toLowerCase().split(/\s+/).filter(Boolean);
   if (words.length === 0) return rows;
   return rows.filter((r) => {
-    const hay = `${r.label} ${r.ref} ${r.detail ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase();
+    const hay = `${r.label} ${r.full ?? ""} ${r.ref} ${r.detail ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase();
     return words.every((w) => hay.includes(w));
   });
 }
@@ -55,6 +56,14 @@ const BADGE_TAGS: Record<string, string> = {
 };
 
 const BADGE_ORDER = [...new Set(Object.values(BADGE_TAGS))];
+
+/** The muted second line under a model's full id (D-084): backend, quantization,
+ * context, size, price per 1M tokens, and why it cannot be picked. */
+export function modelFacts(row: ModelRow): string {
+  const price =
+    row.price_in || row.price_out ? `$${(row.price_in ?? 0).toFixed(2)} / $${(row.price_out ?? 0).toFixed(2)} per 1M` : null;
+  return [row.detail, formatSize(row.size_bytes), price, row.note].filter(Boolean).join(" · ");
+}
 
 export function badgesFor(row: Pick<ModelRow, "tags">): string[] {
   const have = new Set((row.tags ?? []).map((tag) => BADGE_TAGS[tag.toLowerCase()]));

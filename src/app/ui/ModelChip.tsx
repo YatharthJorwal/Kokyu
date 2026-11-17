@@ -23,9 +23,17 @@ import {
 } from "react";
 
 import type { Effort, ModelListData, ModelRow, Spend } from "../../net/protocol";
-import { canPickModel, currentEffort, currentEfforts, currentModelRef, modelLabel, shownEffort as chipEffort } from "../chat-state";
+import {
+  canPickModel,
+  currentEffort,
+  currentEfforts,
+  currentModelRef,
+  modelLabel,
+  modelRow,
+  shownEffort as chipEffort,
+} from "../chat-state";
 import { glowFor } from "../effort-slider";
-import { badgesFor, effortLabel, filterRows, formatSize, formatUsd, isLocalRef } from "../models";
+import { badgesFor, effortLabel, filterRows, formatSize, formatUsd, isLocalRef, modelFacts } from "../models";
 import { actions, useChat } from "../store";
 import { EffortSlider } from "./EffortSlider";
 
@@ -53,6 +61,7 @@ function KindIcon({ local }: { local: boolean }) {
 export function ModelChip() {
   const ref = useChat(currentModelRef);
   const label = useChat((s) => modelLabel(s, currentModelRef(s)));
+  const row = useChat((s) => modelRow(s, currentModelRef(s)));
   const shownEffort = useChat(chipEffort);
   const status = useChat((s) => s.modelStatus);
   const open = useChat((s) => s.pickerOpen);
@@ -62,13 +71,17 @@ export function ModelChip() {
 
   const loading = status?.state === "loading" && status.model_ref === ref;
   const failed = status?.state === "failed" && status.model_ref === ref;
+  // Idle, the hover card says what the model is (D-084); these say why the chip is busy.
   const title = loading
     ? `Loading ${label}…`
     : failed
       ? `${label} failed to load: ${status?.message ?? "unknown error"}`
       : turn !== "idle"
         ? "Switch models after the reply"
-        : "Choose the model";
+        : undefined;
+  const full = row?.full ?? ref;
+  const facts = row ? modelFacts(row) : "";
+  const tip = !title && !open && full;
 
   // A click anywhere outside the chip and its popover closes it.
   useEffect(() => {
@@ -104,6 +117,8 @@ export function ModelChip() {
         className={classes}
         style={glowStyle}
         title={title}
+        aria-label={`Model: ${label}`}
+        aria-describedby={tip ? "model-tip" : undefined}
         aria-haspopup="listbox"
         aria-expanded={open}
         disabled={!enabled && !open}
@@ -122,6 +137,12 @@ export function ModelChip() {
           ▾
         </span>
       </button>
+      {tip ? (
+        <div className="model-tip" id="model-tip" role="tooltip">
+          <span className="tip-full">{full}</span>
+          {facts ? <span className="tip-facts">{facts}</span> : null}
+        </div>
+      ) : null}
       {open ? <ModelPopover current={ref} /> : null}
     </div>
   );
@@ -155,10 +176,9 @@ function Row({
         role="option"
         aria-selected={current}
         className={["model-row", active ? "active" : "", current ? "current" : ""].filter(Boolean).join(" ")}
-        disabled={!row.available}
+        aria-disabled={!row.available}
         onMouseEnter={onHover}
-        onClick={() => actions.setModel(row.ref)}
-        title={[row.label, row.detail, row.note].filter(Boolean).join("\n")}
+        onClick={() => row.available && actions.setModel(row.ref)}
       >
         <span className="check" aria-hidden="true">
           {current ? "✓" : ""}
@@ -300,6 +320,9 @@ function ModelPopover({ current }: { current: string | null }) {
   // Keyboard order follows the list; rows that cannot be picked are skipped.
   const pickable = useMemo(() => [...local, ...api].filter((r) => r.available), [local, api]);
   const activeRef = pickable[Math.min(active, pickable.length - 1)]?.ref ?? null;
+  // The row under the mouse, even one that cannot be picked, else the keyboard's.
+  const [pointed, setPointed] = useState<ModelRow | null>(null);
+  const shown = pointed ?? pickable.find((r) => r.ref === activeRef) ?? null;
 
   // The highlight starts on the current model, not the first row: an Enter
   // straight after opening must not load something else (a two-minute load).
@@ -333,8 +356,9 @@ function ModelPopover({ current }: { current: string | null }) {
     }
   };
 
-  const hover = (ref: string) => () => {
-    const i = pickable.findIndex((r) => r.ref === ref);
+  const hover = (row: ModelRow) => () => {
+    setPointed(row);
+    const i = pickable.findIndex((r) => r.ref === row.ref);
     if (i >= 0) setActive(i);
   };
 
@@ -359,7 +383,13 @@ function ModelPopover({ current }: { current: string | null }) {
         aria-controls="model-listbox"
         aria-activedescendant={activeRef ? optionId(activeRef) : undefined}
       />
-      <div className="model-list" role="listbox" id="model-listbox" aria-label="Models">
+      <div
+        className="model-list"
+        role="listbox"
+        id="model-listbox"
+        aria-label="Models"
+        onMouseLeave={() => setPointed(null)}
+      >
         {models === null ? <p className="list-hint">Looking for models…</p> : null}
 
         {models !== null ? (
@@ -371,7 +401,7 @@ function ModelPopover({ current }: { current: string | null }) {
             ) : null}
             <ul>
               {local.map((r) => (
-                <Row key={r.ref} row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r.ref)} />
+                <Row key={r.ref} row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r)} />
               ))}
             </ul>
           </section>
@@ -426,13 +456,19 @@ function ModelPopover({ current }: { current: string | null }) {
                       {r.group}
                     </li>
                   ) : null}
-                  <Row row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r.ref)} />
+                  <Row row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r)} />
                 </Fragment>
               ))}
             </ul>
           </section>
         ) : null}
       </div>
+      {shown ? (
+        <div className="model-detail" aria-live="polite">
+          <span className="tip-full">{shown.full ?? shown.ref}</span>
+          <span className="tip-facts">{modelFacts(shown) || "\u00a0"}</span>
+        </div>
+      ) : null}
       {efforts.length > 0 ? (
         <section className="effort-section" aria-label="Effort">
           <h3 className="list-head">Effort</h3>

@@ -11,6 +11,7 @@ import {
   type Frame,
   type MemoryFact,
   type ModelListData,
+  type ModelRow,
   type ModelStatus,
   type SavedScenario,
   type ScreenCompanions,
@@ -261,10 +262,15 @@ export function shownEffort(state: ChatState): string | null {
   return effort && currentEfforts(state).includes(effort) ? effort : null;
 }
 
+/** The picker's row for a model, once the list has arrived. */
+export function modelRow(state: ChatState, ref: string | null): ModelRow | undefined {
+  return ref && state.models ? [...state.models.local, ...state.models.api].find((r) => r.ref === ref) : undefined;
+}
+
 /** The chip's name for a model: the picker's label, else the load status's, else the id. */
 export function modelLabel(state: ChatState, ref: string | null): string {
   if (!ref) return "Default model";
-  const row = state.models ? [...state.models.local, ...state.models.api].find((r) => r.ref === ref) : undefined;
+  const row = modelRow(state, ref);
   if (row) return row.label;
   if (state.modelStatus?.model_ref === ref && state.modelStatus.label) return state.modelStatus.label;
   return shortRef(ref);

@@ -1593,7 +1593,14 @@ button:disabled {
   text-align: left;
 }
 
-.model-row.active:not(:disabled) {
+/* A row that cannot be picked is aria-disabled, not disabled: a disabled button
+   gets no mouse events, and its details must still show on hover (D-084). */
+.model-row[aria-disabled="true"] {
+  cursor: default;
+  opacity: 0.45;
+}
+
+.model-row.active:not([aria-disabled="true"]) {
   background: var(--panel-2);
 }
 
@@ -1636,6 +1643,57 @@ button:disabled {
 .effort-section {
   padding: 4px 6px 6px;
   border-top: 1px solid var(--line);
+}
+
+/* D-084: what a model is (its full id, then the facts), muted, on hover. */
+.model-tip {
+  position: absolute;
+  bottom: calc(100% + 8px);
+  right: 0;
+  z-index: 20;
+  display: none;
+  flex-direction: column;
+  gap: 2px;
+  width: max-content;
+  max-width: min(460px, 90vw);
+  padding: 8px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  pointer-events: none;
+}
+
+.model-chip:hover + .model-tip,
+.model-chip:focus-visible + .model-tip {
+  display: flex;
+}
+
+.tip-full {
+  color: var(--muted);
+  font-family: ui-monospace, "Cascadia Code", Consolas, monospace;
+  font-size: 12px;
+  overflow-wrap: anywhere;
+}
+
+.tip-facts {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-detail {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  flex-shrink: 0;
+  padding: 8px 14px;
+  border-top: 1px solid var(--line);
+}
+
+.model-detail .tip-full {
+  overflow: hidden;
+  white-space: nowrap;
+  text-overflow: ellipsis;
 }
 
 .model-footer {

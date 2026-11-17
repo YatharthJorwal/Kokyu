@@ -29,7 +29,7 @@ import llm
 import vram
 from config import CONFIG, Config, LlamaCppConfig
 from provider_presets import API_PRESETS
-from router import capabilities
+from router import capabilities, names
 from router import model_ref as model_refs
 from router.decision import LOCAL_PROVIDER, model_for
 from router.providers.llamacpp import helper_models
@@ -54,17 +54,14 @@ def effective_ref(thread_ref: str | None, cfg: Config | None = None) -> str:
 
 
 def label_for(ref: str, cfg: Config | None = None) -> str:
-    """A short name for the chip: the preset's label, else the backend's model id."""
+    """The short name shown for a model everywhere (FR-M-12, D-084)."""
     cfg = cfg or CONFIG
     try:
         parsed = model_refs.parse(ref)
     except model_refs.ModelRefError:
         return ref
-    if parsed.backend == "llamacpp":
-        preset = cfg.llamacpp.preset(parsed.model)
-        if preset is not None and preset.label:
-            return preset.label
-    return parsed.model
+    preset = cfg.llamacpp.preset(parsed.model) if parsed.backend == "llamacpp" else None
+    return names.short(ref, preset_label=preset.label if preset is not None else None)
 
 
 def is_embedding_model(name: str, details: Mapping[str, Any] | None) -> bool:
@@ -122,7 +119,9 @@ async def ollama_rows(
         rows.append(
             {
                 "ref": f"local:ollama/{name}",
-                "label": name,
+                "label": names.short(f"local:ollama/{name}"),
+                "full": name,
+                "quant": details.get("quantization_level"),   # a tie-breaker only; dropped in _distinct
                 "kind": "local",
                 "backend": "ollama",
                 "detail": " · ".join(["Ollama", *parts]),
@@ -150,10 +149,13 @@ def llamacpp_rows(cfg: LlamaCppConfig) -> list[dict[str, Any]]:
         rows.append(
             {
                 "ref": f"local:llamacpp/{preset.id}",
-                "label": preset.label or preset.id,
+                "label": names.short(f"local:llamacpp/{preset.id}", preset_label=preset.label),
+                "full": path.name or preset.id,
                 "kind": "local",
                 "backend": "llamacpp",
-                "detail": f"llama.cpp · {preset.ctx // 1024}k context",
+                "detail": " · ".join(
+                    p for p in ("llama.cpp", names.label_note(preset.label), f"{preset.ctx // 1024}k context") if p
+                ),
                 "size_bytes": size,
                 "available": size is not None,
                 "note": None if size is not None else "model file not found",
@@ -179,8 +181,9 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> l
         rows.append(
             {
                 "ref": f"api:{backend}/{model_id}",
-                "label": name or model_id,
-                "group": vendor if name else None,   # FR-M-4: grouped by provider
+                "label": names.short(f"api:{backend}/{model_id}"),
+                "full": model_id,
+                "group": names.vendor(vendor) if name else None,   # FR-M-4: grouped by provider
                 "kind": "api",
                 "backend": backend,
                 "detail": " · ".join(detail) or None,
@@ -255,6 +258,19 @@ async def load_check(
     return unknown if row is None else await asyncio.to_thread(_check, row, snap, cfg, "It")
 
 
+def _distinct(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Two rows with one short name get their quantization appended (D-084):
+    "Qwen3.5 9B Q6_K_L" beside "Qwen3.5 9B Q4_K_M"."""
+    seen: dict[str, int] = {}
+    for row in rows:
+        seen[row["label"]] = seen.get(row["label"], 0) + 1
+    for row in rows:
+        quant = row.pop("quant", None)
+        if seen[row["label"]] > 1 and quant:
+            row["label"] = f"{row['label']} {quant}"
+    return rows
+
+
 def _cap(value: float) -> float | None:
     """A negative cap means unlimited (BudgetConfig)."""
     return None if value < 0 else value
@@ -271,7 +287,7 @@ async def model_list(
     cfg = cfg or CONFIG
     exclude = frozenset({_bare(cfg.memory.embedding.model)}) if cfg.memory.embedding.model else frozenset()
     local, local_error = await ollama_rows(cfg.llm.base_url, exclude=exclude, transport=transport)
-    local = await asyncio.to_thread(llamacpp_rows, cfg.llamacpp) + local  # stats files: off the loop
+    local = _distinct(await asyncio.to_thread(llamacpp_rows, cfg.llamacpp) + local)  # stats files: off the loop
     try:
         local = await with_fits(local, rt, cfg)
     except Exception as exc:  # noqa: BLE001 -- a hint, never a reason to fail the list

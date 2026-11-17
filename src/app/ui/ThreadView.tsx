@@ -10,11 +10,11 @@ import {
   canRegenerate,
   currentMode,
   lastExchange,
+  modelLabel,
   turnFailure,
   visibleStream,
   type ChatMessage,
 } from "../chat-state";
-import { shortRef } from "../models";
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
 import { Markdown } from "./Markdown";
@@ -31,6 +31,7 @@ function Avatar({ name }: { name: string | null }) {
 
 function Message({ m, lastReply, roleplay }: { m: ChatMessage; lastReply: boolean; roleplay: boolean }) {
   const regenerable = useChat((s) => lastReply && canRegenerate(s));
+  const sentTo = useChat((s) => (m.sentTo ? modelLabel(s, m.sentTo) : null));
   if (m.role === "divider") {
     return (
       <div className="divider" role="separator">
@@ -63,7 +64,7 @@ function Message({ m, lastReply, roleplay }: { m: ChatMessage; lastReply: boolea
       {m.failed ? <div className="meta">Not answered</div> : null}
       {m.sentTo ? (
         <div className="meta" title="This attachment left your PC for the chosen API model">
-          Sent to {shortRef(m.sentTo)}
+          Sent to {sentTo}
         </div>
       ) : null}
     </div>

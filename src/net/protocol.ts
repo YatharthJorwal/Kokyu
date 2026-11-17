@@ -158,7 +158,10 @@ export interface ThreadMessage {
 /** One row of the model picker (K1-10; FR-M-3, 4). */
 export interface ModelRow {
   ref: string;
+  /** The short name the kernel computed (FR-M-12, D-084). */
   label: string;
+  /** The backend's exact id (or a llama.cpp preset's file), shown muted on hover. */
+  full?: string;
   kind: "local" | "api";
   backend: string;
   detail: string | null;

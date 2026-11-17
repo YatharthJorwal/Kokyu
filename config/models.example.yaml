@@ -24,3 +24,12 @@ local:
     efforts: {off: false, high: true}
   - match: 'local:*magistral*'
     efforts: {off: false, high: true}
+
+# Display names (FR-M-12, D-084). The picker shows a short name derived from the
+# model id ("Qwen3.5 9B" for 'hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L'), with the
+# full id on hover. To name a model yourself, add 'pattern': 'Name' to `names:` in
+# config/models.yaml; the pattern works like `match` above, on the whole ref
+# ('local:ollama/...', 'local:llamacpp/...', 'api:<endpoint>/<vendor>/<model>').
+#   names:
+#     'local:ollama/qwen3.5:9b': 'Qwen 9B'
+names: {}

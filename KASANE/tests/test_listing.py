@@ -35,7 +35,7 @@ async def test_ollama_lists_chat_models_largest_first_without_embedding_models()
     assert error is None
     assert [r["ref"] for r in rows] == ["local:ollama/qwen3.5:9b", "local:ollama/qwen3.5:4b", "local:ollama/broken"]
     nine = rows[0]
-    assert nine["label"] == "qwen3.5:9b" and nine["kind"] == "local" and nine["size_bytes"] == 6_600_000_000
+    assert (nine["label"], nine["full"]) == ("Qwen3.5 9B", "qwen3.5:9b") and nine["kind"] == "local" and nine["size_bytes"] == 6_600_000_000
     assert nine["detail"] == "Ollama · 9.7B" and nine["available"] and nine["fits"] is None
     assert rows[1]["detail"] == "Ollama · 4.7B · Q4_K_M"
     # the slider's detents come from config/models.example.yaml (FR-M-10)
@@ -65,7 +65,7 @@ def test_llamacpp_presets_show_file_size_or_say_the_file_is_missing(tmp_path):
     big, gone = listing.llamacpp_rows(cfg)
     assert (big["ref"], big["label"], big["size_bytes"], big["available"]) == ("local:llamacpp/big", "Qwen 35B", 2048, True)
     assert big["detail"] == "llama.cpp · 8k context"
-    assert (gone["label"], gone["available"], gone["note"]) == ("gone", False, "model file not found")
+    assert (gone["label"], gone["available"], gone["note"]) == ("Gone", False, "model file not found")
 
 
 def catalog(tmp_path, models):
@@ -124,7 +124,7 @@ async def test_model_list_puts_it_together_with_the_spend_footer(tmp_path):
     data = await listing.model_list(rt, refresh=True, cfg=cfg, transport=tags_transport())
     assert rt.refreshed is True
     assert rt.ensured is True                                   # a refreshed list is usable at once (K1-08 review)
-    assert (data["api"][0]["group"], data["api"][0]["label"]) == ("vendor", "chat-1")   # FR-M-4 groups
+    assert (data["api"][0]["group"], data["api"][0]["label"]) == ("Vendor", "Chat 1")   # FR-M-4 groups; D-084 names
     assert data["default_ref"] == "local:llamacpp/big"
     assert [r["ref"] for r in data["local"]][:2] == ["local:llamacpp/big", "local:ollama/qwen3.5:9b"]   # presets first
     assert [r["ref"] for r in data["api"]] == ["api:airouter/vendor/chat-1"]
@@ -170,8 +170,8 @@ def test_default_ref_and_labels():
         cfg, llamacpp=LlamaCppConfig(presets=(LlamaCppPreset(id="big", label="Qwen 35B", model_path="x"),))
     )
     assert listing.label_for("local:llamacpp/big", cfg) == "Qwen 35B"
-    assert listing.label_for("local:llamacpp/other", cfg) == "other"
-    assert listing.label_for("local:ollama/qwen3.5:9b", cfg) == "qwen3.5:9b"
+    assert listing.label_for("local:llamacpp/other", cfg) == "Other"
+    assert listing.label_for("local:ollama/qwen3.5:9b", cfg) == "Qwen3.5 9B"
     assert listing.label_for("nonsense", cfg) == "nonsense"
 
 
@@ -248,8 +248,26 @@ async def test_the_check_before_a_load_names_the_blocker(gpu_cfg):
     vram.MEASURED.record("local:ollama/gemma3:27b", 10000)
     check = await listing.load_check("local:ollama/gemma3:27b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
     assert check.fits is False and check.message.startswith("It needs about 9.8 GB of graphics memory, but only 8.4 GB")
-    assert "In use: other programs (2.7 GB), nomic-embed-text (0.3 GB)." in check.message
+    assert "In use: other programs (2.7 GB), Nomic Embed Text (0.3 GB)." in check.message
     ok = await listing.load_check("local:ollama/qwen3:1.7b", NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))
     assert ok.fits is True
     for unknown in ("api:airouter/vendor/chat-1", "local:ollama/not-pulled:1b", "local:llamacpp/big"):
         assert (await listing.load_check(unknown, NoLlamaServer(), gpu_cfg, transport=tags_transport(MORE_TAGS))).fits is None
+
+
+def test_one_short_name_twice_gets_the_quantization(tmp_path):
+    """D-084, FR-M-12: two pulls of one model stay apart; a preset label's "(...)" moves to the details."""
+    rows = listing._distinct([
+        {"label": "Qwen3.5 9B", "quant": "Q6_K_L"},
+        {"label": "Qwen3.5 9B", "quant": "Q4_K_M"},
+        {"label": "Qwen3.5 4B", "quant": "Q4_K_M"},
+    ])
+    assert [r["label"] for r in rows] == ["Qwen3.5 9B Q6_K_L", "Qwen3.5 9B Q4_K_M", "Qwen3.5 4B"]
+    assert all("quant" not in r for r in rows)
+    gguf = tmp_path / "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf"
+    gguf.write_bytes(b"\0")
+    (row,) = listing.llamacpp_rows(LlamaCppConfig(presets=(
+        LlamaCppPreset(id="big", label="Qwen3.6 35B-A3B (Q4, experts on CPU)", model_path=str(gguf), ctx=16384),
+    )))
+    assert (row["label"], row["full"]) == ("Qwen3.6 35B-A3B", "Qwen3.6-35B-A3B-UD-Q4_K_XL.gguf")
+    assert row["detail"] == "llama.cpp · Q4, experts on CPU · 16k context"

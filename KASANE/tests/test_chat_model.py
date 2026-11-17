@@ -610,7 +610,7 @@ def test_a_window_sees_the_model_load_and_a_pick_loads_the_new_model(loads):
         ws.send_json({"v": 1, "type": "set_model", "data": {"model_ref": LOCAL}})
         _until(ws, "thread_updated")
         loading = _status_until(ws, "loading", LOCAL)
-        assert loading["label"] == "qwen3.5:4b"
+        assert loading["label"] == "Qwen3.5 4B"   # the short name (D-084)
         _status_until(ws, "ready", LOCAL)
         ws.send_json({"v": 1, "type": "model_load", "data": {}})  # Try again: loads even though it is up
         _status_until(ws, "ready", LOCAL)

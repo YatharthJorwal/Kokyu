@@ -25,6 +25,7 @@ import {
   formatElapsed,
   formatSize,
   isLocalRef,
+  modelFacts,
   shortRef,
   thinkingLine,
   wakingLine,
@@ -216,4 +217,23 @@ test("the thinking line waits while the waking-up card speaks for this thread's 
   assert.equal(modelLoadingHere(s), true);
   assert.equal(modelLoadingHere(reduce(s, status("local:b", "loading"))), false); // another thread's model
   assert.equal(modelLoadingHere(reduce(s, status("local:a", "ready"))), false);
+});
+
+test("the hover details: full id searchable, facts in one muted line (D-084, FR-M-12)", () => {
+  const row = {
+    ref: "local:ollama/hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L",
+    label: "Qwen3.5 9B Q6_K_L",
+    full: "hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L",
+    kind: "local",
+    backend: "ollama",
+    detail: "Ollama · 9.0B · Q6_K",
+    size_bytes: 7_600_000_000,
+    available: true,
+    note: null,
+    fits: true,
+  };
+  assert.equal(modelFacts(row), "Ollama · 9.0B · Q6_K · 7.6 GB");
+  assert.equal(filterRows([row], "bartowski").length, 1);
+  const api = { ...row, detail: "200k context", size_bytes: null, price_in: 3, price_out: 15, note: "needs an API key" };
+  assert.equal(modelFacts(api), "200k context · $3.00 / $15.00 per 1M · needs an API key");
 });
