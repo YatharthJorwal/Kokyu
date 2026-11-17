@@ -105,6 +105,10 @@ DELIVERY_LAYERS = {
 # FR-MODE-4: how a roleplay turn is told about the real user (the profile card only).
 ROLEPLAY_PROFILE_FRAMING = "About the real person you are writing with (not their role in the story): {card}"
 
+# FR-MODE-5: a roleplay thread's story memory (story.py), per turn in the ephemeral note
+# and never in history[0]: it changes as the story goes on, the cached prefix must not.
+STORY_NOTE = "The story so far, summarized from earlier scenes: {summary}"
+
 
 def delivery_layer(mode: str) -> str:
     """The delivery text for a thread's mode (FR-MODE-8). An unknown mode raises."""

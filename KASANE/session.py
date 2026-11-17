@@ -29,6 +29,7 @@ import model_loader
 import protocol
 import router
 import settings_file
+import story
 import turns
 import waifus
 from audio import voice_mode
@@ -68,6 +69,9 @@ class Session:
         # context_budget.cap_unprompted keeps only the newest few.
         self.unprompted: list[dict[str, str]] = []
         self.thread: Any = None
+        # The open roleplay thread's story summary (FR-MODE-5), kept here so a turn
+        # starts without a database read; story.KEEPER tells us when it changes.
+        self.story_summary = ""
         # The turn in flight runs as its own task, so the receive loop still reads Stop.
         self.turn: asyncio.Task | None = None
         # A companion switch asked for mid-reply; it applies when the reply ends (FR-S-2).
@@ -116,6 +120,7 @@ class Session:
         self._unsubscribe = [
             model_loader.LOADER.subscribe(push_model_status),
             voice_mode.VOICE.subscribe(push_voice_status),
+            story.KEEPER.subscribe(self.story_updated),
         ]
 
         # K1-00: every window works in a thread from threads.db. Without the store it
@@ -233,6 +238,24 @@ class Session:
             companions.waifu_of(self.ws), **conversation.prompt_layers(thread if thread is not None else self.thread)
         )
 
+    def story_updated(self, thread_id: str, summary: str) -> None:
+        """story.KEEPER saved a new summary; this window keeps it if the thread is open here."""
+        if thread_id == self.thread_id:
+            self.story_summary = summary
+
+    def turn_story(self) -> str | None:
+        """What run_turn gets as `story`: the summary of a roleplay thread outside Temp
+        Chat, else None (FR-MODE-5, D-074). The mode comes from the thread only."""
+        if not self.in_roleplay() or self.temp:
+            return None
+        return self.story_summary or None
+
+    def keep_story(self, thread: Any) -> None:
+        """A roleplay thread outside Temp Chat: ask story.KEEPER to catch its summary up
+        in the background (FR-MODE-5). It runs only while the model is free."""
+        if thread is not None and conversation.prompt_layers(thread)["mode"] == "roleplay" and not self.temp:
+            story.KEEPER.schedule(thread.id, self.manager)
+
     def reset_history_flags(self) -> None:
         """temp_flags follows a rebuilt history; no remark is in it any more."""
         self.temp_flags[:] = [self.temp] * (len(self.history) - 1)
@@ -263,6 +286,15 @@ class Session:
         self.history[:] = await self.manager.history(thread, self.system_prompt())
         self.temp = thread.temp
         self.reset_history_flags()
+        # FR-MODE-5: the story so far, and a catch-up if the thread is behind.
+        self.story_summary = ""
+        if conversation.prompt_layers(thread)["mode"] == "roleplay":
+            try:
+                kept = await self.manager.story(thread.id)
+                self.story_summary = kept.summary if kept is not None else ""
+            except Exception as exc:  # noqa: BLE001 -- the story still plays without its summary
+                log.warning(f"could not read the story summary: {exc}")
+            self.keep_story(thread)
         messages = await self.manager.messages(thread.id)
         await self.ws.send_json(
             protocol.frame(
@@ -332,6 +364,10 @@ class Session:
                 meta=meta,
             )
             await self.send_thread_list()
+            # FR-MODE-5: fold older scenes once the model is free. The store's row
+            # decides (story.KEEPER re-reads mode and Temp Chat), not this snapshot.
+            if self.thread_id == thread.id:
+                self.keep_story(self.thread)
 
         return save
 
@@ -371,6 +407,7 @@ class Session:
             **({"attachment": attachment} if attachment is not None else {}),
             **self.thread_model(),
             mode=self.thread_mode(),
+            story=self.turn_story(),
         )
         self.turn = asyncio.create_task(self._then_switch(turn))
 

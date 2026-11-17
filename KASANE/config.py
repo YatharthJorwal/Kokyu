@@ -370,6 +370,16 @@ class SessionConfig:
 
 
 @dataclass(frozen=True)
+class StoryConfig:
+    """Story memory (FR-MODE-5, D-074): a roleplay thread's running summary, written by
+    the local memory_writer role in batches. `summarize_every` 0 turns it off."""
+
+    summarize_every: int = 12   # fold once this many older messages are waiting
+    keep_recent: int = 4        # the newest messages are never folded (at least 2: Regenerate's exchange)
+    max_chars: int = 2400       # the summary's cap, cut at a sentence end
+
+
+@dataclass(frozen=True)
 class EmbeddingConfig:
     base_url: str = "http://127.0.0.1:11434"
     model: str = "nomic-embed-text"
@@ -517,6 +527,7 @@ class Config:
     tts: TTSConfig = field(default_factory=TTSConfig)
     stt: STTConfig = field(default_factory=STTConfig)
     session: SessionConfig = field(default_factory=SessionConfig)
+    story: StoryConfig = field(default_factory=StoryConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     task_guide: TaskGuideConfig = field(default_factory=TaskGuideConfig)
     ocr_watch: OCRWatchConfig = field(default_factory=OCRWatchConfig)
@@ -969,6 +980,7 @@ def load_config(
         tts=_derive_tts(raw),
         stt=_derive_stt(raw, voice),
         session=_build(SessionConfig, _section(raw, "session")),
+        story=_build(StoryConfig, _section(raw, "story")),
         memory=_derive_memory(raw, providers, models),
         task_guide=_build(TaskGuideConfig, _section(raw, "task_guide")),
         ocr_watch=_build(OCRWatchConfig, _section(raw, "ocr_watch")),

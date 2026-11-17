@@ -21,6 +21,16 @@ def _no_real_unload(monkeypatch):
     monkeypatch.setattr(boot, "unload_ollama", unload)
 
 
+@pytest.fixture(autouse=True)
+def _quiet_story_memory(monkeypatch):
+    """FR-MODE-5: a fresh story keeper per test that always finds the model busy, so a
+    roleplay thread in a test never reaches a real model through story memory. Tests
+    of story memory put in their own keeper."""
+    import story
+
+    monkeypatch.setattr(story, "KEEPER", story.StoryKeeper(is_busy=lambda: True))
+
+
 @pytest.fixture
 def memory_db(tmp_path, monkeypatch):
     """Real sqlite-vec connection on a throwaway file (dim=4), swapped in for

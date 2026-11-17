@@ -24,6 +24,7 @@ import model_loader
 import prompting
 import protocol
 import router
+import story as story_memory
 import tools
 from audio import arbiter, latency, speech, speech_stream, tts, voice_mode
 from audio.chunking import extract_ready_chunks, flush
@@ -257,6 +258,7 @@ async def run_turn(
     attachment: str | None = None,
     *,
     mode: str = "chat",
+    story: str | None = None,
 ) -> None:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, speak each sentence chunk as it's ready, commit (or roll back)
@@ -284,7 +286,11 @@ async def run_turn(
     intent, offers no tools and is not written to transcript_log, so nothing from a
     story reaches app memory (FR-MODE-4). Its voice and captions get only her
     dialogue (speech.DialogueFilter, FR-MODE-8); history keeps the whole reply.
-    The router role is "chat" in both modes."""
+    The router role is "chat" in both modes.
+
+    story: the thread's story summary (FR-MODE-5), passed by the session for a
+    roleplay thread; it joins the turn's ephemeral note, never history[0]. Dropped
+    in Temp Chat, like the profile card (D-074)."""
     if mode not in prompting.MODE_LAYERS:
         raise ValueError(f"unknown conversation mode: {mode!r}")
     roleplay = mode == "roleplay"
@@ -302,6 +308,7 @@ async def run_turn(
     timings = LATENCY.begin()
     arbiter.ARBITER.on_turn_started()
     writer.WRITER.preempt()  # a timer-driven memory pass must not hold the model during a reply
+    story_memory.KEEPER.preempt()  # nor a story summary (FR-MODE-5)
     # Phase 4 Round 2: any real user turn counts as "they're still here,"
     # regardless of whether it's about the tracked task at all -- resets
     # Task Guide Mode's idle clock (see task_guide.is_idle/_task_guide_loop
@@ -368,7 +375,9 @@ async def run_turn(
     # FR-MODE-8: while voice is on, how to shape a reply that is heard. Per turn and
     # not in history[0]: voice is kernel-wide and toggles, the cached prefix must not.
     delivery = prompting.delivery_layer(mode) if voice_mode.VOICE.speaking() else None
-    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block, delivery) if part]
+    # FR-MODE-5: the story so far, for a roleplay only and never in Temp Chat (D-074).
+    story_note = prompting.STORY_NOTE.format(summary=story) if story and roleplay and not temp_mode else None
+    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block, story_note, delivery) if part]
 
     if memory_parts:
         combined = " ".join(memory_parts)

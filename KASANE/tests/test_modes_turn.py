@@ -265,6 +265,58 @@ def test_the_delivery_texts_are_the_agreed_copy():
         prompting.delivery_layer("poetry")
 
 
+# -- FR-MODE-5 (K1c-04): the story summary joins a roleplay turn's ephemeral note ------
+
+
+@pytest.mark.asyncio
+async def test_a_roleplay_turn_gets_the_story_note_before_the_delivery_note(waifu, side_effects, monkeypatch):
+    calls = _model(monkeypatch, [_text("*She nods.* [neutral]")])
+    monkeypatch.setattr(recall, "build_profile_context", _profile("Sam."))
+    monkeypatch.setattr(voice_mode.VOICE, "on", True)
+    history = [{"role": "system", "content": "sys"}]
+    await turns.run_turn(Socket(waifu), history, "And then?", False, [], mode="roleplay", story="They met at dusk.")
+    note = prompting.STORY_NOTE.format(summary="They met at dusk.")
+    assert _notes(calls[0]) == " ".join([
+        prompting.ROLEPLAY_PROFILE_FRAMING.format(card="Sam."), note, prompting.DELIVERY_LAYERS["roleplay"],
+    ])
+    assert calls[0]["messages"][0]["content"] == "sys"                 # never in history[0]
+    assert all(note not in m["content"] for m in history)              # nor kept in history
+
+
+@pytest.mark.parametrize(("mode", "temp"), [("chat", False), ("roleplay", True)])
+@pytest.mark.asyncio
+async def test_no_story_note_in_chat_or_temp_chat(waifu, side_effects, monkeypatch, mode, temp):
+    # D-074: Temp Chat in a roleplay drops the story memory; a chat thread has none.
+    calls = _model(monkeypatch, [_text("Hi. [happy]")])
+    monkeypatch.setattr(recall, "build_profile_context", _profile("Sam."))
+    await turns.run_turn(Socket(waifu), [{"role": "system", "content": "sys"}], "Hi", temp, [], mode=mode, story="Old.")
+    assert "Old." not in _notes(calls[0])
+
+
+@pytest.mark.asyncio
+async def test_a_turn_preempts_a_running_story_summary(waifu, side_effects, monkeypatch):
+    # FR-MODE-5: like the memory writer's timer pass, a story summary never holds the
+    # model while she replies.
+    import story
+
+    started = asyncio.Event()
+
+    async def slow_summary(thread_id, manager=None):
+        started.set()
+        await asyncio.Event().wait()
+
+    keeper = story.StoryKeeper(is_busy=lambda: False)
+    monkeypatch.setattr(keeper, "catch_up", slow_summary)
+    monkeypatch.setattr(story, "KEEPER", keeper)
+    monkeypatch.setattr(story, "limits", lambda: (12, 4, 2400))
+    running = keeper.schedule("t1", manager=object())
+    await asyncio.wait_for(started.wait(), 2)
+    _model(monkeypatch, [_text("*She smiles.* [happy]")])
+    await turns.run_turn(Socket(waifu), [{"role": "system", "content": "sys"}], "Hi", False, [], mode="roleplay")
+    await asyncio.gather(running, return_exceptions=True)
+    assert running.cancelled()
+
+
 # -- D-074: the raw reply text is what is kept and shown ---------------------------
 
 

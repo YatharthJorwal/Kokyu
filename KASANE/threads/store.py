@@ -19,7 +19,8 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 3   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074)
+SCHEMA_VERSION = 4   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074);
+                     # 4: the story_memory table (FR-MODE-5, D-074)
 TITLE_MAX = 80
 SEARCH_LIMIT = 50
 
@@ -68,6 +69,12 @@ CREATE TABLE IF NOT EXISTS attachments (
 CREATE TABLE IF NOT EXISTS kv (
     key   TEXT PRIMARY KEY,
     value TEXT
+);
+CREATE TABLE IF NOT EXISTS story_memory (
+    thread_id          TEXT PRIMARY KEY REFERENCES threads(id) ON DELETE CASCADE,
+    summary            TEXT NOT NULL DEFAULT '',
+    through_message_id INTEGER NOT NULL DEFAULT 0,
+    updated_at         REAL
 );
 """
 
@@ -145,6 +152,17 @@ class Message:
             "tokens_out": self.tokens_out,
             "meta": dict(self.meta),
         }
+
+
+@dataclass(frozen=True)
+class StoryMemory:
+    """A roleplay thread's running summary (FR-MODE-5, D-074): everything up to and
+    including message `through_message_id` is folded into `summary`."""
+
+    thread_id: str
+    summary: str = ""
+    through_message_id: int = 0
+    updated_at: float | None = None
 
 
 class ThreadNotFound(KeyError):
@@ -401,6 +419,35 @@ class ThreadStore:
                 (message_id, kind, path, mime, size),
             )
             return int(cur.lastrowid)
+
+    # -- story memory (FR-MODE-5, D-074) ---------------------------------------
+
+    def get_story(self, thread_id: str) -> StoryMemory | None:
+        """The thread's story summary, or None before the first one is written."""
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM story_memory WHERE thread_id = ?", (thread_id,)).fetchone()
+        if row is None:
+            return None
+        return StoryMemory(
+            thread_id=row["thread_id"],
+            summary=row["summary"],
+            through_message_id=int(row["through_message_id"]),
+            updated_at=row["updated_at"],
+        )
+
+    def set_story(self, thread_id: str, summary: str, through_message_id: int) -> bool:
+        """Writes the thread's summary and how far it reaches, in one statement. False
+        (nothing written) when the thread is gone: a summary finished after its thread
+        was deleted is dropped, never left behind."""
+        with self._connect() as db:
+            cur = db.execute(
+                "INSERT INTO story_memory (thread_id, summary, through_message_id, updated_at)"
+                " SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM threads WHERE id = ?)"
+                " ON CONFLICT(thread_id) DO UPDATE SET summary = excluded.summary,"
+                " through_message_id = excluded.through_message_id, updated_at = excluded.updated_at",
+                (thread_id, summary, int(through_message_id), self._now(), thread_id),
+            )
+        return cur.rowcount > 0
 
     # -- small key/value (last opened thread) ----------------------------------
 

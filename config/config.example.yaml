@@ -380,6 +380,16 @@ session:
   max_unprompted_in_history: 3
 
 # ─────────────────────────────────────────────────────────────────────────────
+# Story memory (FR-MODE-5): each roleplay thread keeps a running summary of its
+# older scenes, written by the local memory_writer role when nothing else is
+# using the model, and fed into every turn of that thread. Temp Chat keeps none.
+# ─────────────────────────────────────────────────────────────────────────────
+story:
+  summarize_every: 12       # fold once this many older messages are waiting (0 = off)
+  keep_recent: 4            # the newest messages are never folded (at least 2)
+  max_chars: 2400           # the summary's cap, cut at a sentence end
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Conversation model (K1, D-051). Threads with no model chosen use this.
 # null = the Ollama model in `llm.model`. Examples:
 #   local:ollama/qwen3.5:9b

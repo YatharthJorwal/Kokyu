@@ -204,9 +204,13 @@ def test_a_version_2_database_gains_mode_and_scenario_and_old_threads_are_chat(t
     assert old.title == "Before modes" and old.efforts == {"local:ollama/x": "off"}
     assert store.create_thread(mode="roleplay", scenario=CARD).scenario == CARD
     with sqlite3.connect(db) as conn:
-        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+        # Schema 4 (K1c-04, FR-MODE-5) added the story_memory table on top of schema 3's
+        # columns, so an old database now lands on 4 and gains that table too.
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 4
         columns = {row[1] for row in conn.execute("PRAGMA table_info(threads)")}
+        tables = {row[0] for row in conn.execute("SELECT name FROM sqlite_master WHERE type = 'table'")}
     assert {"efforts", "mode", "scenario"} <= columns
+    assert "story_memory" in tables
     ThreadStore(db)   # opening it again is a no-op, not a duplicate column
 
 

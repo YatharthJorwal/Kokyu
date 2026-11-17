@@ -23,7 +23,7 @@ from typing import Any
 
 import paths
 from config import CONFIG
-from threads import Message, Thread, ThreadStore
+from threads import Message, StoryMemory, Thread, ThreadStore
 
 log = logging.getLogger("kokyu.conversation")
 
@@ -236,6 +236,15 @@ class ConversationManager:
 
     async def delete_messages(self, ids: list[int]) -> None:
         await self._run(self.store.delete_messages, ids)
+
+    # -- story memory (FR-MODE-5, D-074) ---------------------------------------
+
+    async def story(self, thread_id: str) -> StoryMemory | None:
+        return await self._run(self.store.get_story, thread_id)
+
+    async def save_story(self, thread_id: str, summary: str, through_message_id: int) -> bool:
+        """False when the thread was deleted meanwhile (nothing is written)."""
+        return await self._run(self.store.set_story, thread_id, summary, through_message_id)
 
     async def record_companion_change(self, thread_id: str, speaker: Speaker) -> Message:
         """FR-S-2: a divider marks where another companion took over; the thread
