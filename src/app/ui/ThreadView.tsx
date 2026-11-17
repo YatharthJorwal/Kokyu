@@ -24,7 +24,17 @@ import { WakingCard } from "./WakingCard";
 /** Her face in a circle, shown when Appearance → Messages is "Bubbles" (D-073, D-091). */
 function Avatar({ id, name }: { id: string | null | undefined; name: string | null }) {
   const portrait = useChat((s) => s.roster.find((w) => w.id === id)?.portrait ?? null);
-  return <Portrait id={id} name={name ?? ""} portrait={portrait} className="avatar" />;
+  const known = useChat((s) => s.roster.some((w) => w.id === id));
+  return (
+    <Portrait
+      id={id}
+      name={name ?? ""}
+      portrait={portrait}
+      className="avatar"
+      title={known && name ? `${name}'s profile` : undefined}
+      onClick={known && id ? () => actions.openProfile(id) : undefined}
+    />
+  );
 }
 
 function Message({ m, lastReply, roleplay }: { m: ChatMessage; lastReply: boolean; roleplay: boolean }) {

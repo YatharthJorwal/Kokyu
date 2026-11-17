@@ -14,6 +14,7 @@ export const CLIENT_TYPES = [
   "send_file",
   "stop",
   "switch_waifu",
+  "set_portrait",
   "set_temp",
   "camera_frame",
   "thread_list",
@@ -58,6 +59,7 @@ export const SERVER_TYPES = [
   "screen_companions",
   "voice_status",
   "waifu_state",
+  "waifu_roster",
   "surface_status",
   "speak",
   "camera_request",
@@ -79,6 +81,7 @@ export const ERROR_CODES = [
   "vision_unavailable",
   "observer",
   "price_unknown",
+  "picture_unreadable",
 ] as const;
 
 /** D-061: voice mode (replies spoken; the mic in K2). It starts only when turned on. */
@@ -101,8 +104,12 @@ export interface CompanionInfo {
   name: string;
   premade?: boolean;
   traits?: string[];
+  /** Her profile's brief (D-091, FR-W-9). */
+  about?: string | null;
   /** A version stamp for `/waifus/<id>/portrait`, or null (D-091, FR-W-8). */
   portrait?: string | null;
+  /** The picture is one the user chose, not the model's face. */
+  portrait_chosen?: boolean;
 }
 
 export type ClientType = (typeof CLIENT_TYPES)[number];
@@ -253,6 +260,8 @@ export interface ServerData {
   screen_companions: ScreenCompanions;
   voice_status: VoiceStatus;
   waifu_state: { active: string | null; waifus: CompanionInfo[]; problems: string[]; pending: string | null };
+  /** D-091: only the roster changed (a new picture); active and pending stay. */
+  waifu_roster: { waifus: CompanionInfo[] };
   surface_status: { role: "driver" | "observer" };
   /** One spoken clause (FR-V-2); `audio_b64` is empty when the voice backend is down. */
   speak: { text: string; audio_b64: string; mime: string };
@@ -319,11 +328,14 @@ export interface ClientData {
   send_file: { filename: string; kind: "image" | "text"; content: string; caption: string };
   stop: Record<string, never>;
   switch_waifu: { id: string };
+  /** D-091: bare base64 (already scaled down), or null for the model's face. */
+  set_portrait: { waifu_id: string; image_b64: string | null };
   set_temp: { on: boolean };
   camera_frame: { image_b64: string | null };
   thread_list: Record<string, never>;
   thread_search: { query: string };
-  thread_new: { mode?: ThreadMode; scenario?: Scenario | null };
+  /** `waifu_id`: her profile's Chat button; the new thread starts with her (D-091). */
+  thread_new: { mode?: ThreadMode; scenario?: Scenario | null; waifu_id?: string };
   thread_open: { id: string };
   thread_delete: { id: string };
   thread_rename: { id: string; title: string };

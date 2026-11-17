@@ -6,6 +6,7 @@
 
 import {
   stripTrailingTag,
+  type CompanionInfo,
   type DoctorCheck,
   type ErrorCode,
   type Frame,
@@ -59,6 +60,21 @@ export interface Companion {
   name: string;
   /** Her portrait's version stamp, or null for her initial (D-091). */
   portrait?: string | null;
+  /** For her profile (D-091, FR-W-9). */
+  traits?: string[];
+  about?: string | null;
+  portraitChosen?: boolean;
+}
+
+function toCompanion(w: CompanionInfo): Companion {
+  return {
+    id: w.id,
+    name: w.name,
+    portrait: w.portrait ?? null,
+    traits: w.traits ?? [],
+    about: w.about ?? null,
+    portraitChosen: w.portrait_chosen ?? false,
+  };
 }
 
 export interface ChatState {
@@ -104,6 +120,8 @@ export interface ChatState {
   scenarios: SavedScenario[] | null;
   /** FR-MODE-6: the New roleplay dialog is open. */
   roleplayOpen: boolean;
+  /** D-091 (FR-W-9): whose profile is open, or null. */
+  profile: string | null;
   /** FR-MODE-6: the dialog's card save. "pending" until its own answer: the
    * `scenarios` frame naming the saved card, or a store error. null: none asked. */
   scenarioSave: ScenarioSave;
@@ -129,6 +147,7 @@ export type ChatEvent =
   | { kind: "picker"; open: boolean }
   | { kind: "settings"; section: SettingsSection | null }
   | { kind: "roleplay"; open: boolean }
+  | { kind: "profile"; id: string | null }
   /** A card save went out (FR-MODE-6). */
   | { kind: "scenario_saving" }
   /** The dialog's thread_new went out (FR-MODE-6). */
@@ -160,6 +179,7 @@ export const initialState: ChatState = {
   prefs: null,
   scenarios: null,
   roleplayOpen: false,
+  profile: null,
   scenarioSave: null,
   roleplayStart: null,
 };
@@ -412,10 +432,16 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, voice: frame.data as VoiceStatus };
     case "waifu_state": {
       const data = frame.data as ServerData["waifu_state"];
-      const roster = (data.waifus ?? []).map((w) => ({ id: w.id, name: w.name, portrait: w.portrait ?? null }));
+      const roster = (data.waifus ?? []).map(toCompanion);
       const found = roster.find((w) => w.id === data.active);
       const pending = data.pending !== data.active ? roster.find((w) => w.id === data.pending) : undefined;
       return { ...state, roster, companion: found ?? null, pendingCompanion: pending ?? null };
+    }
+    case "waifu_roster": {
+      // A new picture (D-091): the same companions, fresh details; who is active stays.
+      const roster = ((frame.data as ServerData["waifu_roster"]).waifus ?? []).map(toCompanion);
+      const fresh = (c: Companion | null) => (c ? (roster.find((w) => w.id === c.id) ?? c) : null);
+      return { ...state, roster, companion: fresh(state.companion), pendingCompanion: fresh(state.pendingCompanion) };
     }
     case "surface_status": {
       const { role } = frame.data as ServerData["surface_status"];
@@ -441,7 +467,11 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       // A failed turn still ends with turn_done; turn_running, a screen-companion refusal
       // and the unpriced-model notice (D-083) do not stop the turn. Anything else refused the send.
       const keepsTurn =
-        failedTurn || data.code === "turn_running" || data.code === "vision_unavailable" || data.code === "price_unknown";
+        failedTurn ||
+        data.code === "turn_running" ||
+        data.code === "vision_unavailable" ||
+        data.code === "price_unknown" ||
+        data.code === "picture_unreadable";
       // A store failure answers a pending card save (the kernel sends no list then).
       const scenarioSave = state.scenarioSave === "pending" && data.code === "threads_unavailable" ? "failed" : state.scenarioSave;
       // A refused Start roleplay (turn_running, threads_unavailable): the dialog stays open.
@@ -509,6 +539,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
     case "roleplay":
       // Opens only when a new thread could start; closing always works.
       return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false, scenarioSave: null, roleplayStart: null };
+    case "profile":
+      return { ...state, profile: event.id, pickerOpen: false };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
     case "roleplay_starting":

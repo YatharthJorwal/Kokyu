@@ -5,6 +5,7 @@
 import { Composer } from "./ui/Composer";
 import { ConnectionBanner } from "./ui/ConnectionBanner";
 import { NoticeBar } from "./ui/NoticeBar";
+import { ProfileDialog } from "./ui/ProfileDialog";
 import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { Sidebar } from "./ui/Sidebar";
@@ -26,6 +27,7 @@ export function App() {
       </main>
       <SettingsDialog />
       <RoleplayDialog />
+      <ProfileDialog />
     </div>
   );
 }

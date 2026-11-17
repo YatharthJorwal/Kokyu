@@ -107,6 +107,20 @@ def test_her_chosen_picture_wins_and_changes_the_version(registry):
     assert portrait.version(alpha) != before
 
 
+def test_a_chosen_picture_is_saved_square_and_can_be_taken_back(registry):
+    alpha = registry.get("alpha")
+    from_model = portrait.portrait_file(alpha)
+    portrait.choose("alpha", png(90, 40))
+    chosen = portrait.portrait_file(alpha)
+    assert chosen == portrait.chosen_path("alpha") and Image.open(chosen).size == (portrait.SIZE, portrait.SIZE)
+    portrait.choose("alpha", None)
+    assert not chosen.exists() and portrait.portrait_file(alpha) == from_model
+    portrait.choose("alpha", None)                              # nothing chosen: still fine
+    with pytest.raises(ValueError):
+        portrait.choose("alpha", b"<html>")
+    assert not portrait.chosen_path("alpha").exists()
+
+
 def test_square_refuses_what_is_not_an_image():
     with pytest.raises(ValueError):
         portrait.square(b"not an image at all")

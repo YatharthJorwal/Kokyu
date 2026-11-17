@@ -72,7 +72,15 @@ class WaifuRegistry:
         """What clients may know about each waifu. No paths, no prompt text. `portrait` is
         a version stamp for `/waifus/<id>/portrait` (D-091), or None when nothing can be read."""
         return [
-            {"id": w.id, "name": w.name, "premade": w.premade, "traits": list(w.traits), "portrait": portrait.version(w)}
+            {
+                "id": w.id,
+                "name": w.name,
+                "premade": w.premade,
+                "traits": list(w.traits),
+                "about": w.about,
+                "portrait": portrait.version(w),
+                "portrait_chosen": portrait.chosen_path(w.id).is_file(),
+            }
             for w in self.list()
         ]
 

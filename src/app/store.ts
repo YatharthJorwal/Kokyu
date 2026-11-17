@@ -19,6 +19,7 @@ import {
   type ChatState,
   type SettingsSection,
 } from "./chat-state";
+import { resizeImageToBase64Jpeg } from "./file-upload";
 import { VoicePlayer } from "./voice";
 
 /** A file ready to send: an image as base64 JPEG, or a text file's content (src/file-upload.ts). */
@@ -185,6 +186,41 @@ export const actions = {
     if (useChat.getState().turn !== "idle") return;
     socket.send("thread_delete", { id });
     researchThreads();
+  },
+
+  // ── her profile (D-091, FR-W-9) ─────────────────────────────────────
+
+  openProfile(id: string): void {
+    dispatch({ kind: "profile", id });
+  },
+
+  closeProfile(): void {
+    dispatch({ kind: "profile", id: null });
+  },
+
+  /** The profile's Chat button: a new chat that starts with her. The open chat gets
+   * no divider, since nobody switched in it. */
+  chatWith(id: string): void {
+    if (!canStartThread(useChat.getState())) return;
+    if (socket.send("thread_new", { waifu_id: id })) dispatch({ kind: "profile", id: null });
+  },
+
+  /** A picture the user picked for her; the engine cuts it square. A file the engine
+   * cannot read comes back as a notice. */
+  async choosePortrait(id: string, file: File): Promise<void> {
+    let image: string;
+    try {
+      image = await resizeImageToBase64Jpeg(file, "image/png");
+    } catch {
+      dispatch({ kind: "problem", reason: "That file is not a picture Kōkyū can read. Try a PNG or JPEG." });
+      return;
+    }
+    socket.send("set_portrait", { waifu_id: id, image_b64: image });
+  },
+
+  /** Back to the face from her model. */
+  resetPortrait(id: string): void {
+    socket.send("set_portrait", { waifu_id: id, image_b64: null });
   },
 
   /** Persona and voice only; model, memory and tools stay (FR-W-3). Mid-reply it waits for the reply. */

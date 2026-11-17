@@ -63,6 +63,21 @@ def test_refuses_to_overwrite_without_force(sources, capsys):
     assert build_premade.main(_args(tmp, voices, yp, "--force")) == 0
 
 
+def test_a_rebuild_keeps_the_hand_written_about_and_persona(sources):
+    # D-091 and D-074 answer 6: --force used to lose both
+    tmp, voices, yp = sources
+    assert build_premade.main(_args(tmp, voices, yp)) == 0
+    pack = tmp / "out" / "luna"
+    manifest = (pack / "waifu.yaml").read_text(encoding="utf-8")
+    manifest = manifest.replace("prompt: prompt.md", "prompt: persona.md\nabout: Blunt, secretly kind.")
+    (pack / "waifu.yaml").write_text(manifest, encoding="utf-8")
+    (pack / "persona.md").write_text("You are Luna, persona only. Keep it short and sharp.", encoding="utf-8")
+    assert build_premade.main(_args(tmp, voices, yp, "--force")) == 0
+    luna = WaifuRegistry(tmp / "out", tmp / "none").get("luna")
+    assert luna.about == "Blunt, secretly kind." and luna.prompt == "You are Luna, persona only. Keep it short and sharp."
+    assert (pack / "prompt.md").is_file()                        # the original is rebuilt beside it
+
+
 def test_missing_traits_default_to_a_placeholder_and_say_so(sources, capsys):
     tmp, voices, yp = sources
     assert build_premade.main(_args(tmp, voices, yp)) == 0

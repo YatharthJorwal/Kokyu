@@ -6,6 +6,7 @@
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
+import type { Companion } from "../chat-state";
 import { actions, useChat } from "../store";
 import { Portrait } from "./Portrait";
 
@@ -68,7 +69,7 @@ function CompanionPopover({
   onPick,
   onClose,
 }: {
-  roster: { id: string; name: string }[];
+  roster: Companion[];
   active: string | null;
   onPick: (id: string) => void;
   onClose: () => void;
@@ -114,8 +115,20 @@ function CompanionPopover({
                   {w.id === active ? "✓" : ""}
                 </span>
                 <span className="row-main">
+                  <Portrait id={w.id} name={w.name} portrait={w.portrait} className="row-face" />
                   <span className="row-label">{w.name}</span>
                 </span>
+              </button>
+              <button
+                type="button"
+                className="ghost profile-link"
+                aria-label={`${w.name}'s profile`}
+                onClick={() => {
+                  onClose();
+                  actions.openProfile(w.id);
+                }}
+              >
+                Profile
               </button>
             </li>
           ))}

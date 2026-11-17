@@ -330,6 +330,60 @@ def test_closing_mid_reply_with_a_switch_pending_still_ends_the_session(kernel, 
     assert "divider" not in [m.role for m in stored]                    # nobody was there to switch for
 
 
+def test_her_profiles_chat_button_opens_a_new_thread_with_her_and_no_divider(kernel):
+    # D-091 (FR-W-9): nobody switched in the open thread, so it gets no divider line
+    with kernel.websocket_connect("/ws") as ws:
+        first, _ = _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {"waifu_id": "beta"}})
+        opened, seen = _until(ws, "thread_opened")
+        assert opened["data"]["thread"]["active_waifu_id"] == "beta" and opened["data"]["messages"] == []
+        assert [m["data"]["active"] for m in seen if m["type"] == "waifu_state"] == ["beta"]
+        assert not any(m["type"] == "thread_message" for m in seen)
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": first["data"]["thread"]["id"]}})
+        back, _ = _until(ws, "thread_opened")
+        assert back["data"]["messages"] == []                          # still no divider there
+        ws.send_json({"v": 1, "type": "thread_new", "data": {"waifu_id": "nobody"}})
+        refused, _ = _until(ws, "error")
+        assert refused["data"]["code"] == "unknown_waifu"
+
+
+def test_a_chosen_picture_reaches_every_window(kernel, monkeypatch):
+    import base64
+    import io
+
+    from PIL import Image
+
+    class OtherWindow:                                            # a second window, as the hub sees it
+        def __init__(self):
+            self.frames = []
+
+        async def send_json(self, frame):
+            self.frames.append(frame)
+
+    other = OtherWindow()
+    monkeypatch.setattr(hub, "connections", {other})
+    buf = io.BytesIO()
+    Image.new("RGB", (40, 30), (1, 2, 3)).save(buf, format="JPEG")
+    picture = base64.b64encode(buf.getvalue()).decode()
+    with kernel.websocket_connect("/ws") as one:
+        _until(one, "thread_opened")
+        one.send_json({"v": 1, "type": "set_portrait", "data": {"waifu_id": "alpha", "image_b64": picture}})
+        roster, _ = _until(one, "waifu_roster")
+        alpha = {w["id"]: w for w in roster["data"]["waifus"]}["alpha"]
+        assert alpha["portrait_chosen"] is True and alpha["portrait"].startswith("c")
+        assert [f["type"] for f in other.frames] == ["waifu_roster"]
+        one.send_json({"v": 1, "type": "set_portrait", "data": {"waifu_id": "alpha", "image_b64": None}})
+        roster, _ = _until(one, "waifu_roster")
+        assert {w["id"]: w for w in roster["data"]["waifus"]}["alpha"]["portrait_chosen"] is False
+        for bad in ("not base64!", base64.b64encode(b"<html>").decode()):
+            one.send_json({"v": 1, "type": "set_portrait", "data": {"waifu_id": "alpha", "image_b64": bad}})
+            refused, _ = _until(one, "error")
+            assert refused["data"]["code"] == "picture_unreadable"
+        one.send_json({"v": 1, "type": "set_portrait", "data": {"waifu_id": "nobody", "image_b64": None}})
+        refused, _ = _until(one, "error")
+        assert refused["data"]["code"] == "unknown_waifu"
+
+
 def test_rename_search_and_delete(kernel):
     with kernel.websocket_connect("/ws") as ws:
         opened, _ = _until(ws, "thread_opened")

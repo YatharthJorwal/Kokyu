@@ -11,6 +11,8 @@ companions' checks are ambient.py; who drives is hub.py.
 from __future__ import annotations
 
 import asyncio
+import base64
+import binascii
 import contextlib
 import logging
 from collections.abc import Awaitable, Callable, Coroutine
@@ -38,6 +40,7 @@ from memory import viewer as memory_viewer
 from memory import writer
 from router import listing as model_listing
 from senses import camera, ocr_watch, task_guide
+from waifus import portrait
 
 log = logging.getLogger(__name__)
 
@@ -511,6 +514,21 @@ class Session:
             self.pending_waifu = None
             await self.switch_companion(target_id)
 
+    async def on_set_portrait(self, msg: Any) -> None:
+        """Her picture (D-091, FR-W-9). App-level, not the conversation: any window may,
+        mid-reply too. Every window hears the new roster."""
+        data = msg.data
+        if self.registry.get(data.waifu_id) is None:
+            await self.refuse("unknown_waifu", f"There is no companion called {data.waifu_id!r}.")
+            return
+        try:
+            raw = base64.b64decode(data.image_b64, validate=True) if data.image_b64 is not None else None
+            await asyncio.to_thread(portrait.choose, data.waifu_id, raw)
+        except (ValueError, binascii.Error):
+            await self.refuse("picture_unreadable", "That file is not a picture Kōkyū can read. Try a PNG or JPEG.")
+            return
+        await hub.broadcast(protocol.frame("waifu_roster", {"waifus": self.registry.describe()}))
+
     async def on_set_temp(self, msg: Any) -> None:
         """Temp Chat (FR-MEM-5): saved with the thread, so it comes back when the thread
         is reopened. Only this window's conversation changes."""
@@ -551,7 +569,17 @@ class Session:
         card = data.scenario.model_dump() if data.mode == "roleplay" and data.scenario is not None else {}
         scenario = {key: value for key, value in card.items() if value} or None
 
+        if data.waifu_id is not None and self.registry.get(data.waifu_id) is None:
+            await self.refuse("unknown_waifu", f"There is no companion called {data.waifu_id!r}.")
+            return
+
         async def new() -> None:
+            current = companions.waifu_of(self.ws)
+            if data.waifu_id is not None and (current is None or current.id != data.waifu_id):
+                # Persona and voice only (FR-W-3); load_thread rebuilds the history for the new thread.
+                await companions.apply_switch(
+                    self.ws, self.history, self.registry, data.waifu_id, **conversation.prompt_layers(self.thread)
+                )
             active = companions.waifu_of(self.ws)
             thread = await self.manager.new_thread(
                 waifu_id=active.id if active else None,

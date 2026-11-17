@@ -17,23 +17,35 @@ export function Portrait({
   portrait,
   className,
   title,
+  onClick,
 }: {
   id?: string | null;
   name: string | null | undefined;
   portrait?: string | null;
   className: string;
   title?: string;
+  /** Makes it a button (her profile, D-091); `title` is then its label. */
+  onClick?: () => void;
 }) {
   const src = id && portrait ? portraitUrl(id, portrait) : null;
   const [failed, setFailed] = useState<string | null>(null);
   const shown = src !== null && failed !== src;
+  const classes = shown ? `${className} has-face` : className;
+  const face = shown ? (
+    <img src={src} alt="" draggable={false} onError={() => setFailed(src)} />
+  ) : (
+    (name ?? "?").slice(0, 1).toUpperCase()
+  );
+  if (onClick) {
+    return (
+      <button type="button" className={`${classes} face-button`} title={title} aria-label={title} onClick={onClick}>
+        {face}
+      </button>
+    );
+  }
   return (
-    <span className={shown ? `${className} has-face` : className} title={title} aria-hidden="true">
-      {shown ? (
-        <img src={src} alt="" draggable={false} onError={() => setFailed(src)} />
-      ) : (
-        (name ?? "?").slice(0, 1).toUpperCase()
-      )}
+    <span className={classes} title={title} aria-hidden="true">
+      {face}
     </span>
   );
 }

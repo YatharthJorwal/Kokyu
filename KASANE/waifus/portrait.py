@@ -21,7 +21,7 @@ from waifus.pack import Waifu
 
 log = logging.getLogger("kokyu.waifus")
 
-SIZE = 256                          # the largest place it is shown is 128 px at 2x
+SIZE = 512                          # the profile shows it at 160 px; sharp at 2x and more
 MAX_THUMBNAIL_BYTES = 16 * 1024 * 1024
 _GLB_MAGIC = b"glTF"
 _JSON_CHUNK = 0x4E4F534A
@@ -77,6 +77,20 @@ def square(data: bytes, size: int = SIZE) -> bytes:
 def chosen_path(waifu_id: str) -> Path:
     """The picture the user chose for her (UI1-06b)."""
     return paths.portraits_dir() / f"{waifu_id}.png"
+
+
+def choose(waifu_id: str, data: bytes | None) -> None:
+    """Saves the picture the user chose for her (cut square), or with None goes back
+    to the model's face. Raises ValueError if `data` is not an image. Blocking."""
+    path = chosen_path(waifu_id)
+    if data is None:
+        path.unlink(missing_ok=True)
+        return
+    png = square(data)
+    path.parent.mkdir(parents=True, exist_ok=True)
+    tmp = path.with_suffix(".tmp")
+    tmp.write_bytes(png)
+    tmp.replace(path)
 
 
 def _stamp(path: Path) -> str:

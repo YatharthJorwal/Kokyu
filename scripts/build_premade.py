@@ -69,15 +69,34 @@ def find_voice(voice_root: Path, folder: str) -> tuple[Path, str]:
     return wavs[0], text
 
 
+def _hand_written(pack: Path) -> dict[str, str]:
+    """What a rebuild must not lose: the About (D-091) and the persona-only prompt
+    with its pointer (D-074 answer 6). Both are written by hand, not from the sources."""
+    kept: dict[str, str] = {}
+    try:
+        manifest = yaml.safe_load((pack / "waifu.yaml").read_text(encoding="utf-8")) or {}
+    except (OSError, yaml.YAMLError):
+        return kept
+    if isinstance(manifest.get("about"), str) and manifest["about"].strip():
+        kept["about"] = manifest["about"]
+    prompt = manifest.get("prompt")
+    if isinstance(prompt, str) and prompt != "prompt.md" and (pack / prompt).is_file():
+        kept["prompt_name"] = prompt
+        kept["prompt_text"] = (pack / prompt).read_text(encoding="utf-8")
+    return kept
+
+
 def build_pack(
     out_dir: Path, companion_id: str, *, vrm: Path, voice_wav: Path, transcript: str,
     prompt: str, traits: list[str], force: bool,
 ) -> Path:
     meta = COMPANIONS[companion_id]
     pack = out_dir / companion_id
+    kept: dict[str, str] = {}
     if pack.exists():
         if not force:
             raise BuildError(f"{pack} already exists (use --force to rebuild it)")
+        kept = _hand_written(pack)
         shutil.rmtree(pack)
     if not vrm.is_file() or vrm.suffix.lower() != ".vrm":
         raise BuildError(f"{meta['name']}: VRM file not found or not a .vrm: {vrm}")
@@ -85,13 +104,16 @@ def build_pack(
     shutil.copy2(vrm, pack / "model.vrm")
     shutil.copy2(voice_wav, pack / "voice" / "ref.wav")
     (pack / "prompt.md").write_text(prompt + "\n", encoding="utf-8")
+    if "prompt_name" in kept:
+        (pack / kept["prompt_name"]).write_text(kept["prompt_text"], encoding="utf-8")
     manifest = {
         "schema": 1,
         "id": companion_id,
         "name": meta["name"],
         "traits": traits,
+        **({"about": kept["about"]} if "about" in kept else {}),
         "vrm": "model.vrm",
-        "prompt": "prompt.md",
+        "prompt": kept.get("prompt_name", "prompt.md"),
         "voice": {"provider": "gpt_sovits", "ref_audio": "voice/ref.wav", "ref_text": transcript, "ref_lang": "en"},
     }
     (pack / "waifu.yaml").write_text(yaml.safe_dump(manifest, sort_keys=False, allow_unicode=True), encoding="utf-8")

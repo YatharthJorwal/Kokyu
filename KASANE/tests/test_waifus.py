@@ -22,7 +22,7 @@ def test_valid_pack_loads_everything_a_waifu_is(tmp_path):
 def test_a_waifu_has_no_capability_fields():
     """D-003: voice and persona only. The model has no place to put a model, tool or memory key."""
     fields = set(waifus.Waifu.model_fields)
-    assert fields == {"id", "name", "traits", "prompt", "vrm_path", "voice", "ref_audio_path", "premade", "root"}
+    assert fields == {"id", "name", "traits", "about", "prompt", "vrm_path", "voice", "ref_audio_path", "premade", "root"}
 
 
 @pytest.mark.parametrize("key,value", [("models", {"chat": "x"}), ("tools", ["fs"]), ("permissions", "all"), ("memory", "own"), ("scene", "garden")])
@@ -127,4 +127,16 @@ def test_reload_picks_up_new_packs(tmp_path):
 def test_describe_exposes_no_paths_or_prompt_text(tmp_path):
     make_pack(tmp_path / "premade", "alpha")
     info = WaifuRegistry(tmp_path / "premade", tmp_path / "u").describe()[0]
-    assert set(info) == {"id", "name", "premade", "traits", "portrait"}
+    assert set(info) == {"id", "name", "premade", "traits", "about", "portrait", "portrait_chosen"}
+    assert info["portrait_chosen"] is False
+
+
+def test_about_is_optional_one_paragraph_and_capped(tmp_path):
+    # D-091 (FR-W-1): her profile's brief
+    assert load_pack(make_pack(tmp_path / "a", "alpha")).about is None
+    root = make_pack(tmp_path / "b", "alpha", extra_manifest={"about": "  Blunt.\n\n  Secretly   kind. "})
+    assert load_pack(root).about == "Blunt. Secretly kind."
+    assert load_pack(make_pack(tmp_path / "c", "alpha", extra_manifest={"about": "   "})).about is None
+    with pytest.raises(PackError):
+        load_pack(make_pack(tmp_path / "d", "alpha", extra_manifest={"about": "x" * 601}))
+

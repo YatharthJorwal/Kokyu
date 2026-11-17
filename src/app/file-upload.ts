@@ -92,7 +92,7 @@ export function classifyFile(file: File): ClassifiedFile {
  * project already use. Plain 2D canvas, same reasoning as camera.ts's
  * own choice: this is one still image with no filters or live rendering
  * involved, so WebGL wouldn't add anything here either. */
-export async function resizeImageToBase64Jpeg(file: File): Promise<string> {
+export async function resizeImageToBase64Jpeg(file: File, type: "image/jpeg" | "image/png" = "image/jpeg"): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -113,7 +113,8 @@ export async function resizeImageToBase64Jpeg(file: File): Promise<string> {
     if (!ctx) throw new Error("Canvas 2D context unavailable.");
     ctx.drawImage(img, 0, 0, width, height);
 
-    const dataUrl = canvas.toDataURL("image/jpeg", 0.85);
+    // PNG keeps transparency (a chosen portrait, D-091); JPEG is smaller for everything else.
+    const dataUrl = canvas.toDataURL(type, 0.85);
     const commaIndex = dataUrl.indexOf(",");
     if (commaIndex === -1) throw new Error("Failed to encode image.");
     return dataUrl.slice(commaIndex + 1);

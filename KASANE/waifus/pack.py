@@ -17,6 +17,7 @@ SLUG_RE = re.compile(r"^[a-z0-9][a-z0-9-]{1,31}$")
 MAX_PROMPT_CHARS = 20_000
 MIN_PROMPT_CHARS = 20
 MAX_TRAITS = 12
+MAX_ABOUT_CHARS = 600
 
 
 class PackError(ValueError):
@@ -54,6 +55,7 @@ class _Manifest(BaseModel):
     id: str
     name: str = Field(min_length=1, max_length=32)
     traits: list[str] = Field(min_length=1, max_length=MAX_TRAITS)
+    about: str | None = Field(default=None, max_length=MAX_ABOUT_CHARS)   # her profile's brief (D-091)
     vrm: str
     prompt: str
     voice: VoiceSpec
@@ -74,6 +76,13 @@ class _Manifest(BaseModel):
             raise ValueError("name is empty")
         return value
 
+    @field_validator("about")
+    @classmethod
+    def _about(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        return " ".join(value.split()) or None   # one paragraph; blank means none
+
     @field_validator("traits")
     @classmethod
     def _traits(cls, value: list[str]) -> list[str]:
@@ -92,6 +101,7 @@ class Waifu(BaseModel):
     id: str
     name: str
     traits: tuple[str, ...]
+    about: str | None = None
     prompt: str
     vrm_path: Path
     voice: VoiceSpec
@@ -150,6 +160,7 @@ def load_pack(root: Path, *, premade: bool = False) -> Waifu:
         id=manifest.id,
         name=manifest.name,
         traits=tuple(manifest.traits),
+        about=manifest.about,
         prompt=prompt,
         vrm_path=vrm_path,
         voice=manifest.voice,

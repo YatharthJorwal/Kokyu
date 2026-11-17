@@ -53,8 +53,8 @@ def test_a_valid_frame_is_parsed_and_trimmed():
     assert msg.type == "thread_rename" and msg.id == "r1"
     assert msg.data.model_dump() == {"id": "abc", "title": "Trip"}
     # FR-MODE-1: an empty thread_new (the client before modes) is still valid: a chat thread.
-    # (It used to dump to {}; the payload gained mode and scenario with defaults, D-074.)
-    assert protocol.parse_client({"v": 1, "type": "thread_new"}).data.model_dump() == {"mode": "chat", "scenario": None}
+    # (It used to dump to {}; the payload gained mode and scenario with defaults, D-074, and waifu_id, D-091.)
+    assert protocol.parse_client({"v": 1, "type": "thread_new"}).data.model_dump() == {"mode": "chat", "scenario": None, "waifu_id": None}
 
 
 def test_thread_new_takes_a_mode_and_a_scenario_card():

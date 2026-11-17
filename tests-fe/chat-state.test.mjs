@@ -248,12 +248,36 @@ test("her portrait stamp reaches the roster, and replies remember who spoke (D-0
   assert.equal(s.messages.at(-1).speakerId, "luna");
 });
 
+test("a new picture refreshes the roster; who is active and who comes next stay (D-091)", () => {
+  const luna = { id: "luna", name: "Luna", portrait: "m1", traits: ["blunt"], about: "Blunt." };
+  const yuri = { id: "yuri", name: "Yuri", portrait: "m2" };
+  let s = run(online, frame("waifu_state", { active: "luna", waifus: [luna, yuri], problems: [], pending: "yuri" }, null));
+  assert.equal(s.pendingCompanion.id, "yuri");
+  s = reduce(s, frame("waifu_roster", { waifus: [{ ...luna, portrait: "c9", portrait_chosen: true }, yuri] }, null));
+  assert.equal(s.companion.portrait, "c9");
+  assert.equal(s.companion.portraitChosen, true);
+  assert.deepEqual(s.companion.traits, ["blunt"]);
+  assert.equal(s.companion.about, "Blunt.");
+  assert.equal(s.pendingCompanion.id, "yuri");
+});
+
+test("her profile opens and closes; an unreadable picture does not end a reply (D-091)", () => {
+  let s = run(online, { kind: "profile", id: "luna" });
+  assert.equal(s.profile, "luna");
+  s = reduce(s, { kind: "profile", id: null });
+  assert.equal(s.profile, null);
+  s = reduce(s, frame("turn_start", { user_text: "a" }));
+  s = reduce(s, frame("error", { code: "picture_unreadable", message: "Not a picture.", reply_to: null }, null));
+  assert.equal(s.turn, "thinking");
+  assert.equal(s.notice.text, "Not a picture.");
+});
+
 test("companion name, observer role and a lost connection", () => {
   let s = run(
     online,
     frame("waifu_state", { active: "yuri", waifus: [{ id: "yuri", name: "Yuri" }], problems: [], pending: null }, null),
   );
-  assert.deepEqual(s.companion, { id: "yuri", name: "Yuri", portrait: null });
+  assert.deepEqual(s.companion, { id: "yuri", name: "Yuri", portrait: null, traits: [], about: null, portraitChosen: false });
   s = reduce(s, frame("surface_status", { role: "observer" }, null));
   assert.equal(canSend(s), false);
   s = reduce(s, frame("surface_status", { role: "driver" }, null));

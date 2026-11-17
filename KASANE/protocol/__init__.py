@@ -74,6 +74,9 @@ class ThreadNew(_Data):
 
     mode: Literal["chat", "roleplay"] = "chat"
     scenario: Scenario | None = None
+    # D-091: her profile's Chat button. The new thread starts with her; the open
+    # thread gets no divider, since nobody switched in it.
+    waifu_id: str | None = Field(default=None, min_length=1, max_length=64)
 
 
 class ScenarioSave(_Data):
@@ -121,6 +124,14 @@ class SendFile(_Data):
 
 class SwitchWaifu(_Data):
     id: str = Field(min_length=1, max_length=64)
+
+
+class SetPortrait(_Data):
+    """D-091 (FR-W-9): the picture the user chose for her, as base64 (the window has
+    already scaled it down), or None to go back to the model's face."""
+
+    waifu_id: str = Field(min_length=1, max_length=64)
+    image_b64: str | None = Field(default=None, min_length=1, max_length=FILE_MAX)
 
 
 class CameraFrame(_Data):
@@ -208,6 +219,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "send_file": SendFile,            # an attached file or image starts a turn (FR-C-4)
     "stop": Empty,                    # Stop the reply in flight (FR-C-2)
     "switch_waifu": SwitchWaifu,      # FR-S-1: changes only persona and voice
+    "set_portrait": SetPortrait,      # D-091 (FR-W-9): her picture, chosen or reset
     "set_temp": TempChat,             # FR-MEM-5: Temp Chat on or off for the open thread
     "camera_frame": CameraFrame,      # the answer to camera_request (K2-07)
     "thread_list": Empty,
@@ -253,6 +265,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "screen_companions",  # K1-05b (FR-SC-2): what is watching the screen
     "voice_status",   # D-061: voice on or off, and how its start is going
     "waifu_state",    # FR-S-1: the roster, the active companion, a pending switch
+    "waifu_roster",   # D-091: the roster alone changed (a new picture), for every window
     "surface_status", # this window drives turns, or watches
     "speak",          # one spoken clause: caption text and a WAV (FR-V-2)
     "camera_request", # the kernel wants one camera frame (K2-07)
@@ -274,6 +287,7 @@ ERROR_CODES: tuple[str, ...] = (
     "vision_unavailable",   # K1-05b (FR-SC-3): no local model can see the screen
     "observer",             # another window drives the conversation
     "price_unknown",        # D-083: said once; the turn goes on
+    "picture_unreadable",   # D-091: a chosen picture that is not an image
 )
 
 
