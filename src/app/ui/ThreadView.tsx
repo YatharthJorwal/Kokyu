@@ -5,9 +5,11 @@
 // on the last line (D-092). The user's own lines stay plain text in a chat; in a
 // roleplay thread both sides render the story's way (FR-MODE-7). Reading older
 // messages is never interrupted: new text only scrolls the view when it is already
-// at the bottom, and a pill jumps back down.
+// at the bottom, and a pill jumps back down. While she thinks, her face, the heart
+// and a changing word sit where her reply will appear; the reply then types out
+// letter by letter (D-096).
 
-import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
+import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 
 import {
   canPickModel,
@@ -17,20 +19,20 @@ import {
   editableKey,
   lastExchange,
   modelLabel,
-  modelLoadingHere,
   startsGroup,
   turnFailure,
   visibleStream,
   type ChatMessage,
 } from "../chat-state";
 import { messageTime } from "../history";
-import { THINKING_LINES, THINKING_STEP_S, thinkingLine } from "../models";
+import { THINKING_STEP_S, thinkingOrder } from "../models";
 import { actions, useChat } from "../store";
+import { revealTo } from "../typewriter";
 import { CopyButton } from "./CopyButton";
+import { Heart } from "./Heart";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
 import { Portrait } from "./Portrait";
-import { WakingCard } from "./WakingCard";
 
 /** Her face in a circle, shown when Appearance → Messages is "Bubbles" (D-073, D-091). */
 function Avatar({ id, name }: { id: string | null | undefined; name: string | null }) {
@@ -116,7 +118,22 @@ function EditBox({ text, onDone }: { text: string; onDone: () => void }) {
   );
 }
 
-function Message({ m, first, lastReply, editable, roleplay }: { m: ChatMessage; first: boolean; lastReply: boolean; editable: boolean; roleplay: boolean }) {
+function Message({
+  m,
+  first,
+  lastReply,
+  editable,
+  roleplay,
+  typing = false,
+}: {
+  m: ChatMessage;
+  first: boolean;
+  lastReply: boolean;
+  editable: boolean;
+  roleplay: boolean;
+  /** Still typing out (D-096): the caret shows and the action bar waits. */
+  typing?: boolean;
+}) {
   const sentTo = useChat((s) => (m.sentTo ? modelLabel(s, m.sentTo) : null));
   const [editing, setEditing] = useState(false);
   if (m.role === "divider") {
@@ -126,7 +143,7 @@ function Message({ m, first, lastReply, editable, roleplay }: { m: ChatMessage; 
       </div>
     );
   }
-  const classes = ["msg", m.role, first ? "" : "cont", m.pending ? "pending" : "", m.failed ? "failed" : "", editing ? "editing" : ""]
+  const classes = ["msg", m.role, first ? "" : "cont", m.pending ? "pending" : "", m.failed ? "failed" : "", editing ? "editing" : "", typing ? "streaming" : ""]
     .filter(Boolean)
     .join(" ");
   const her = m.role === "assistant" && first;
@@ -143,7 +160,7 @@ function Message({ m, first, lastReply, editable, roleplay }: { m: ChatMessage; 
       ) : (
         <>
           <div className="bubble">{m.role === "assistant" || roleplay ? <Markdown text={m.text} roleplay={roleplay} /> : m.text}</div>
-          {m.pending ? null : <ActionBar m={m} lastReply={lastReply} editable={editable} onEdit={() => setEditing(true)} />}
+          {m.pending || typing ? null : <ActionBar m={m} lastReply={lastReply} editable={editable} onEdit={() => setEditing(true)} />}
         </>
       )}
       {m.stopped ? <div className="meta">Stopped</div> : null}
@@ -227,31 +244,71 @@ function EmptyChat() {
   );
 }
 
-/** While she thinks, her reply's place says so (UI1-07, D-063's changing line). The
- * waking-up card speaks while the model loads, so this waits for it. */
+/** While she thinks (D-096): her face, the heart, and a short word that changes,
+ * where her reply will appear. Gone as soon as the reply starts typing. */
 function ThinkingReply({ id, name }: { id: string | null; name: string | null }) {
+  const portrait = useChat((s) => s.roster.find((w) => w.id === id)?.portrait ?? null);
+  const [order] = useState(() => thinkingOrder());
   const [step, setStep] = useState(0);
-  const [start] = useState(() => Math.floor(Math.random() * THINKING_LINES.length));
   useEffect(() => {
     const t = window.setInterval(() => setStep((n) => n + 1), THINKING_STEP_S * 1000);
     return () => window.clearInterval(t);
   }, []);
-  const text = thinkingLine(name, step, start);
+  const word = order[step % order.length];
   return (
-    <div className="msg assistant thinking">
-      <Avatar id={id} name={name} />
-      <div className="msg-head">{name ? <span className="speaker">{name}</span> : null}</div>
-      <div className="bubble">
-        <span className="thinking-line" role="status">
-          {/* Screen readers hear it once; the changing words are for the eyes. */}
-          <span className="sr-only">{name ?? "She"} is thinking</span>
-          <span aria-hidden="true" key={text}>
-            {text}
+    <div className="thinking-now" role="status">
+      <Portrait id={id} name={name ?? ""} portrait={portrait} className="avatar-dot thinking-face" />
+      <span className="thinking-heart" aria-hidden="true">
+        <Heart />
+      </span>
+      {/* keyed on the word, so each new one plays its entrance */}
+      <span className="thinking-word" key={word} aria-hidden="true">
+        {Array.from(word).map((ch, i) => (
+          <span key={i} className="letter" style={{ "--i": i } as CSSProperties}>
+            {ch}
           </span>
+        ))}
+        <span className="thinking-dots">
+          <span />
+          <span />
+          <span />
         </span>
-      </div>
+      </span>
+      {/* Screen readers hear it once; the changing words are for the eyes. */}
+      <span className="sr-only">{name ?? "She"} is thinking</span>
     </div>
   );
+}
+
+/** The part of `text` shown so far, growing letter by letter (D-096); null when
+ * there is nothing to type. Reduced motion shows it all at once. */
+function useTypewriter(text: string | null): string | null {
+  const [shown, setShown] = useState(0);
+  const latest = useRef(text);
+  latest.current = text;
+  const idle = text === null;
+  useEffect(() => {
+    if (idle) setShown(0);
+  }, [idle]);
+  const behind = text !== null && shown < text.length;
+  useEffect(() => {
+    if (!behind) return;
+    let frame = 0;
+    let then = performance.now();
+    const tick = (now: number) => {
+      const target = latest.current;
+      if (target === null) return;
+      const dt = now - then; // read before the updater runs, which is later
+      then = now;
+      setShown((n) => revealTo(n, target, dt));
+      frame = requestAnimationFrame(tick);
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, [behind]);
+  if (text === null) return null;
+  if (window.matchMedia("(prefers-reduced-motion: reduce)").matches) return text;
+  return text.slice(0, Math.min(shown, text.length));
 }
 
 export function ThreadView() {
@@ -261,7 +318,6 @@ export function ThreadView() {
   const companion = useChat((s) => s.companion?.name ?? null);
   const companionId = useChat((s) => s.companion?.id ?? null);
   const modelState = useChat((s) => s.modelStatus?.state ?? null);
-  const loading = useChat(modelLoadingHere);
   const threadId = useChat((s) => s.thread?.id ?? null);
   const editable = useChat(editableKey);
   // The mode is the open thread's (FR-MODE-1), never the companion's.
@@ -277,6 +333,24 @@ export function ThreadView() {
   const [away, setAway] = useState(false);
   const last = messages[messages.length - 1];
   const justSent = last?.role === "user" && last.pending === true;
+
+  // The reply types out (D-096): first the streamed text, then, once it is saved,
+  // the same reply where it now sits in the list until the letters catch up.
+  const live = turn !== "idle" && streaming ? streaming : null;
+  const finishing = useRef<string | null>(null);
+  const wasLive = useRef(false);
+  if (live !== null) {
+    wasLive.current = true;
+    finishing.current = null;
+  } else if (wasLive.current) {
+    wasLive.current = false;
+    finishing.current = last?.role === "assistant" ? last.key : null;
+  } else if (turn !== "idle") {
+    finishing.current = null; // a new turn: the last reply is done typing
+  }
+  const finishingText = finishing.current !== null && last?.key === finishing.current ? last.text : null;
+  const typed = useTypewriter(live ?? finishingText);
+  const typingKey = finishingText !== null && typed !== null && typed.length < finishingText.length ? finishing.current : null;
 
   const toEnd = (smooth = false) => {
     const el = box.current;
@@ -307,7 +381,7 @@ export function ThreadView() {
     // The user's own line always brings the view down to it.
     if (justSent) atBottom.current = true;
     if (atBottom.current) toEnd();
-  }, [messages.length, streaming, turn, modelState, justSent]);
+  }, [messages.length, typed?.length, turn, modelState, justSent]);
 
   return (
     <div className="thread-wrap">
@@ -339,7 +413,8 @@ export function ThreadView() {
         {messages.map((m, i) => (
           <Message
             key={m.key}
-            m={m}
+            m={m.key === typingKey && typed !== null ? { ...m, text: typed } : m}
+            typing={m.key === typingKey}
             first={startsGroup(messages, i)}
             lastReply={m.key === lastReplyKey}
             editable={m.key === editable}
@@ -347,14 +422,13 @@ export function ThreadView() {
           />
         ))}
         <TurnFailure />
-        <WakingCard />
-        {turn === "thinking" && !streaming && !loading ? <ThinkingReply id={companionId} name={companion} /> : null}
-        {turn !== "idle" && streaming ? (
+        {turn !== "idle" && !typed ? <ThinkingReply id={companionId} name={companion} /> : null}
+        {live !== null && typed ? (
           <div className="msg assistant streaming">
             <Avatar id={companionId} name={companion} />
             <div className="msg-head">{companion ? <span className="speaker">{companion}</span> : null}</div>
             <div className="bubble">
-              <Markdown text={streaming} roleplay={roleplay} />
+              <Markdown text={typed} roleplay={roleplay} />
             </div>
           </div>
         ) : null}

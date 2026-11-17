@@ -321,11 +321,6 @@ export function modelStatusHere(state: ChatState): ModelStatus | null {
   return status;
 }
 
-/** The waking-up card is talking: the thinking line waits for it (D-063). */
-export function modelLoadingHere(state: ChatState): boolean {
-  return modelStatusHere(state)?.state === "loading";
-}
-
 /** The effort a turn in the open thread runs with (FR-M-1: shown on the chip). */
 export function currentEffort(state: ChatState): string | null {
   return state.thread?.effort ?? state.defaults?.effort ?? null;

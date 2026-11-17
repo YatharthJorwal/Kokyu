@@ -1,7 +1,6 @@
-// "<companion> is waking up…" (K1-10, FR-M-6, D-054): shown in the chat while the
-// kernel loads the chat model, so a two-minute load of a big model reads as the
-// companion getting ready instead of a frozen app. The line changes every few
-// seconds; the model and the time so far sit underneath. A failed load says so
+// The model loading strip (K1-10, FR-M-6, D-054; compact above the input box since
+// D-096): which model is loading, a changing line ("<companion> is waking up…") so a
+// two-minute load reads as her getting ready, and the time so far. A failed load says so
 // with Try again and Switch model (and Unload X when graphics memory is what is
 // missing, K1-09b); a finished one says she is awake, briefly.
 
@@ -10,6 +9,7 @@ import { useEffect, useRef, useState } from "react";
 import { canPickModel, modelStatusHere } from "../chat-state";
 import { awakeLine, failedLine, formatElapsed, wakingLine } from "../models";
 import { actions, useChat } from "../store";
+import { Icon } from "./Icon";
 
 const AWAKE_MS = 2600;
 
@@ -59,21 +59,15 @@ export function WakingCard() {
     const line = wakingLine(name, elapsed, switching.current);
     // Screen readers hear the line and the model, not a timer ticking every second.
     return (
-      <div className="waking">
-        <span className="waking-avatar" aria-hidden="true">
-          <span className="zz">z</span>
-          <span className="zz">z</span>
-          <span className="zz">z</span>
+      <div className="waking" role="status">
+        <span className="spinner" aria-hidden="true" />
+        <span className="waking-main">Loading {status.label ?? "the model"}</span>
+        {/* keyed on the text so each new line fades in */}
+        <span className="waking-line" key={line}>
+          {line}
         </span>
-        <span className="waking-text" role="status">
-          {/* keyed on the text so each new line fades in */}
-          <span className="waking-line" key={line}>
-            {line}
-          </span>
-          <span className="waking-meta">
-            Loading {status.label ?? "the model"}
-            <span aria-hidden="true"> · {formatElapsed(elapsed)}</span>
-          </span>
+        <span className="waking-time" aria-hidden="true">
+          {formatElapsed(elapsed)}
         </span>
       </div>
     );
@@ -82,11 +76,9 @@ export function WakingCard() {
   if (status.state === "failed") {
     return (
       <div className="waking failed" role="alert">
-        <span className="waking-text">
-          <span className="waking-line">{failedLine(name)}</span>
-          <span className="waking-meta">
-            {status.label ?? "The model"}: {status.message ?? "unknown error"}
-          </span>
+        <span className="waking-main">{failedLine(name)}</span>
+        <span className="waking-line">
+          {status.label ?? "The model"}: {status.message ?? "unknown error"}
         </span>
         {/* Only the window that drives the kernel can act; others just watch. */}
         {canPick ? (
@@ -111,7 +103,8 @@ export function WakingCard() {
   if (awake) {
     return (
       <div className="waking awake" role="status">
-        <span className="waking-line">{awakeLine(name)}</span>
+        <Icon name="check" size={14} />
+        <span className="waking-main">{awakeLine(name)}</span>
       </div>
     );
   }

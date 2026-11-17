@@ -9,12 +9,12 @@ import {
   initialState,
   shownEffort,
   modelLabel,
-  modelLoadingHere,
+  modelStatusHere,
   reduce,
 } from "../src/app/chat-state.ts";
 import {
   SLOW_AFTER_S,
-  THINKING_LINES,
+  THINKING_WORDS,
   WAKING_LINES,
   WAKING_STEP_S,
   awakeLine,
@@ -27,9 +27,10 @@ import {
   isLocalRef,
   modelFacts,
   shortRef,
-  thinkingLine,
+  thinkingOrder,
   wakingLine,
 } from "../src/app/models.ts";
+import { revealTo } from "../src/app/typewriter.ts";
 
 // K1-10: the model chip, its picker and the "waking up" card (FR-M-1..7, D-054).
 
@@ -199,24 +200,42 @@ test("the picker opens only when a model can be picked and closes on send or dis
   assert.equal(s.modelStatus, null); // the kernel re-sends it on reconnect
 });
 
-test("the thinking line names her, walks the list from a random start and wraps (D-063)", () => {
-  assert.equal(thinkingLine("Luna", 0), "Luna is mulling it over…");
-  const turn = Array.from({ length: THINKING_LINES.length }, (_, i) => thinkingLine("Luna", i, 4));
-  assert.equal(new Set(turn).size, THINKING_LINES.length); // every line once before any repeats
-  assert.equal(turn[0], thinkingLine("Luna", THINKING_LINES.length, 4));
-  assert.ok(turn.every((l) => l.startsWith("Luna ") && l.endsWith("…")));
-  assert.equal(thinkingLine(null, 0), "Your waifu is mulling it over…");
-  // FR-W-3: only the name changes between companions
-  assert.equal(thinkingLine("Yuri", 3, 2).replace("Yuri", "Luna"), thinkingLine("Luna", 3, 2));
+test("thinking words: each once a turn in a fresh order, short, and none from the waking lines (D-096)", () => {
+  let seed = 7;
+  const rand = () => (seed = (seed * 16807) % 2147483647) / 2147483647;
+  const order = thinkingOrder(rand);
+  assert.equal(order.length, THINKING_WORDS.length);
+  assert.equal(new Set(order).size, THINKING_WORDS.length);
+  assert.notDeepEqual(order, THINKING_WORDS);
+  assert.deepEqual([...order].sort(), [...THINKING_WORDS].sort());
+  assert.ok(THINKING_WORDS.every((w) => w.length <= 20 && !/\s/.test(w) && !/waifu|kernel/i.test(w)));
+  assert.ok(THINKING_WORDS.every((w) => !WAKING_LINES.some((l) => l.toLowerCase().includes(w.toLowerCase()))));
 });
 
-test("the thinking line waits while the waking-up card speaks for this thread's model", () => {
+test("a reply types out: steady when close, faster when far behind, never half an emoji (D-096)", () => {
+  assert.equal(revealTo(0, "hello", 16), 1); // at least a letter a frame
+  assert.equal(revealTo(5, "hello", 16), 5);
+  const long = "x".repeat(700);
+  assert.ok(revealTo(0, long, 100) >= 100); // 700 behind: about 1000 letters a second
+  let shown = 0;
+  let ms = 0;
+  while (shown < long.length) {
+    shown = revealTo(shown, long, 16);
+    ms += 16;
+  }
+  assert.ok(ms < 4000, `${ms} ms to type 700 letters`);
+  assert.ok(ms > 1000, "not dumped at once");
+  assert.equal(revealTo(0, "\u{1F600}a", 16), 2); // the emoji's two halves together
+  assert.equal(revealTo(0, "a", -5), 1); // a clock that went back still moves on
+});
+
+test("the loading strip speaks only for this thread's model", () => {
   const status = (model_ref, state) => ({ kind: "frame", frame: { v: 1, type: "model_status", id: "s", thread: null, data: { model_ref, label: null, state, message: null, elapsed_s: 0 } } });
   const hello = { kind: "frame", frame: { v: 1, type: "hello", id: "s", thread: null, data: { protocol: 1, kernel: "k", default_model_ref: "local:a" } } };
   let s = reduce(reduce(initialState, hello), status("local:a", "loading"));
-  assert.equal(modelLoadingHere(s), true);
-  assert.equal(modelLoadingHere(reduce(s, status("local:b", "loading"))), false); // another thread's model
-  assert.equal(modelLoadingHere(reduce(s, status("local:a", "ready"))), false);
+  assert.equal(modelStatusHere(s)?.state, "loading");
+  assert.equal(modelStatusHere(reduce(s, status("local:b", "loading"))), null); // another thread's model
+  assert.equal(modelStatusHere(reduce(s, status("local:a", "ready")))?.state, "ready");
 });
 
 test("the hover details: full id searchable, facts in one muted line (D-084, FR-M-12)", () => {

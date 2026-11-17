@@ -11,10 +11,10 @@ import { ProfileDialog } from "./ui/ProfileDialog";
 import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { Sidebar } from "./ui/Sidebar";
-import { ThinkingRow } from "./ui/ThinkingRow";
 import { Toasts } from "./ui/Toasts";
 import { ThreadView } from "./ui/ThreadView";
 import { TopBar } from "./ui/TopBar";
+import { WakingCard } from "./ui/WakingCard";
 
 export function App() {
   return (
@@ -25,7 +25,7 @@ export function App() {
         <ThreadView />
         <ConnectionBanner />
         <NoticeBar />
-        <ThinkingRow />
+        <WakingCard />
         <Composer />
       </main>
       <SettingsDialog />

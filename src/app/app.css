@@ -1103,9 +1103,102 @@ button:disabled {
   color: var(--on-accent);
 }
 
-/* The thinking line, where her reply will appear (UI1-07) */
-.msg.thinking .bubble {
-  min-height: 1.55em;
+/* She is thinking (D-096): her face, the heart and a word, where her reply will appear */
+.thinking-now {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin: 0 0 22px;
+  color: color-mix(in srgb, var(--accent) 65%, var(--text));
+}
+
+.thinking-face {
+  flex: none;
+  width: 30px;
+  height: 30px;
+  font-size: 13px;
+}
+
+.thinking-heart {
+  display: flex;
+}
+
+.thinking-word {
+  display: inline-flex;
+  align-items: baseline;
+  font-size: 14px;
+  font-weight: 500;
+  letter-spacing: 0.01em;
+}
+
+/* each letter rises into place, then the word keeps a soft wave */
+.thinking-word .letter {
+  display: inline-block;
+  white-space: pre;
+  animation:
+    letter-in 420ms cubic-bezier(0.2, 0.8, 0.2, 1) calc(var(--i) * 32ms) both,
+    letter-wave 1.8s ease-in-out calc(600ms + var(--i) * 70ms) infinite;
+}
+
+.thinking-dots {
+  display: inline-flex;
+  gap: 2px;
+  margin-left: 2px;
+}
+
+.thinking-dots span {
+  width: 3px;
+  height: 3px;
+  border-radius: 50%;
+  background: currentColor;
+  animation: dot-hop 1.2s ease-in-out infinite;
+}
+
+.thinking-dots span:nth-child(2) {
+  animation-delay: 0.15s;
+}
+
+.thinking-dots span:nth-child(3) {
+  animation-delay: 0.3s;
+}
+
+@keyframes letter-in {
+  from {
+    opacity: 0;
+    transform: translateY(7px) scale(0.8);
+    filter: blur(3px);
+  }
+}
+
+@keyframes letter-wave {
+  0%,
+  60%,
+  100% {
+    transform: translateY(0);
+  }
+  30% {
+    transform: translateY(-2.5px);
+  }
+}
+
+@keyframes dot-hop {
+  0%,
+  60%,
+  100% {
+    opacity: 0.35;
+    transform: translateY(0);
+  }
+  30% {
+    opacity: 1;
+    transform: translateY(-3px);
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .thinking-word .letter,
+  .thinking-dots span {
+    animation: none;
+  }
 }
 
 /* A caret at the end of the reply being streamed (UI1-07) */
@@ -1664,31 +1757,6 @@ button:disabled {
   }
 }
 
-/* Its row, just above the input box (D-063): the heart and the thinking line. */
-.thinking-row {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(var(--column), calc(100% - 48px));
-  min-height: 20px;
-  margin: 10px auto 10px;
-}
-
-.thinking-line {
-  color: var(--muted);
-  font-size: 13px;
-  transition: opacity 600ms ease;
-}
-
-.thinking-line > [aria-hidden] {
-  display: inline-block;
-  animation: fade-in 0.4s ease;
-}
-
-.thinking-line.fading {
-  opacity: 0;
-}
-
 .sr-only {
   position: absolute;
   width: 1px;
@@ -1702,8 +1770,7 @@ button:disabled {
 @media (prefers-reduced-motion: reduce) {
   .heart .heart-arc,
   .heart.thinking .heart-arc,
-  .heart.replying svg,
-  .thinking-line > [aria-hidden] {
+  .heart.replying svg {
     animation: none;
   }
 
@@ -1712,9 +1779,6 @@ button:disabled {
     stroke-dasharray: 100 0;
   }
 
-  .thinking-line {
-    transition: none;
-  }
 }
 
 /* ── model chip and picker (K1-10) ───────────────────────── */
@@ -2291,104 +2355,67 @@ button:disabled {
   right: auto;
 }
 
-/* ── "waking up" card (K1-10) ────────────────────────────── */
+/* ── the model loading strip (K1-10; compact above the input box, D-096) ── */
 
 .waking {
   display: flex;
   align-items: center;
-  gap: 14px;
-  width: fit-content;
-  max-width: 100%;
-  margin: 4px 0 18px;
-  padding: 12px 18px 12px 14px;
-  border: 1px solid color-mix(in srgb, var(--accent) 35%, var(--line));
-  border-radius: var(--radius);
-  background: color-mix(in srgb, var(--accent) 7%, var(--panel));
+  gap: 10px;
+  width: min(var(--column), calc(100% - 48px));
+  min-height: 34px;
+  margin: 0 auto 8px;
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: var(--panel);
+  font-size: 13px;
 }
 
-.waking-avatar {
-  position: relative;
+.waking-main {
   flex: none;
-  width: 34px;
-  height: 34px;
-  border-radius: 50%;
-  background: radial-gradient(circle at 35% 30%, color-mix(in srgb, var(--accent) 55%, #fff), var(--accent));
-  animation: breathe 3.2s ease-in-out infinite;
-}
-
-.zz {
-  position: absolute;
-  top: -6px;
-  right: -4px;
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  opacity: 0;
-  animation: drift 2.4s ease-out infinite;
-}
-
-.zz:nth-child(2) {
-  animation-delay: 0.8s;
-}
-
-.zz:nth-child(3) {
-  animation-delay: 1.6s;
-}
-
-@keyframes breathe {
-  50% {
-    transform: scale(1.06);
-    filter: brightness(1.08);
-  }
-}
-
-@keyframes drift {
-  0% {
-    opacity: 0;
-    transform: translate(0, 4px) scale(0.7);
-  }
-  30% {
-    opacity: 0.9;
-  }
-  100% {
-    opacity: 0;
-    transform: translate(10px, -16px) scale(1.15);
-  }
-}
-
-.waking-text {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-  min-width: 0;
+  font-weight: 500;
+  white-space: nowrap;
 }
 
 .waking-line {
+  flex: 1;
+  min-width: 0;
+  overflow: hidden;
+  color: var(--muted);
+  text-overflow: ellipsis;
+  white-space: nowrap;
   animation: fade-in 0.5s ease;
 }
 
-.waking-meta {
+.waking-time {
+  flex: none;
   color: var(--muted);
-  font-size: 12px;
   font-variant-numeric: tabular-nums;
-  overflow-wrap: anywhere;
 }
 
 .waking.failed {
+  flex-wrap: wrap;
   border-color: var(--danger);
-  background: color-mix(in srgb, var(--danger) 12%, var(--bg));
+  background: color-mix(in srgb, var(--danger) 10%, var(--panel));
+}
+
+.waking.failed .waking-line {
+  white-space: normal;
+  overflow-wrap: anywhere;
 }
 
 .waking-actions {
   display: flex;
   gap: 6px;
+  margin-left: auto;
 }
 
 .waking-actions button {
-  padding: 5px 10px;
+  padding: 3px 10px;
   border: 1px solid var(--line);
-  border-radius: 8px;
+  border-radius: 7px;
   background: var(--panel-2);
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -2416,15 +2443,9 @@ button:disabled {
 
 @media (prefers-reduced-motion: reduce) {
   .spinner,
-  .waking-avatar,
-  .zz,
   .waking-line,
   .waking.awake {
     animation: none;
-  }
-
-  .zz:first-child {
-    opacity: 0.8;
   }
 }
 
