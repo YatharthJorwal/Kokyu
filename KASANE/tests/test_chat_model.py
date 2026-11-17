@@ -351,6 +351,25 @@ def test_model_and_effort_are_saved_on_the_thread_and_used_by_the_next_turn(kern
         assert stored[0]["model_ref"] == LOCAL and stored[0]["effort"] == "low"
 
 
+def test_the_unpriced_notice_reaches_the_window_and_the_turn_goes_on(kernel, monkeypatch):
+    # D-083: a notice from the router is shown, not treated as a failure
+    client, _ = kernel
+
+    async def noticed(role, messages, tools, **kwargs):
+        yield {"type": "notice", "text": "No listed price."}
+        yield {"type": "content", "text": "fine [happy]"}
+
+    monkeypatch.setattr(router, "stream_with_tools", noticed)
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hi"}})
+        _, seen = _until(ws, "turn_done")
+    errors = [m["data"] for m in seen if m["type"] == "error"]
+    assert errors == [{"code": "price_unknown", "message": "No listed price.", "reply_to": None}]
+    assert "".join(m["data"]["text"] for m in seen if m["type"] == "token") == "fine [happy]"
+
+
 def test_effort_is_remembered_per_model_in_the_thread(kernel):
     # FR-M-11: back on a model, its effort comes back; a model used for the first time starts at its default
     client, _ = kernel

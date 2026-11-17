@@ -36,6 +36,8 @@ COMPLEXITY_THRESHOLD = "COMPLEXITY_THRESHOLD"
 LOCAL_DEFAULT = "LOCAL_DEFAULT"
 # K1-00c (D-025): the `chat` role runs on the user's selection.
 USER_SELECTED = "USER_SELECTED"
+# D-083: the user's pick runs though the catalog has no price; the cap cannot count it.
+USER_SELECTED_UNPRICED = "USER_SELECTED_UNPRICED"
 AMBIENT_CONTEXT = "AMBIENT_CONTEXT"
 MODEL_UNSUPPORTED = "MODEL_UNSUPPORTED"
 OTHER_PROVIDER = "OTHER_PROVIDER"
@@ -154,9 +156,11 @@ def decide_chat(
     6. API model, ambient capture -> blocked AMBIENT_CONTEXT (FR-R-7)
     7. provider off / no key      -> blocked CLOUD_DISABLED
     8. recently unreachable       -> blocked OFFLINE
-    9. no price, a cap is on      -> blocked PRICE_UNKNOWN (D-058)
-    9b. over a spending cap       -> blocked BUDGET_EXHAUSTED
-    10. otherwise                 -> that API model. User-attached files
+    9. over a spending cap        -> blocked BUDGET_EXHAUSTED (an unpriced model too:
+                                     a reached cap, or a cap of 0, stops every API call)
+    10. no price, a cap is on     -> that API model, USER_SELECTED_UNPRICED (D-083):
+                                     its cost is not counted against the cap
+    11. otherwise                 -> that API model. User-attached files
         (trust=untrusted, not ambient) may go (D-025 rule 4).
     """
 
@@ -194,10 +198,10 @@ def decide_chat(
         return decision(CLOUD_DISABLED, target, blocked=True)
     if state.offline_until and now < state.offline_until:
         return decision(OFFLINE, target, blocked=True)
-    if _price_unknown(budget, state):
-        return decision(PRICE_UNKNOWN, target, blocked=True)
     if _budget_exhausted(budget, state):
         return decision(BUDGET_EXHAUSTED, target, blocked=True)
+    if _price_unknown(budget, state):
+        return decision(USER_SELECTED_UNPRICED, target)
     return decision(USER_SELECTED, target)
 
 

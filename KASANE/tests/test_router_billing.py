@@ -10,7 +10,7 @@ import sqlite3
 import pytest
 
 import config
-from router import Router
+from router import UNPRICED_NOTICE, Router
 from router import decision as d
 from router.audit import AuditWriter
 from router.budget import SpendLedger
@@ -151,19 +151,37 @@ async def test_calls_started_together_cannot_all_pass_the_cap(tmp_path):
     assert router._reserved_usd == pytest.approx(0.0)
 
 
-@pytest.mark.asyncio
-async def test_a_model_without_a_price_is_refused_while_a_cap_is_on(tmp_path):
-    class Unpriced(FakeCatalog):
-        def priced(self, model):
-            return False
+class Unpriced(FakeCatalog):
+    def priced(self, model):
+        return False
 
+    def price(self, model):
+        return (0.0, 0.0)
+
+
+@pytest.mark.asyncio
+async def test_a_model_without_a_price_runs_under_a_cap_with_one_notice(tmp_path):
+    # D-083, FR-R-2: it runs, uncounted, and the user is told once per model
+    router = router_with(tmp_path, Scripted(ModelChunk.content("hi"), ModelChunk.done(Usage(1, 1))), catalog=Unpriced())
+    messages = [{"role": "user", "content": "hi"}]
+    first = [e async for e in router.stream_with_tools("chat", messages, [], model_ref=API)]
+    assert first[0] == {"type": "notice", "text": UNPRICED_NOTICE} and {"type": "content", "text": "hi"} in first
+    again = [e async for e in router.stream_with_tools("chat", messages, [], model_ref=API)]
+    assert all(e["type"] != "notice" for e in again)
+    assert [row[0] for row in ledger_rows(tmp_path)] == [0.0, 0.0]   # recorded, costing nothing against the cap
+    started = [r for r in audit_rows(tmp_path) if r["event"] == "model.call.started"]
+    assert started[0]["reason"] == d.USER_SELECTED_UNPRICED
+
+
+@pytest.mark.asyncio
+async def test_a_reached_cap_still_stops_a_model_without_a_price(tmp_path):
     cloud = Scripted(ModelChunk.done(Usage(1, 1)))
     with pytest.raises(RouteBlockedError) as blocked:
-        await drain(router_with(tmp_path, cloud, catalog=Unpriced()), ask())
-    assert blocked.value.reason == d.PRICE_UNKNOWN and "price" in blocked.value.message
+        await drain(router_with(tmp_path, cloud, catalog=Unpriced(), hourly_usd=0.0), ask())
+    assert blocked.value.reason == d.BUDGET_EXHAUSTED and cloud.requests == []
     router = router_with(tmp_path, cloud, catalog=Unpriced(), hourly_usd=-1.0, daily_usd=-1.0, monthly_usd=-1.0)
-    await drain(router, ask())                                  # no cap to keep: it runs, and is recorded
-    assert len(cloud.requests) == 1 and len(ledger_rows(tmp_path)) == 1
+    events = [e async for e in router.stream_with_tools("chat", [{"role": "user", "content": "hi"}], [], model_ref=API)]
+    assert all(e["type"] != "notice" for e in events)          # no cap on: nothing to tell
 
 
 @pytest.mark.asyncio

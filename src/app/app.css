@@ -769,6 +769,11 @@ button:disabled {
   background: color-mix(in srgb, var(--danger) 12%, var(--bg));
 }
 
+.notice.info {
+  border-color: var(--line);
+  background: var(--panel);
+}
+
 .turn-failure {
   align-self: flex-start;
   max-width: min(560px, 90%);

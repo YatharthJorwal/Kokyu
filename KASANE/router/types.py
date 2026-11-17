@@ -74,7 +74,7 @@ class ModelRequest:
 
 @dataclass(frozen=True)
 class ModelChunk:
-    kind: str                                   # content | tool_calls | usage | done
+    kind: str                                   # content | tool_calls | usage | done | notice
     text: str = ""
     calls: tuple[dict[str, Any], ...] = ()
     usage: Usage | None = None

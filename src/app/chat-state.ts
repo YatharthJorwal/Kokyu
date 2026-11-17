@@ -432,9 +432,10 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       const data = frame.data as ServerData["error"];
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };
       const failedTurn = data.code === "model_blocked" || data.code === "model_failed";
-      // A failed turn still ends with turn_done; turn_running and a screen-companion
-      // refusal are not about the turn at all. Anything else refused the send itself.
-      const keepsTurn = failedTurn || data.code === "turn_running" || data.code === "vision_unavailable";
+      // A failed turn still ends with turn_done; turn_running, a screen-companion refusal
+      // and the unpriced-model notice (D-083) do not stop the turn. Anything else refused the send.
+      const keepsTurn =
+        failedTurn || data.code === "turn_running" || data.code === "vision_unavailable" || data.code === "price_unknown";
       // A store failure answers a pending card save (the kernel sends no list then).
       const scenarioSave = state.scenarioSave === "pending" && data.code === "threads_unavailable" ? "failed" : state.scenarioSave;
       // A refused Start roleplay (turn_running, threads_unavailable): the dialog stays open.

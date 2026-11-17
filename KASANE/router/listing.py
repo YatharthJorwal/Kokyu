@@ -166,7 +166,7 @@ def llamacpp_rows(cfg: LlamaCppConfig) -> list[dict[str, Any]]:
     return rows
 
 
-def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> list[dict[str, Any]]:
+def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter", caps_on: bool = False) -> list[dict[str, Any]]:
     """Chat models from the provider catalog. Without a key they are listed but
     not selectable: picking one would only be refused (CLOUD_DISABLED)."""
     if catalog is None or not catalog.available:
@@ -177,6 +177,9 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> l
         if info is None or info.kind not in ("language", "", "chat", "text"):
             continue
         detail = [f"{info.context_length // 1000}k context"] if info.context_length else []
+        unpriced = caps_on and not info.priced
+        if unpriced:
+            detail.append("price unknown, not counted against the cap")   # D-083
         vendor, _, name = model_id.partition("/")
         rows.append(
             {
@@ -193,6 +196,7 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter") -> l
                 "fits": None,
                 "price_in": info.price_in or None,
                 "price_out": info.price_out or None,
+                "unpriced": unpriced,
                 "tags": list(info.tags) + (["zdr"] if getattr(info, "zdr", False) else []),
                 "efforts": capabilities.efforts_for(f"api:{backend}/{model_id}", info.tags),
             }
@@ -306,7 +310,9 @@ async def model_list(
     catalog = getattr(rt, "catalog", None)   # a key change during the refresh swaps it
     key_present = bool(getattr(rt, "api_key_present", False))
     status = rt.api_status() if hasattr(rt, "api_status") else None
-    api = api_rows(catalog, key_present=key_present, backend=status["id"] if status else "airouter")
+    caps = (cfg.budget.hourly_usd, cfg.budget.daily_usd, cfg.budget.monthly_usd)
+    caps_on = cfg.budget.enabled and any(cap >= 0 for cap in caps)
+    api = api_rows(catalog, key_present=key_present, backend=status["id"] if status else "airouter", caps_on=caps_on)
 
     spend = None
     ledger = getattr(rt, "ledger", None)

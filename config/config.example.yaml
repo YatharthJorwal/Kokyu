@@ -47,7 +47,7 @@ providers:
     # ignored). For another endpoint, use your own id (a-z, 0-9, _) and set
     #   base_url: 'https://...'      (https, or plain http to this PC only)
     #   api_key_env: 'MY_API_KEY'
-    #   price_unit: 'per_million'    # per_million | per_token | none (no prices: blocked while a cap is on)
+    #   price_unit: 'per_million'    # per_million | per_token | none (no prices: models run, not counted against a cap)
     #   models_url, models_cache     (default: <base_url>/models, data/<id>_models.json)
     preset: 'airouter'
     enabled: true
@@ -165,7 +165,6 @@ budget:
   hourly_usd: 0.25
   daily_usd: 1.50
   monthly_usd: 20.00
-  on_exhausted: 'local_only'
   prices: 'from_provider'
   # SQLite ledger so caps survive a restart. A cap of 0 means "never spend".
   ledger_path: 'data/spend.db'

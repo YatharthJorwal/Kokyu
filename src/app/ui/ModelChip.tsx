@@ -184,7 +184,9 @@ function Row({
           {current ? "✓" : ""}
         </span>
         <span className="row-label">{row.label}</span>
-        <span className={row.note ? "row-meta row-note" : "row-meta"}>{row.note ?? size ?? price ?? ""}</span>
+        <span className={row.note ? "row-meta row-note" : "row-meta"}>
+          {row.note ?? size ?? price ?? (row.unpriced ? "price unknown" : "")}
+        </span>
         <span className="row-fit">
           {row.note ? null : row.fits === false ? (
             <span className="no-fit" title="Not enough free graphics memory beside the helper models">

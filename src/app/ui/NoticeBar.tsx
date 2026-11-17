@@ -11,7 +11,8 @@ export function NoticeBar() {
   const canRetry = useChat(canRegenerate);
   if (!notice) return null;
   return (
-    <div className="notice" role="alert">
+    // D-083: the unpriced-model notice informs; it is not an error
+    <div className={notice.code === "price_unknown" ? "notice info" : "notice"} role={notice.code === "price_unknown" ? "status" : "alert"}>
       <span className="notice-text">{notice.text}</span>
       <span className="notice-actions">
         {notice.actions.includes("retry") && canRetry ? (

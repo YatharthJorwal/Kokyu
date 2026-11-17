@@ -88,6 +88,16 @@ def test_api_rows_come_from_the_catalog_and_need_a_key(tmp_path):
     assert listing.api_rows(None, key_present=True) == []
 
 
+def test_an_unpriced_model_is_labelled_only_while_a_cap_is_on(tmp_path):
+    # D-083, FR-R-2
+    cat = catalog(tmp_path, [ModelInfo("vendor/free-1", context_length=32_000, priced=False)])
+    [row] = listing.api_rows(cat, key_present=True, caps_on=True)
+    assert row["unpriced"] is True
+    assert row["detail"] == "32k context · price unknown, not counted against the cap"
+    [row] = listing.api_rows(cat, key_present=True)
+    assert row["unpriced"] is False and "price unknown" not in row["detail"]
+
+
 @pytest.mark.asyncio
 async def test_model_list_puts_it_together_with_the_spend_footer(tmp_path):
     gguf = tmp_path / "big.gguf"

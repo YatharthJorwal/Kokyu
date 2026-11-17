@@ -78,6 +78,7 @@ export const ERROR_CODES = [
   "model_failed",
   "vision_unavailable",
   "observer",
+  "price_unknown",
 ] as const;
 
 /** D-061: voice mode (replies spoken; the mic in K2). It starts only when turned on. */
@@ -173,6 +174,8 @@ export interface ModelRow {
   fits: boolean | null;
   price_in?: number | null;
   price_out?: number | null;
+  /** No catalog price while a cap is on: it runs, not counted against the cap (D-083). */
+  unpriced?: boolean;
   tags?: string[];
   /** API rows: the vendor the model is listed under (FR-M-4). */
   group?: string | null;

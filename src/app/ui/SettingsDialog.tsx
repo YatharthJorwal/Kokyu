@@ -216,8 +216,8 @@ function CustomApiForm({ prefs, saving }: { prefs: SettingsData; saving: Saving 
         <FormStatus text={saving.status("custom")} failed={saving.failed("custom")} />
       </div>
       <p className="muted settings-hint">
-        Any OpenAI-compatible API. Save its key with Key in the model picker. Its models have no listed prices, so they run
-        only while the budget is off.
+        Any OpenAI-compatible API. Save its key with Key in the model picker. Its models have no listed prices, so what they
+        cost is not counted against your spending cap.
       </p>
     </form>
   );

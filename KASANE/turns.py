@@ -481,6 +481,10 @@ async def run_turn(
                 if event["type"] == "usage":
                     usage = event
                     continue
+                if event["type"] == "notice":
+                    notice = {"code": "price_unknown", "message": event["text"], "reply_to": None}
+                    await websocket.send_json(protocol.frame("error", notice, thread=thread_id))
+                    continue
                 buffer += dialogue.feed(event["text"]) if dialogue is not None else event["text"]
                 raw_text += event["text"]
                 if event["text"]:

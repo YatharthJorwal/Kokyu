@@ -199,7 +199,6 @@ class BudgetConfig:
     hourly_usd: float = 0.25
     daily_usd: float = 1.50
     monthly_usd: float = 20.00
-    on_exhausted: str = "local_only"
     prices: str = "from_provider"
     # SQLite ledger, so caps survive a restart. A cap of 0 means "never spend";
     # a negative cap means unlimited.

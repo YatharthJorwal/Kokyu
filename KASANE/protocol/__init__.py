@@ -273,6 +273,7 @@ ERROR_CODES: tuple[str, ...] = (
     "model_failed",
     "vision_unavailable",   # K1-05b (FR-SC-3): no local model can see the screen
     "observer",             # another window drives the conversation
+    "price_unknown",        # D-083: said once; the turn goes on
 )
 
 

@@ -185,6 +185,13 @@ test("turn_running while busy does not end the turn; other errors show a notice"
   assert.equal(s.notice.text, "Wait");
 });
 
+test("the unpriced-model notice is shown and the reply goes on (D-083)", () => {
+  let s = run(online, frame("turn_start", { user_text: "a" }));
+  s = reduce(s, frame("error", { code: "price_unknown", message: "No listed price.", reply_to: null }, null));
+  assert.equal(s.turn, "thinking");
+  assert.equal(s.notice.text, "No listed price.");
+});
+
 test("frames for another thread are ignored; the list stays sorted and hides archived threads", () => {
   let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
   s = reduce(s, frame("token", { text: "stray" }, "t2"));

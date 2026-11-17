@@ -71,8 +71,10 @@ BLOCKED_MESSAGES = {
     decide_mod.OTHER_PROVIDER: "This thread's model comes from another API provider than the one whose key is saved now. Switch model, or save that provider's key.",
     decide_mod.OFFLINE: "The API provider didn't answer a moment ago. Retry, or switch model.",
     decide_mod.BUDGET_EXHAUSTED: "Your spending cap is reached. Raise it in Settings, or switch model.",
-    decide_mod.PRICE_UNKNOWN: "The model list has no price for this model, so your spending cap can't be kept. Refresh the list, or switch model.",
 }
+
+# D-083: said once per model, the first time it runs while a cap is on.
+UNPRICED_NOTICE = "This model has no listed price, so what it costs is not counted against your spending cap."
 
 
 def blocked_message(reason: str) -> str:
@@ -124,6 +126,8 @@ class Router:
         # Worst-case cost of AI Router calls still running: the cap counts them
         # before they finish, so calls started together cannot all pass it (FR-R-2).
         self._reserved_usd = 0.0
+        # shortcut: remembered for this run only, so the notice comes back after a restart; persist it if that grates
+        self._told_unpriced: set[str | None] = set()
         self._cloud_cfg: ProviderConfig | None = cloud_cfg
 
     @staticmethod
@@ -428,6 +432,9 @@ class Router:
         if decision.blocked:
             await asyncio.to_thread(self._audit_blocked, request, decision)
             raise RouteBlockedError(decision.reason, blocked_message(decision.reason), request.model_ref)
+        if decision.reason == decide_mod.USER_SELECTED_UNPRICED and request.model_ref not in self._told_unpriced:
+            self._told_unpriced.add(request.model_ref)
+            yield ModelChunk(kind="notice", text=UNPRICED_NOTICE)
         chain = self._execution_chain(decision)
         first = chain[0]
         executed_decision = dataclasses.replace(decision, executed=first)
@@ -741,6 +748,8 @@ class Router:
         async for chunk in self.complete(request):
             if chunk.kind == "content":
                 yield {"type": "content", "text": chunk.text}
+            elif chunk.kind == "notice":
+                yield {"type": "notice", "text": chunk.text}
             elif chunk.kind == "tool_calls":
                 yield {"type": "tool_calls", "calls": list(chunk.calls)}
             elif chunk.kind == "usage" and chunk.usage is not None and not chunk.usage.estimated:
