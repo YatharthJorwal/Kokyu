@@ -78,7 +78,7 @@ class Selection:
     card: str | None = None
     facts: list[dict[str, Any]] = field(default_factory=list)
     episodes: list[dict[str, Any]] = field(default_factory=list)
-    path: str = "vector"  # vector | keyword
+    path: str = "vector"  # vector | keyword | card (a roleplay turn: the profile card only)
     tokens: int = 0
 
     @property
@@ -218,6 +218,25 @@ async def build_recall_context(user_text: str, top_k: int = DEFAULT_TOP_K, *, bu
 
     await _record(fitted, budget)
     return PREAMBLE + " ".join(parts)
+
+
+async def build_profile_context(framing: str, *, budget: str = "reflex") -> str | None:
+    """The profile card alone, for a roleplay turn (FR-MODE-4, D-074): no facts or
+    episodes, so chat memories never drift into a story, and no embedding call.
+    `framing` is a format string with a `{card}` field that says this is the real
+    person, not their role. Trimmed and audited like build_recall_context; None when
+    there is no card or memory is unavailable."""
+    cfg = settings.section("recall")
+    try:
+        card = await asyncio.to_thread(store.get_profile_card)
+    except MemoryUnavailableError as exc:
+        log.warning(f"memory recall: unavailable, skipping the profile card: {exc}")
+        return None
+    fitted = fit(Selection(card=card, path="card"), int(cfg[budget]["tokens"]))
+    if not fitted.card:
+        return None
+    await _record(fitted, budget)
+    return framing.format(card=fitted.card)
 
 
 async def _record(fitted: Selection, budget: str) -> None:

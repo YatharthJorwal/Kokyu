@@ -21,6 +21,7 @@ import context_budget
 import hub
 import llm
 import model_loader
+import prompting
 import protocol
 import router
 import tools
@@ -236,6 +237,12 @@ def trim_history(history: list[dict[str, str]], temp_turn_flags: list[bool] | No
     history[:] = [system] + turns
 
 
+def reply_text(raw: str) -> str:
+    """The reply as it is kept and shown (D-074): the raw streamed text with the
+    trailing emotion tag removed and the ends trimmed. Line breaks inside stay."""
+    return extract_emotion_tag(raw)[0].strip()
+
+
 async def run_turn(
     websocket: WebSocket,
     history: list[dict[str, str]],
@@ -248,6 +255,8 @@ async def run_turn(
     effort: str | None = None,
     unprompted: list[dict[str, str]] | None = None,
     attachment: str | None = None,
+    *,
+    mode: str = "chat",
 ) -> None:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, speak each sentence chunk as it's ready, commit (or roll back)
@@ -268,7 +277,15 @@ async def run_turn(
     per-turn rather than as a single per-session flag, and consolidation
     time (Session.saver) for where it actually gets used. None
     means "don't bother" (there's nowhere to track it, or this call site
-    doesn't care) -- every real call site passes a real list."""
+    doesn't care) -- every real call site passes a real list.
+
+    mode: the thread's conversation mode (FR-MODE-1, D-074), from the THREAD only.
+    A roleplay turn reads only the profile card, runs no forget, Task Guide or look
+    intent, offers no tools and is not written to transcript_log, so nothing from a
+    story reaches app memory (FR-MODE-4). The router role is "chat" in both modes."""
+    if mode not in prompting.MODE_LAYERS:
+        raise ValueError(f"unknown conversation mode: {mode!r}")
+    roleplay = mode == "roleplay"
     history.append({"role": "user", "content": user_text})
     if temp_turn_flags is not None:
         temp_turn_flags.append(temp_mode)
@@ -286,8 +303,10 @@ async def run_turn(
     # Phase 4 Round 2: any real user turn counts as "they're still here,"
     # regardless of whether it's about the tracked task at all -- resets
     # Task Guide Mode's idle clock (see task_guide.is_idle/_task_guide_loop
-    # below). A no-op if nothing's actually being tracked.
-    task_guide.mark_interaction()
+    # below). A no-op if nothing's actually being tracked. Not in a roleplay
+    # (FR-MODE-4): a story is not work on the tracked task.
+    if not roleplay:
+        task_guide.mark_interaction()
     # K1-10 (FR-M-6): the turn runs on the loaded model. A pending or running load
     # of it finishes first (at most chat.load_delay_s extra), so an Ollama turn never
     # starts while llama-server still holds the memory; with nothing loaded yet
@@ -313,9 +332,17 @@ async def run_turn(
     # (a task tracked from a "this doesn't count" conversation chiding
     # the user later in a normal one would defeat the point).
     if temp_mode:
+        # Temp Chat reads nothing, in a roleplay too: not even the profile card (D-074).
         forget_hint = None
         task_hint = None
         memory_block = None
+    elif roleplay:
+        # FR-MODE-4: a "forget that" or a task said inside a story is fiction, so it
+        # must not retire real facts or start a Task Guide task. Recall is the profile
+        # card alone, framed as the real person and not their role in the story.
+        forget_hint = None
+        task_hint = None
+        memory_block = await recall.build_profile_context(prompting.ROLEPLAY_PROFILE_FRAMING)
     else:
         forget_hint = await forget.maybe_forget(user_text)
         # Phase 4 Round 2 fix -- see task_guide.py's own comment on why this
@@ -333,9 +360,13 @@ async def run_turn(
     # itself -- see look_intent.py for the real-log evidence (2 of ~9
     # explicit requests actually fired the tool). Deliberately NOT gated on
     # temp_mode: this is live sensing that gets spliced in for this one
-    # turn, not a read from or write to persistent memory.
-    look_hint = await look_intent.maybe_look(user_text, websocket)
-    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block) if part]
+    # turn, not a read from or write to persistent memory. Never in a roleplay:
+    # "look at me" in a story must not capture the camera (FR-MODE-4).
+    look_hint = None if roleplay else await look_intent.maybe_look(user_text, websocket)
+    # FR-MODE-8: while voice is on, how to shape a reply that is heard. Per turn and
+    # not in history[0]: voice is kernel-wide and toggles, the cached prefix must not.
+    delivery = prompting.delivery_layer(mode) if voice_mode.VOICE.speaking() else None
+    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block, delivery) if part]
 
     if memory_parts:
         combined = " ".join(memory_parts)
@@ -345,6 +376,10 @@ async def run_turn(
 
     buffer = ""
     reply_parts: list[str] = []
+    # Everything the model wrote, untouched (D-074): history, the saved message and
+    # turn_done use it, so Markdown and paragraph breaks survive the stream.
+    # reply_parts and spoken_parts are the speech side, clause by clause.
+    raw_text = ""
     # Pipelined voice: clauses go in as the model writes them, audio comes out
     # in order, synthesizing one clause ahead of playback. The old path awaited
     # TTS inside this loop, so the model's next sentence waited on the voice.
@@ -374,7 +409,9 @@ async def run_turn(
         # Her Task Guide and OCR remarks were written from screen captures: ambient
         # content an API model never sees (FR-SC-3, FR-R-7). `unprompted` holds them by identity.
         messages_for_llm = [m for m in messages_for_llm if not any(m is u for u in unprompted)]
-    offered_tools = tools.offered_schemas(already_looked=bool(look_hint), local_model=local_model)
+    # FR-MODE-4: a roleplay offers no tools; the router role stays "chat" in both modes.
+    offered_tools = [] if roleplay else tools.offered_schemas(already_looked=bool(look_hint), local_model=local_model)
+    offered_names = {schema["function"]["name"] for schema in offered_tools}
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             saw_tool_call = False
@@ -399,7 +436,7 @@ async def run_turn(
                     # model, same as a real multi-tool exchange would.
                     for call in event["calls"]:
                         result_text = await tools.dispatch_tool_call(
-                            call["name"], call["arguments"], websocket=websocket
+                            call["name"], call["arguments"], websocket=websocket, offered=offered_names
                         )
                         tool_messages.append(
                             {
@@ -416,11 +453,14 @@ async def run_turn(
                             }
                         )
                         tool_messages.append({"role": "tool", "content": result_text})
+                    if raw_text and not raw_text[-1].isspace():
+                        raw_text += "\n\n"   # what she said before the tool and after it stay apart
                     break  # re-enter the outer for-loop with results appended
                 if event["type"] == "usage":
                     usage = event
                     continue
                 buffer += event["text"]
+                raw_text += event["text"]
                 if event["text"]:
                     await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
                 timings.mark("first_token")
@@ -445,7 +485,7 @@ async def run_turn(
                     timings.mark("first_clause")
                     await stream.push(styled)
                 await stream.close()
-                if not reply_parts:
+                if not reply_text(raw_text):
                     # The model ended without a word (often a thinking model out of
                     # room): say so, never a silent turn (FR-R-5, D-064).
                     with contextlib.suppress(Exception):
@@ -503,8 +543,9 @@ async def run_turn(
         # LLM-unreachable fallback line above is deliberately NOT added to
         # reply_parts -- it was never really said by her, so it shouldn't
         # end up looking like a real reply in history either.
-        if reply_parts:
-            history.append({"role": "assistant", "content": " ".join(reply_parts)})
+        final_text = reply_text(raw_text)
+        if final_text:
+            history.append({"role": "assistant", "content": final_text})
             if temp_turn_flags is not None:
                 temp_turn_flags.append(temp_mode)
         else:
@@ -530,11 +571,15 @@ async def run_turn(
         # just on normal completion) so the log panel matches reality even
         # for a stopped-mid-sentence turn, same reasoning as the
         # history.append() above.
-        log_id = await log_transcript_turn(user_text, " ".join(spoken_parts), temp_mode, speaker=companions.speaker_of(websocket))
+        # FR-MODE-4: a roleplay exchange never reaches transcript_log, so the memory
+        # writer never distils a story into facts about the real user.
+        log_id = None if roleplay else await log_transcript_turn(
+            user_text, " ".join(spoken_parts), temp_mode, speaker=companions.speaker_of(websocket)
+        )
         # K1-00: the thread store records the exchange (user line, reply text, and
         # whether Stop cut it off, FR-C-2). Same "never fail the turn" rule as the
         # transcript log right above.
-        if reply_parts:
+        if final_text:
             # K1-10: a model that just answered is not "failed to load" any more.
             with contextlib.suppress(Exception):
                 await model_loader.LOADER.mark_ready(model_listing.effective_ref(model_ref, CONFIG))
@@ -543,7 +588,7 @@ async def run_turn(
             try:
                 meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to,
                         "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out")}
-                await on_finished(user_text, " ".join(reply_parts), stopped, {k: v for k, v in meta.items() if v is not None})
+                await on_finished(user_text, final_text, stopped, {k: v for k, v in meta.items() if v is not None})
             except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                 log.warning(f"could not save the exchange to the thread: {exc}")
         with contextlib.suppress(Exception):
@@ -551,7 +596,7 @@ async def run_turn(
                 protocol.frame(
                     "turn_done",
                     {
-                        "text": " ".join(reply_parts),
+                        "text": final_text,
                         "stopped": isinstance(sys.exc_info()[1], asyncio.CancelledError),
                         "emotion": detected_emotion,   # the avatar's expression (K2)
                     },

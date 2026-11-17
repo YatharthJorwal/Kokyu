@@ -121,6 +121,22 @@ async def test_dispatch_unknown_tool_name():
 
 
 @pytest.mark.asyncio
+async def test_dispatch_refuses_a_tool_this_turn_did_not_offer(monkeypatch, caplog):
+    # D-074 (FR-MODE-4, FR-R-7): a model can emit a tool it was not given; it never runs.
+    ran = []
+
+    async def fake_describe_screen():
+        ran.append(True)
+        return "a desk"
+
+    monkeypatch.setattr(vision, "describe_screen", fake_describe_screen)
+    assert await tools.dispatch_tool_call("capture_screen", {}, offered=set()) == tools.NOT_OFFERED_RESULT
+    assert await tools.dispatch_tool_call("capture_screen", {}, offered={"read_clipboard"}) == tools.NOT_OFFERED_RESULT
+    assert ran == [] and "capture_screen" in caplog.text
+    assert await tools.dispatch_tool_call("capture_screen", {}, offered={"capture_screen"}) == "a desk"
+
+
+@pytest.mark.asyncio
 async def test_dispatch_tool_unavailable_becomes_text_not_exception(monkeypatch):
     async def failing_describe_screen():
         raise vision.ToolUnavailableError("no display")

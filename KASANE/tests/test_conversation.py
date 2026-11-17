@@ -15,9 +15,9 @@ import prompting
 import router
 import turns
 import waifus
-from audio import tts
+from audio import tts, voice_mode
 from conversation import ConversationManager, Speaker, history_from
-from memory import writer
+from memory import recall, writer
 from senses import look_intent
 from threads import ThreadStore
 from waifu_fixtures import make_pack
@@ -540,3 +540,51 @@ def test_a_companion_switch_and_a_regenerate_keep_the_roleplay_layer(kernel, mon
     registry = waifus.get_registry()
     alpha, beta = registry.get("alpha").prompt.rstrip(), registry.get("beta").prompt.rstrip()
     assert seen[0]["system"].removeprefix(alpha) == seen[1]["system"].removeprefix(beta)
+
+
+def test_a_roleplay_thread_keeps_its_story_out_of_the_transcript_and_regenerates(kernel, monkeypatch):
+    """FR-MODE-4 (K1c-03): over the socket, a roleplay turn (Temp off) gets the profile
+    card and no tools, is never written to transcript_log, keeps its paragraphs in the
+    saved reply, and Regenerate replaces it with no transcript row to drop."""
+    logged, dropped, seen = [], [], []
+    replies = iter(["*She looks up.*\n\nOh, it's you. [happy]", "*She waves.*\n\n\"Over here!\" [happy]",
+                    "Two. [neutral]"])
+
+    async def recording_log(user_text, assistant_text, temp=False, speaker=None):
+        logged.append(user_text)
+        return 7
+
+    async def recording_drop(row_id):
+        dropped.append(row_id)
+
+    async def card(framing, **_k):
+        return framing.format(card="Sam.")
+
+    async def recording(role, messages, offered, **kwargs):
+        seen.append({"role": role, "tools": list(offered), "notes": [m["content"] for m in messages[1:] if m["role"] == "system"]})
+        yield {"type": "content", "text": next(replies)}
+
+    monkeypatch.setattr(turns, "log_transcript_turn", recording_log)
+    monkeypatch.setattr(turns, "drop_transcript_turn", recording_drop)
+    monkeypatch.setattr(recall, "build_profile_context", card)
+    monkeypatch.setattr(router, "stream_with_tools", recording)
+    monkeypatch.setattr(voice_mode.VOICE, "on", False)   # no delivery note in this test
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        thread = _new_roleplay(ws)
+        _chat(ws, "Hello?")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        done, _ = _until(ws, "turn_done")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
+        _until(ws, "thread_opened")
+        _temp_on(ws)
+        _chat(ws, "1 + 1?")
+    assert done["data"]["text"] == "*She waves.*\n\n\"Over here!\""
+    stored = conversation.get_manager().store.messages(thread["id"])
+    assert [(m.role, m.content) for m in stored] == [("user", "Hello?"), ("assistant", "*She waves.*\n\n\"Over here!\"")]
+    assert "log_id" not in (stored[-1].meta or {})
+    assert logged == ["1 + 1?"] and dropped == []          # only the chat thread's turn reached the transcript
+    assert seen[0]["tools"] == [] and seen[0]["role"] == "chat" and seen[0]["notes"] == [
+        prompting.ROLEPLAY_PROFILE_FRAMING.format(card="Sam.")
+    ]
+    assert seen[2]["tools"]                                # the chat thread offers tools again

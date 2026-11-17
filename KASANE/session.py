@@ -216,6 +216,14 @@ class Session:
         effort = self.thread.effort if self.thread is not None else None
         return {"model_ref": model_ref or CONFIG.chat.default_model_ref, "effort": effort or CONFIG.chat.default_effort}
 
+    def thread_mode(self) -> str:
+        """The open thread's conversation mode (FR-MODE-1); chat with no thread. From
+        the thread only, never from the companion (FR-W-3, D-074)."""
+        return str(conversation.prompt_layers(self.thread)["mode"])
+
+    def in_roleplay(self) -> bool:
+        return self.thread_mode() == "roleplay"
+
     def system_prompt(self, thread: Any = None) -> str:
         """history[0]: the window's companion's persona with the layers of `thread` (the
         open thread by default): its mode and scenario card (FR-MODE-2, D-074). The one
@@ -362,6 +370,7 @@ class Session:
             unprompted=self.unprompted,
             **({"attachment": attachment} if attachment is not None else {}),
             **self.thread_model(),
+            mode=self.thread_mode(),
         )
         self.turn = asyncio.create_task(self._then_switch(turn))
 
@@ -717,6 +726,8 @@ class Session:
             state = task_guide.get_state()
             if not state.active or not task_guide.enabled() or not hub.drives(self.ws):
                 continue
+            if self.in_roleplay():
+                continue   # FR-MODE-9: no remark ever lands in a story
             if task_guide.is_idle(state, CONFIG.task_guide.idle_timeout_seconds):
                 # Stepped away: the task ends quietly, nobody is there to hear a nudge.
                 task_guide.clear_active_task()
@@ -740,6 +751,8 @@ class Session:
             if not state.active or not hub.drives(self.ws):
                 pause_announced = False
                 continue
+            if self.in_roleplay():
+                continue   # FR-MODE-9: no remark ever lands in a story
             paused = CONFIG.ocr_watch.pause_during_task and task_guide.get_state().active
             if paused and not pause_announced:
                 # Said once: "OCR watch does nothing" was reported when a task paused it.

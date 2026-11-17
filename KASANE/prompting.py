@@ -86,6 +86,33 @@ TOOL_GUIDANCE = (
 )
 
 
+# FR-MODE-2, 8: the delivery layer, one text per mode. Not part of the system message:
+# voice is kernel-wide and toggles, so the turn runner adds it to the turn's ephemeral
+# note only while voice is on (D-074), and the cached prefix never changes with it.
+DELIVERY_LAYERS = {
+    "chat": (
+        "Your reply is spoken aloud by your voice right now. Say it in one to three short "
+        "spoken sentences. No lists, Markdown, emoji, symbols, quotation marks, dashes or "
+        "ellipses; write numbers as words; never read out links or code."
+    ),
+    "roleplay": (
+        "Your reply is heard aloud: only what you say is spoken, while your actions are shown "
+        "but not read. Keep the spoken lines short and natural, with no symbols, dashes or "
+        "ellipses inside them, and write numbers as words."
+    ),
+}
+
+# FR-MODE-4: how a roleplay turn is told about the real user (the profile card only).
+ROLEPLAY_PROFILE_FRAMING = "About the real person you are writing with (not their role in the story): {card}"
+
+
+def delivery_layer(mode: str) -> str:
+    """The delivery text for a thread's mode (FR-MODE-8). An unknown mode raises."""
+    if mode not in DELIVERY_LAYERS:
+        raise ValueError(f"unknown conversation mode: {mode!r}")
+    return DELIVERY_LAYERS[mode]
+
+
 def scenario_block(scenario: Mapping[str, Any] | None) -> str:
     """The scenario card as text, or "" when it has nothing filled in (FR-MODE-6)."""
     if not scenario:

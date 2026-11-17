@@ -10,12 +10,19 @@ turn-handling loop itself.
 from __future__ import annotations
 
 import asyncio
+import logging
+from collections.abc import Collection
 from typing import Any, Awaitable, Callable
 
 from senses import camera
 from senses import task_guide
 from config import CONFIG
 from tools import vision
+
+log = logging.getLogger(__name__)
+
+# What the model gets back when it calls a tool this turn did not offer (D-074).
+NOT_OFFERED_RESULT = "(that tool is not available here)"
 
 TOOL_SCHEMAS: list[dict[str, Any]] = [
     {
@@ -192,7 +199,9 @@ _HANDLERS: dict[str, Callable[..., Awaitable[str]]] = {
 }
 
 
-async def dispatch_tool_call(name: str, arguments: dict[str, Any], websocket: Any = None) -> str:
+async def dispatch_tool_call(
+    name: str, arguments: dict[str, Any], websocket: Any = None, *, offered: Collection[str] | None = None
+) -> str:
     """Runs one tool call by name and always returns a plain string --
     either the real result, the tool's own failure message
     (ToolUnavailableError), or a note that the model asked for a tool
@@ -204,7 +213,16 @@ async def dispatch_tool_call(name: str, arguments: dict[str, Any], websocket: An
     need it) rather than given its own special-cased call path, purely
     so capture_camera -- the one tool that genuinely needs it, see
     camera.py -- doesn't need different wiring than the rest.
+
+    offered: the names of the tools this turn actually offered. A model can still
+    emit a tool it was not given (a local model copying earlier tool use, a template
+    that parses tool-call text), so anything outside it is refused and never runs:
+    no capture in a roleplay (FR-MODE-4), no screen, camera or clipboard read for an
+    API model (FR-R-7). None means no limit (direct callers and older tests).
     """
+    if offered is not None and name not in offered:
+        log.warning(f"tools: refused a call to {name!r}, which this turn did not offer")
+        return NOT_OFFERED_RESULT
     handler = _HANDLERS.get(name)
     if handler is None:
         return f"(no such tool: {name!r})"

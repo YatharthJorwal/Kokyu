@@ -56,14 +56,15 @@ async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day.", 
     monkeypatch.setattr(turns, "log_transcript_turn", no_log)
     ws = FakeWebSocket(waifu)
     history = [{"role": "system", "content": companions.system_message(waifu, mode=mode, scenario=scenario)}]
-    await turns.run_turn(ws, history, user_text, True, [])   # Temp Chat: no memory reads or writes
+    # Temp Chat: no memory reads or writes. The mode is the thread's, the same for both companions.
+    await turns.run_turn(ws, history, user_text, True, [], mode=mode)
     return calls, voices, history
 
 
 @pytest.mark.parametrize(("mode", "scenario"), [("chat", None), ("roleplay", CARD), ("roleplay", None)])
 @pytest.mark.asyncio
 async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(registry, monkeypatch, mode, scenario):
-    voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
+    monkeypatch.setattr(voice_mode.VOICE, "on", True)   # these exercise the spoken path (voice mode on, D-061)
     a_calls, a_voices, a_hist = await _run_turn_as(registry.get("alpha"), monkeypatch, mode=mode, scenario=scenario)
     b_calls, b_voices, b_hist = await _run_turn_as(registry.get("beta"), monkeypatch, mode=mode, scenario=scenario)
 
@@ -86,6 +87,10 @@ async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(regi
     else:
         assert a_system.endswith(prompting.APP_ADDENDUM) and prompting.TOOL_GUIDANCE not in a_system
         assert (prompting.SCENARIO_HEADING in a_system) == bool(scenario)
+        assert a["tools"] == [] and a["role"] == "chat"   # FR-MODE-4: no tools, same router role
+    # FR-MODE-8: voice is on here, so both get the same delivery note for the thread's mode
+    a_notes = [m["content"] for m in a["messages"][1:] if m["role"] == "system"]
+    assert a_notes == [prompting.DELIVERY_LAYERS[mode]]
     assert a["messages"][0]["content"].startswith("You are Alpha") and b["messages"][0]["content"].startswith("You are Beta")
 
     assert a_voices and b_voices
