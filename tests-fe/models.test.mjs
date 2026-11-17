@@ -67,6 +67,8 @@ const thread = (model_ref = null) => ({
   effort: null,
   temp: false,
   archived: false,
+  mode: "chat", // FR-MODE-1: what the kernel sends for a chat thread
+  scenario: {},
 });
 const online = { kind: "status", status: "online" };
 

@@ -50,10 +50,15 @@ def speaker_of(websocket: Any) -> str | None:
     return active.name if active else None
 
 
-def system_message(waifu: "waifus.Waifu | None") -> str:
-    """Persona prompt plus the shared app addendum. With no companion installed a
-    neutral fallback persona answers, so a fresh checkout still talks."""
-    return prompting.build_system_prompt(FALLBACK_PERSONA if waifu is None else waifu.prompt)
+def system_message(
+    waifu: "waifus.Waifu | None", *, mode: str = "chat", scenario: "dict[str, Any] | None" = None
+) -> str:
+    """Her persona prompt with the thread's layers (FR-MODE-2). The companion picks
+    only the persona text; `mode` and `scenario` come from the thread and are the same
+    for every companion (FR-W-3, D-074). With no companion installed a neutral
+    fallback persona answers, so a fresh checkout still talks."""
+    persona_text = FALLBACK_PERSONA if waifu is None else waifu.prompt
+    return prompting.build_system_prompt(persona_text, mode=mode, scenario=scenario)
 
 
 def _active_id_path() -> Path:
@@ -92,15 +97,23 @@ async def send_waifu_state(websocket: Any, registry: "waifus.WaifuRegistry", pen
 
 
 async def apply_switch(
-    websocket: Any, history: list[dict[str, str]], registry: "waifus.WaifuRegistry", waifu_id: str
+    websocket: Any,
+    history: list[dict[str, str]],
+    registry: "waifus.WaifuRegistry",
+    waifu_id: str,
+    *,
+    mode: str = "chat",
+    scenario: "dict[str, Any] | None" = None,
 ) -> "waifus.Waifu | None":
     """Changes ONLY the persona text and the voice. History, model, effort, memory and
-    tools are untouched (FR-W-3, FR-S-5). Returns None for an unknown id."""
+    tools are untouched (FR-W-3, FR-S-5), and so is the thread's mode: the caller
+    passes the open thread's `mode` and `scenario` (FR-MODE-2), so a switch inside a
+    roleplay keeps the roleplay layer. Returns None for an unknown id."""
     target = registry.get(waifu_id)
     if target is None:
         return None
     websocket.state.waifu = target
-    history[0]["content"] = system_message(target)
+    history[0]["content"] = system_message(target, mode=mode, scenario=scenario)
     save_active_id(target.id)
     await send_waifu_state(websocket, registry)
     voice_params = voice_of(websocket)

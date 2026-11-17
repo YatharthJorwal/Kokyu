@@ -41,15 +41,34 @@ async def check_chat_model() -> None:
     await warm_default_chat_model()
 
 
+async def _last_thread() -> "conversation.Thread | None":
+    """The thread the first window will land in, or None without the store."""
+    try:
+        return await conversation.get_manager().last_thread()
+    except Exception as exc:  # noqa: BLE001 -- no store: the defaults
+        log.warning(f"warm-up: threads store unavailable ({exc}); using the defaults")
+        return None
+
+
 async def boot_model_ref() -> str:
     """The model the first window will use: the last thread's choice, else the
     configured default (FR-M-5: new threads inherit the last selection)."""
-    thread = None
-    try:
-        thread = await conversation.get_manager().last_thread()
-    except Exception as exc:  # noqa: BLE001 -- no store: the default model
-        log.warning(f"warm-up: threads store unavailable ({exc}); using the default model")
+    thread = await _last_thread()
     return model_listing.effective_ref(thread.model_ref if thread else None, CONFIG)
+
+
+async def warm_up_prompt() -> tuple[list[dict[str, str]], list[dict]]:
+    """The first message and tool list llama-server reads once at load (D-052): built
+    by the same builder a turn uses, for the thread the first turn will run in (its
+    mode and scenario, FR-MODE-2), so the cached prefix matches. A roleplay thread
+    offers no tools (FR-MODE-4)."""
+    thread = await _last_thread()
+    registry = waifus.get_registry()
+    waifu = registry.get(companions.load_active_id()) or registry.get(registry.default_id() or "")
+    layers = conversation.prompt_layers(thread)
+    system = companions.system_message(waifu, **layers)
+    offered = [] if layers["mode"] == "roleplay" else tools.offered_schemas(already_looked=False)
+    return [{"role": "system", "content": system}, {"role": "user", "content": "(warm-up)"}], offered
 
 
 def loads_without_asking(ref_text: str) -> bool:
@@ -89,8 +108,9 @@ async def load_chat_model(ref_text: str) -> None:
     function). Raises when the load fails; the loader shows why.
 
     - llama.cpp: start `llama-server` for the preset (which unloads Ollama's chat
-      model, keeping the helpers) and have it read the active persona and the
-      tool list once, so the first message reuses that prefix (D-052).
+      model, keeping the helpers) and have it read the active persona with the
+      last thread's mode layer, and that mode's tool list, once, so the first
+      message reuses that prefix (D-052, FR-MODE-2).
     - Ollama: stop `llama-server` first: one large local model at a time (FR-M-6).
     - API: nothing to load.
     Then the small helper models that run before every reply.
@@ -121,10 +141,8 @@ async def load_chat_model(ref_text: str) -> None:
             log.info("stopped llama-server: an API model was picked")
         await free_ollama(keep)
         return
-    registry = waifus.get_registry()
-    waifu = registry.get(companions.load_active_id()) or registry.get(registry.default_id() or "")
-    messages = [{"role": "system", "content": companions.system_message(waifu)}, {"role": "user", "content": "(warm-up)"}]
-    await rt.warm(str(ref), messages, tools.offered_schemas(already_looked=False))
+    messages, offered = await warm_up_prompt()
+    await rt.warm(str(ref), messages, offered)
     await warm_helpers()
 
 

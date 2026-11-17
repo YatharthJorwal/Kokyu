@@ -83,7 +83,7 @@ KASANE/
   bus.py  config.py  llm.py  check.py  context_budget.py  persona.py  shell_keys.py
   paths.py               DONE (K0): ALL filesystem locations
   waifus/                DONE (K0): pack model, loader, validator, registry (instruction template comes in K3)
-  prompting.py           DONE (K0): persona prompt + shared app addendum
+  prompting.py           DONE (K0; K1c layers, D-074): persona + mode layer + scenario card + shared addendum + tool guidance
   threads/               NEW (K1): SQLite thread store
   conversation.py        NEW (K1): threads and history for a window (`get_manager()`)
   protocol/              NEW (K1): typed message models
@@ -120,14 +120,19 @@ docs/
 Yuri's real shape (`docs/notes/yuri-inventory.md` §5): `history[0]` is the system prompt (inferred), and one **ephemeral system message** (forget/task/look hints, recalled memory, scene context) is spliced just before the last user message and is never stored in history.
 
 ```
-system    =  persona prompt (the speaking waifu's prompt.md)
-          +  APP ADDENDUM  (identical for every waifu)
+system    =  persona prompt (the speaking waifu's prompt: who she is, no format or length rules)
+          +  MODE LAYER    (CHAT_LAYER or ROLEPLAY_LAYER, from the THREAD's mode; same for every waifu)
+          [+ SCENARIO CARD (roleplay only: the filled-in card fields, its opening line last)]
+          +  APP_ADDENDUM  (every mode: emotion tag, honesty about abilities)
+          [+ TOOL_GUIDANCE (chat only: how to use the offered tools; roleplay offers none)]
 history   =  prior messages (speaker-tagged; other waifus' lines appear as context)
 ephemeral =  recall + hints + scene context   (spliced before the last user message, as in Yuri)
 user      =  current message (+ attachments)
 ```
 
-The **app addendum** is the same for all waifus and carries: speech rules, the **emotion-tag convention** (the reply ends with `[happy|angry|sad|teasing|surprised|neutral]`, extracted by the existing helper), date and time, a no-capability-claims line, and the existing generic output cleanup (`apply_persona_pass`). Only the first line differs between waifus. The invariance test (FR-W-3) diffs everything *except* the persona prompt and TTS parameters.
+Since D-074 (FR-MODE-2) the system message is built in layers by `prompting.build_system_prompt(persona, mode=, scenario=)`, reached through `companions.system_message(waifu, mode=, scenario=)`: the companion picks only the persona text, and `mode` and `scenario` come from the thread (`conversation.prompt_layers(thread)`), never from a companion. Parts are joined by a blank line; the addendum and the tool guidance share one paragraph. `Session.system_prompt()` is the one builder for every place `history[0]` is set (window open, thread load, Regenerate and its failed-reply restore, the companion switch through `apply_switch(..., mode=, scenario=)`), and `boot.warm_up_prompt()` builds the llama.cpp warm-up from the same function for the last thread, with that mode's tool list (none in roleplay), so the cached prefix matches the first turn. The system message is stable for the life of a thread; what changes per turn (recall, hints, later the story summary and the voice delivery layer) belongs in the ephemeral note, so llama-server's cached prefix holds.
+
+The **app addendum** is the same for all waifus and modes and carries the **emotion-tag convention** (the reply ends with `[happy|angry|sad|teasing|surprised|neutral]`, extracted by the existing helper) and a no-capability-claims line; the generic output cleanup (`apply_persona_pass`) runs on spoken text. Only the persona differs between waifus. The invariance test (FR-W-3) diffs everything *except* the persona prompt and TTS parameters, in a chat thread and in a roleplay thread.
 
 ### 4.2 Turn lifecycle
 
@@ -183,10 +188,10 @@ There are **no token events** and no thread, waifu or model concept.
 | Kernel → client | `thread_list` `{query, threads}` | Sidebar history, newest first; sent on open and after every saved exchange, rename or delete |
 | Kernel → client | `thread_message` `{thread, message}` | A divider written when the companion changes (FR-S-2) |
 | Client → kernel | `thread_list`, `thread_search {query}` | History list, or threads whose title or messages contain the text |
-| Client → kernel | `thread_new`, `thread_open {id}`, `thread_delete {id}` | Change the open thread; refused with `error {code:"turn_running"}` while a reply runs |
+| Client → kernel | `thread_new {mode?, scenario?}`, `thread_open {id}`, `thread_delete {id}` | Change the open thread; refused with `error {code:"turn_running"}` while a reply runs. `thread_new`: `mode` is `chat` (default; `{}` stays valid) or `roleplay`, fixed for the thread's life (FR-MODE-1); `scenario` is the roleplay's card (`title` up to 120 characters, `setting`, `user_role`, `her_role`, `rules` up to 2000, `opening` up to 4000; all optional, no other keys), kept only for a roleplay, only its filled-in fields; a card title names the thread. The new thread keeps the open one's model and effort, not its Temp Chat flag. Thread rows (`thread_opened`, `thread_list`, `thread_updated`) carry `mode` and `scenario` |
 | Client → kernel | `thread_rename {id, title}` | Rename; `error {code:"unknown_thread"}` for a missing id |
 
-`KASANE/threads/store.py` owns `threads.db` (SPEC §3.5 plus a `temp` column for FR-MEM-5 and a small `kv` table for the last opened thread); `KASANE/conversation.py` turns stored messages into the turn's history (dividers excluded) and records each exchange with speaker, model ref, effort and a `stopped` flag. `_run_turn` gained one optional `on_finished(user, reply, stopped)` callback and still never sees a waifu. Opening a thread brings back its companion; `set_temp_mode` is saved on the thread.
+`KASANE/threads/store.py` owns `threads.db` (SPEC §3.5 plus a `temp` column for FR-MEM-5, `efforts` for FR-M-11, `mode` and `scenario` for FR-MODE-1 (schema 3, added in place: older threads read as chat), and a small `kv` table for the last opened thread); `KASANE/conversation.py` turns stored messages into the turn's history (dividers excluded) and records each exchange with speaker, model ref, effort and a `stopped` flag. `_run_turn` gained one optional `on_finished(user, reply, stopped)` callback and still never sees a waifu. Opening a thread brings back its companion; `set_temp_mode` is saved on the thread.
 
 ### 5.3 Target (K1): typed protocol
 

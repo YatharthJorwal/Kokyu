@@ -26,6 +26,8 @@ const thread = (id, extra = {}) => ({
   effort: null,
   temp: false,
   archived: false,
+  mode: "chat", // FR-MODE-1: what the kernel sends for a chat thread
+  scenario: {},
   ...extra,
 });
 const stored = (id, role, content, meta = {}) => ({

@@ -103,7 +103,7 @@ class Session:
         ws.state.waifu = self.registry.get(companions.load_active_id()) or self.registry.get(
             self.registry.default_id() or ""
         )
-        self.history = [{"role": "system", "content": companions.system_message(companions.waifu_of(ws))}]
+        self.history = [{"role": "system", "content": self.system_prompt()}]   # no thread yet: chat
         await companions.send_waifu_state(ws, self.registry)
 
         # Every window hears about model loads (K1-10, the waking-up card) and voice (D-061).
@@ -216,6 +216,15 @@ class Session:
         effort = self.thread.effort if self.thread is not None else None
         return {"model_ref": model_ref or CONFIG.chat.default_model_ref, "effort": effort or CONFIG.chat.default_effort}
 
+    def system_prompt(self, thread: Any = None) -> str:
+        """history[0]: the window's companion's persona with the layers of `thread` (the
+        open thread by default): its mode and scenario card (FR-MODE-2, D-074). The one
+        builder wherever history[0] is set, so a regenerate, a reload or a companion
+        switch never drops a roleplay back to chat. The mode comes from the thread only."""
+        return companions.system_message(
+            companions.waifu_of(self.ws), **conversation.prompt_layers(thread if thread is not None else self.thread)
+        )
+
     def reset_history_flags(self) -> None:
         """temp_flags follows a rebuilt history; no remark is in it any more."""
         self.temp_flags[:] = [self.temp] * (len(self.history) - 1)
@@ -237,11 +246,13 @@ class Session:
         active = companions.waifu_of(self.ws)
         wanted = thread.active_waifu_id
         if wanted and self.registry.get(wanted) is not None and (active is None or active.id != wanted):
-            await companions.apply_switch(self.ws, self.history, self.registry, wanted)
+            await companions.apply_switch(
+                self.ws, self.history, self.registry, wanted, **conversation.prompt_layers(thread)
+            )
         elif not wanted and active is not None:
             thread = await asyncio.to_thread(self.manager.store.update_thread, thread.id, active_waifu_id=active.id)
         self.thread = thread
-        self.history[:] = await self.manager.history(thread, companions.system_message(companions.waifu_of(self.ws)))
+        self.history[:] = await self.manager.history(thread, self.system_prompt())
         self.temp = thread.temp
         self.reset_history_flags()
         messages = await self.manager.messages(thread.id)
@@ -262,7 +273,9 @@ class Session:
     async def switch_companion(self, target_id: str) -> None:
         """A companion switch plus the thread's divider line (FR-S-2)."""
         before = companions.waifu_of(self.ws)
-        target = await companions.apply_switch(self.ws, self.history, self.registry, target_id)
+        target = await companions.apply_switch(
+            self.ws, self.history, self.registry, target_id, **conversation.prompt_layers(self.thread)
+        )
         if target is None or self.thread is None or (before is not None and before.id == target.id):
             return
         try:
@@ -325,7 +338,7 @@ class Session:
         async def replace(user_text: str, reply: str, stopped: bool, meta: dict[str, Any]) -> None:
             if not reply:
                 # The thread keeps the old exchange, so the model's context gets it back too.
-                self.history[:] = await self.manager.history(thread, companions.system_message(companions.waifu_of(self.ws)))
+                self.history[:] = await self.manager.history(thread, self.system_prompt(thread))
                 self.reset_history_flags()
                 return
             await self.manager.delete_messages(old_ids)
@@ -425,9 +438,7 @@ class Session:
         old_log_id = old_meta.get("log_id")
         # Rebuilt from the thread without the old exchange, so a remark or a divider
         # after it cannot leave it in the model's context.
-        self.history[:] = await self.manager.history(
-            self.thread, companions.system_message(companions.waifu_of(self.ws)), exclude=old_ids
-        )
+        self.history[:] = await self.manager.history(self.thread, self.system_prompt(), exclude=old_ids)
         self.reset_history_flags()
         self.start_turn(
             again,
@@ -485,6 +496,14 @@ class Session:
         await self.send_thread_list()
 
     async def on_thread_new(self, msg: Any) -> None:
+        """A new thread in the mode asked for, fixed for its life (FR-MODE-1). It keeps
+        the open thread's model and effort, but not its Temp Chat flag."""
+        data = msg.data
+        # Only the filled-in fields are kept; a chat thread has no scenario card, and a
+        # blank roleplay has an empty one (FR-MODE-6).
+        card = data.scenario.model_dump() if data.mode == "roleplay" and data.scenario is not None else {}
+        scenario = {key: value for key, value in card.items() if value} or None
+
         async def new() -> None:
             active = companions.waifu_of(self.ws)
             await self.load_thread(
@@ -492,6 +511,9 @@ class Session:
                     waifu_id=active.id if active else None,
                     model_ref=self.thread.model_ref if self.thread else None,
                     effort=self.thread.effort if self.thread else None,
+                    mode=data.mode,
+                    scenario=scenario,
+                    title=(scenario or {}).get("title", ""),
                 )
             )
 

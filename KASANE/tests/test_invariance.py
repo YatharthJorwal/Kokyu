@@ -1,4 +1,5 @@
-"""FR-W-3 / FR-S-5: a waifu is a prompt and a voice. Nothing else about a turn may depend on her."""
+"""FR-W-3 / FR-S-5: a waifu is a prompt and a voice. Nothing else about a turn may depend on her,
+in a chat thread or a roleplay thread alike (FR-MODE-2, D-074: the mode belongs to the thread)."""
 from __future__ import annotations
 
 import inspect
@@ -33,7 +34,10 @@ def registry(tmp_path):
     return WaifuRegistry(premade, tmp_path / "user")
 
 
-async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day."):
+CARD = {"title": "Rain", "setting": "A station at night.", "opening": "*She waves.* Over here!"}
+
+
+async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day.", *, mode="chat", scenario=None):
     calls, voices = [], []
 
     async def fake_stream(role, messages, tools, **kwargs):
@@ -51,16 +55,17 @@ async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day."):
     monkeypatch.setattr(tts, "synthesize", fake_synth)
     monkeypatch.setattr(turns, "log_transcript_turn", no_log)
     ws = FakeWebSocket(waifu)
-    history = [{"role": "system", "content": companions.system_message(waifu)}]
+    history = [{"role": "system", "content": companions.system_message(waifu, mode=mode, scenario=scenario)}]
     await turns.run_turn(ws, history, user_text, True, [])   # Temp Chat: no memory reads or writes
     return calls, voices, history
 
 
+@pytest.mark.parametrize(("mode", "scenario"), [("chat", None), ("roleplay", CARD), ("roleplay", None)])
 @pytest.mark.asyncio
-async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(registry, monkeypatch):
+async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(registry, monkeypatch, mode, scenario):
     voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
-    a_calls, a_voices, a_hist = await _run_turn_as(registry.get("alpha"), monkeypatch)
-    b_calls, b_voices, b_hist = await _run_turn_as(registry.get("beta"), monkeypatch)
+    a_calls, a_voices, a_hist = await _run_turn_as(registry.get("alpha"), monkeypatch, mode=mode, scenario=scenario)
+    b_calls, b_voices, b_hist = await _run_turn_as(registry.get("beta"), monkeypatch, mode=mode, scenario=scenario)
 
     assert len(a_calls) == len(b_calls) == 1
     a, b = a_calls[0], b_calls[0]
@@ -69,8 +74,18 @@ async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(regi
     assert a["kwargs"] == b["kwargs"]                  # same privacy class, trust, options
     assert a["messages"][1:] == b["messages"][1:]      # history, hints and the user message identical
     assert a["messages"][0] != b["messages"][0]        # ...only the system message differs
-    assert a["messages"][0]["content"].endswith(prompting.APP_ADDENDUM)
-    assert b["messages"][0]["content"].endswith(prompting.APP_ADDENDUM)
+    # FR-MODE-2: the layers after the persona are the thread's, identical for both companions
+    a_system, b_system = a["messages"][0]["content"], b["messages"][0]["content"]
+    alpha, beta = registry.get("alpha").prompt.rstrip(), registry.get("beta").prompt.rstrip()
+    assert a_system.startswith(alpha) and b_system.startswith(beta)
+    assert a_system.removeprefix(alpha) == b_system.removeprefix(beta)
+    layer = prompting.CHAT_LAYER if mode == "chat" else prompting.ROLEPLAY_LAYER
+    assert layer in a_system and layer in b_system
+    if mode == "chat":
+        assert a_system.endswith(prompting.APP_ADDENDUM + " " + prompting.TOOL_GUIDANCE)
+    else:
+        assert a_system.endswith(prompting.APP_ADDENDUM) and prompting.TOOL_GUIDANCE not in a_system
+        assert (prompting.SCENARIO_HEADING in a_system) == bool(scenario)
     assert a["messages"][0]["content"].startswith("You are Alpha") and b["messages"][0]["content"].startswith("You are Beta")
 
     assert a_voices and b_voices

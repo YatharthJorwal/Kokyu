@@ -100,6 +100,19 @@ export type ClientType = (typeof CLIENT_TYPES)[number];
 export type ServerType = (typeof SERVER_TYPES)[number];
 export type ErrorCode = (typeof ERROR_CODES)[number];
 
+/** What kind of conversation a thread is, fixed when it is created (FR-MODE-1). */
+export type ThreadMode = "chat" | "roleplay";
+
+/** A roleplay's scenario card (FR-MODE-6). Every field may be left out or empty. */
+export interface Scenario {
+  title?: string;
+  setting?: string;
+  user_role?: string;
+  her_role?: string;
+  rules?: string;
+  opening?: string;
+}
+
 export interface ThreadInfo {
   id: string;
   title: string;
@@ -110,6 +123,9 @@ export interface ThreadInfo {
   effort: string | null;
   temp: boolean;
   archived: boolean;
+  mode: ThreadMode;
+  /** The filled-in fields of the card; empty for chat threads and blank roleplays. */
+  scenario: Scenario;
 }
 
 export interface ThreadMessage {
@@ -282,7 +298,7 @@ export interface ClientData {
   camera_frame: { image_b64: string | null };
   thread_list: Record<string, never>;
   thread_search: { query: string };
-  thread_new: Record<string, never>;
+  thread_new: { mode?: ThreadMode; scenario?: Scenario | null };
   thread_open: { id: string };
   thread_delete: { id: string };
   thread_rename: { id: string; title: string };

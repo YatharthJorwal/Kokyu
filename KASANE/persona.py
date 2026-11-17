@@ -1,7 +1,7 @@
 """Text rules shared by every companion: the speech safety nets and the emotion tag.
 
 A companion's personality is her pack's prompt (`waifus/`, D-031); the rules every
-companion shares are in `prompting.APP_ADDENDUM`. This module only holds the
+companion shares are in `prompting` (the mode layers and the addendum, D-074). This module only holds the
 fallback persona for an install with no companion at all, the two regex safety
 nets on spoken text, and the parser for the trailing `[emotion]` tag.
 """
@@ -9,11 +9,12 @@ nets on spoken text, and the parser for the trailing `[emotion]` tag.
 import re
 
 # Used only when no companion pack is installed: a plain, neutral character, so the
-# app still answers. Every installed companion brings her own prompt.
+# app still answers. Every installed companion brings her own prompt. Persona only:
+# length and format belong to the mode layer (FR-MODE-2, D-074).
 FALLBACK_PERSONA = (
     "You are a friendly companion who lives on the user's computer. You talk like a "
-    "person, not a help desk: warm, curious and direct. Keep replies short unless the "
-    "user asks for detail, and give accurate, complete help when something matters."
+    "person, not a help desk: warm, curious and direct, and you care about getting "
+    "things right when they matter."
 )
 
 # A small model told "never use a dash" still uses one now and then, and TTS reads

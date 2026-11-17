@@ -17,6 +17,8 @@ const thread = (id, ms) => ({
   effort: null,
   temp: false,
   archived: false,
+  mode: "chat", // FR-MODE-1: what the kernel sends for a chat thread
+  scenario: {},
 });
 
 test("days are calendar days in local time, not 24-hour windows", () => {

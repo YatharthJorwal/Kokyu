@@ -52,7 +52,23 @@ def test_a_valid_frame_is_parsed_and_trimmed():
     msg = protocol.parse_client({"v": 1, "type": "thread_rename", "id": "r1", "data": {"id": "abc", "title": "  Trip  "}})
     assert msg.type == "thread_rename" and msg.id == "r1"
     assert msg.data.model_dump() == {"id": "abc", "title": "Trip"}
-    assert protocol.parse_client({"v": 1, "type": "thread_new"}).data.model_dump() == {}
+    # FR-MODE-1: an empty thread_new (the client before modes) is still valid: a chat thread.
+    # (It used to dump to {}; the payload gained mode and scenario with defaults, D-074.)
+    assert protocol.parse_client({"v": 1, "type": "thread_new"}).data.model_dump() == {"mode": "chat", "scenario": None}
+
+
+def test_thread_new_takes_a_mode_and_a_scenario_card():
+    """FR-MODE-1, FR-MODE-6: a roleplay with its card; every field optional and trimmed."""
+    msg = protocol.parse_client({
+        "v": 1, "type": "thread_new",
+        "data": {"mode": "roleplay", "scenario": {"title": "  Rain  ", "opening": "*waves*"}},
+    })
+    assert msg.data.mode == "roleplay"
+    assert msg.data.scenario.model_dump() == {
+        "title": "Rain", "setting": "", "user_role": "", "her_role": "", "rules": "", "opening": "*waves*",
+    }
+    blank = protocol.parse_client({"v": 1, "type": "thread_new", "data": {"mode": "roleplay"}})
+    assert blank.data.mode == "roleplay" and blank.data.scenario is None
 
 
 @pytest.mark.parametrize(
@@ -64,6 +80,14 @@ def test_a_valid_frame_is_parsed_and_trimmed():
         ({"v": 1, "type": "thread_open", "data": {"id": "x", "extra": 1}}, "bad_message"),
         ({"v": 1, "type": "thread_open", "data": "x"}, "bad_message"),
         ({"v": 1, "type": "thread_search", "data": {"query": "q" * 500}}, "bad_message"),
+        # FR-MODE-1, 6: an unknown mode, an oversized card field, an unknown key
+        ({"v": 1, "type": "thread_new", "data": {"mode": "live"}}, "bad_message"),
+        ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"title": "t" * 121}}}, "bad_message"),
+        ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"setting": "s" * 2001}}}, "bad_message"),
+        ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"rules": "r" * 2001}}}, "bad_message"),
+        ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"opening": "o" * 4001}}}, "bad_message"),
+        ({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": {"genre": "noir"}}}, "bad_message"),
+        ({"v": 1, "type": "thread_new", "data": {"mode": "chat", "extra": 1}}, "bad_message"),
     ],
 )
 def test_bad_frames_are_typed_errors(raw, code):

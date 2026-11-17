@@ -42,6 +42,15 @@ def divider_text(name: str | None) -> str:
     return f"Switched to {name}" if name else "Switched companion"  # FR-S-2 wording
 
 
+def prompt_layers(thread: Thread | None) -> dict[str, Any]:
+    """The thread's part of the system message (FR-MODE-2): its mode and scenario card,
+    as keywords for `companions.system_message`. Read from the THREAD only, never from
+    a companion (FR-W-3, D-074). No thread (the store is unavailable) means chat."""
+    if thread is None:
+        return {"mode": "chat", "scenario": None}
+    return {"mode": thread.mode, "scenario": dict(thread.scenario) or None}
+
+
 def history_from(messages: list[Message], system_message: str, max_messages: int) -> list[dict[str, str]]:
     """The turn loop's `history` list: the system prompt, then the latest user and
     assistant lines. Dividers are UI markers, not something anyone said, so they stay out.
@@ -98,13 +107,22 @@ class ConversationManager:
         model_ref: str | None = None,
         effort: str | None = None,
         temp: bool = False,
+        mode: str = "chat",
+        scenario: dict[str, Any] | None = None,
+        title: str = "",
     ) -> Thread:
+        """`mode` and `scenario` are fixed for the thread's life (FR-MODE-1). A roleplay
+        started from a card with a title is named after it; otherwise the first user
+        message names the thread, as before."""
         thread = await self._run(
             self.store.create_thread,
+            title=title,
             active_waifu_id=waifu_id,
             model_ref=model_ref,
             effort=effort,
             temp=temp,
+            mode=mode,
+            scenario=scenario,
         )
         await self._run(self.store.set_kv, LAST_THREAD_KEY, thread.id)
         return thread

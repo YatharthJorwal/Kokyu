@@ -146,3 +146,78 @@ def test_a_version_1_database_gains_the_efforts_column(tmp_path):
     store = ThreadStore(db)
     assert store.get_thread("old").efforts == {}
     assert store.update_thread("old", efforts={"local:ollama/x": "off"}).efforts == {"local:ollama/x": "off"}
+
+
+# -- conversation modes (FR-MODE-1, D-074) ------------------------------------
+
+CARD = {"title": "Rain", "setting": "A station at night.", "opening": "*She waves.* Over here!"}
+
+
+def test_a_new_thread_is_chat_with_no_scenario(store):
+    t = store.create_thread()
+    assert t.mode == "chat" and t.scenario == {}
+    assert t.to_dict()["mode"] == "chat" and t.to_dict()["scenario"] == {}
+
+
+def test_a_roleplay_thread_keeps_its_mode_and_card(store, tmp_path):
+    t = store.create_thread(title="Rain", mode="roleplay", scenario=CARD)
+    assert t.mode == "roleplay" and t.scenario == CARD and t.title == "Rain"
+    assert t.to_dict()["mode"] == "roleplay" and t.to_dict()["scenario"] == CARD
+    again = ThreadStore(tmp_path / "threads.db").get_thread(t.id)   # survives a reopen
+    assert again.mode == "roleplay" and again.scenario == CARD
+    # a blank roleplay: the mode, no card
+    blank = store.create_thread(mode="roleplay", scenario={})
+    assert blank.mode == "roleplay" and blank.scenario == {}
+
+
+def test_an_unknown_mode_is_refused(store):
+    with pytest.raises(ValueError):
+        store.create_thread(mode="live")
+
+
+def test_mode_and_scenario_are_fixed_for_the_threads_life(store):
+    """FR-MODE-1: chosen when the thread is created; v1 does not edit the card either."""
+    t = store.create_thread(mode="roleplay", scenario=CARD)
+    with pytest.raises(ValueError):
+        store.update_thread(t.id, mode="chat")
+    with pytest.raises(ValueError):
+        store.update_thread(t.id, scenario={"title": "Other"})
+    renamed = store.rename(t.id, "Renamed")
+    assert renamed.mode == "roleplay" and renamed.scenario == CARD
+
+
+def test_a_version_2_database_gains_mode_and_scenario_and_old_threads_are_chat(tmp_path):
+    """FR-MODE-1: threads that existed before modes read as chat; nothing else changes."""
+    db = tmp_path / "threads.db"
+    with sqlite3.connect(db) as conn:
+        conn.executescript(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,"
+            " updated_at REAL NOT NULL, active_waifu_id TEXT, model_ref TEXT, effort TEXT,"
+            " temp INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0, efforts TEXT);"
+            "INSERT INTO threads (id, title, created_at, updated_at, efforts)"
+            " VALUES ('old', 'Before modes', 1, 1, '{\"local:ollama/x\": \"off\"}');"
+            "PRAGMA user_version=2;"
+        )
+    store = ThreadStore(db)
+    old = store.get_thread("old")
+    assert old.mode == "chat" and old.scenario == {}
+    assert old.title == "Before modes" and old.efforts == {"local:ollama/x": "off"}
+    assert store.create_thread(mode="roleplay", scenario=CARD).scenario == CARD
+    with sqlite3.connect(db) as conn:
+        assert conn.execute("PRAGMA user_version").fetchone()[0] == 3
+        columns = {row[1] for row in conn.execute("PRAGMA table_info(threads)")}
+    assert {"efforts", "mode", "scenario"} <= columns
+    ThreadStore(db)   # opening it again is a no-op, not a duplicate column
+
+
+def test_a_version_1_database_gains_every_later_column(tmp_path):
+    db = tmp_path / "threads.db"
+    with sqlite3.connect(db) as conn:
+        conn.executescript(
+            "CREATE TABLE threads (id TEXT PRIMARY KEY, title TEXT NOT NULL DEFAULT '', created_at REAL NOT NULL,"
+            " updated_at REAL NOT NULL, active_waifu_id TEXT, model_ref TEXT, effort TEXT,"
+            " temp INTEGER NOT NULL DEFAULT 0, archived INTEGER NOT NULL DEFAULT 0);"
+            "INSERT INTO threads (id, created_at, updated_at) VALUES ('old', 1, 1);"
+        )
+    old = ThreadStore(db).get_thread("old")
+    assert old.mode == "chat" and old.scenario == {} and old.efforts == {}

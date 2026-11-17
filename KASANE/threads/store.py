@@ -19,11 +19,13 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 2   # 2: threads.efforts (FR-M-11)
+SCHEMA_VERSION = 3   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074)
 TITLE_MAX = 80
 SEARCH_LIMIT = 50
 
 ROLES = ("user", "assistant", "divider")
+# FR-MODE-1 (D-074): what kind of conversation a thread is, fixed when it is created.
+MODES = ("chat", "roleplay")
 
 _SCHEMA = """
 CREATE TABLE IF NOT EXISTS threads (
@@ -36,7 +38,9 @@ CREATE TABLE IF NOT EXISTS threads (
     effort          TEXT,
     temp            INTEGER NOT NULL DEFAULT 0,
     archived        INTEGER NOT NULL DEFAULT 0,
-    efforts         TEXT
+    efforts         TEXT,
+    mode            TEXT NOT NULL DEFAULT 'chat',
+    scenario        TEXT
 );
 CREATE TABLE IF NOT EXISTS messages (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -67,6 +71,14 @@ CREATE TABLE IF NOT EXISTS kv (
 );
 """
 
+# Columns added after schema 1, checked on every start (PRAGMA user_version is
+# written but never read: the checks are the migration, and they are idempotent).
+_ADDED_COLUMNS = (
+    ("efforts", "efforts TEXT"),
+    ("mode", "mode TEXT NOT NULL DEFAULT 'chat'"),
+    ("scenario", "scenario TEXT"),
+)
+
 
 @dataclass(frozen=True)
 class Thread:
@@ -81,6 +93,11 @@ class Thread:
     archived: bool = False
     # FR-M-11: the effort last used with each model in this thread, by model ref
     efforts: dict[str, str] = field(default_factory=dict)
+    # FR-MODE-1 (D-074): fixed for the thread's life; threads made before modes are chat
+    mode: str = "chat"
+    # FR-MODE-4, 6: the roleplay's scenario card (title, setting, user_role, her_role,
+    # rules, opening); empty for chat threads and blank roleplays
+    scenario: dict[str, Any] = field(default_factory=dict)
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -93,6 +110,8 @@ class Thread:
             "effort": self.effort,
             "temp": self.temp,
             "archived": self.archived,
+            "mode": self.mode,
+            "scenario": dict(self.scenario),
         }
 
 
@@ -152,6 +171,8 @@ def _thread(row: sqlite3.Row) -> Thread:
         temp=bool(row["temp"]),
         archived=bool(row["archived"]),
         efforts=_json_dict(row["efforts"]),
+        mode=row["mode"] if row["mode"] in MODES else "chat",
+        scenario=_json_dict(row["scenario"]),
     )
 
 
@@ -189,9 +210,13 @@ class ThreadStore:
         with self._connect() as db:
             db.execute("PRAGMA journal_mode=WAL")
             db.executescript(_SCHEMA)
-            # v1 -> v2: a database made before FR-M-11 lacks the column
-            if "efforts" not in {r["name"] for r in db.execute("PRAGMA table_info(threads)")}:
-                db.execute("ALTER TABLE threads ADD COLUMN efforts TEXT")
+            # Older databases gain the columns in place (v1 -> v2: efforts, FR-M-11;
+            # v2 -> v3: mode and scenario, FR-MODE-1). SQLite adds a NOT NULL column only
+            # with a constant default, so every existing thread reads as a chat thread.
+            have = {r["name"] for r in db.execute("PRAGMA table_info(threads)")}
+            for name, ddl in _ADDED_COLUMNS:
+                if name not in have:
+                    db.execute(f"ALTER TABLE threads ADD COLUMN {ddl}")
             db.execute(f"PRAGMA user_version={SCHEMA_VERSION}")
 
     @contextmanager
@@ -218,14 +243,24 @@ class ThreadStore:
         model_ref: str | None = None,
         effort: str | None = None,
         temp: bool = False,
+        mode: str = "chat",
+        scenario: dict[str, Any] | None = None,
     ) -> Thread:
+        """`mode` is fixed for the thread's life (FR-MODE-1): update_thread cannot change
+        it, nor the scenario card (not editable in v1, D-074)."""
+        if mode not in MODES:
+            raise ValueError(f"unknown thread mode: {mode!r}")
         now = self._now()
         thread_id = uuid.uuid4().hex
         with self._connect() as db:
             db.execute(
-                "INSERT INTO threads (id, title, created_at, updated_at, active_waifu_id, model_ref, effort, temp)"
-                " VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (thread_id, title_from(title), now, now, active_waifu_id, model_ref, effort, int(temp)),
+                "INSERT INTO threads"
+                " (id, title, created_at, updated_at, active_waifu_id, model_ref, effort, temp, mode, scenario)"
+                " VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (
+                    thread_id, title_from(title), now, now, active_waifu_id, model_ref, effort, int(temp),
+                    mode, json.dumps(scenario) if scenario else None,
+                ),
             )
         return self.get_thread(thread_id)
 
@@ -252,7 +287,8 @@ class ThreadStore:
 
     def update_thread(self, thread_id: str, **fields: Any) -> Thread:
         """Sets any of: title, active_waifu_id, model_ref, effort, temp, archived, efforts.
-        Settings changes do not reorder the history list (updated_at is for messages)."""
+        Settings changes do not reorder the history list (updated_at is for messages).
+        Mode and scenario are not here on purpose: fixed when the thread is made (FR-MODE-1)."""
         allowed = {"title", "active_waifu_id", "model_ref", "effort", "temp", "archived", "efforts"}
         unknown = set(fields) - allowed
         if unknown:

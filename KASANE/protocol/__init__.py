@@ -52,6 +52,30 @@ class ThreadSearch(_Data):
     query: str = Field(default="", max_length=QUERY_MAX)
 
 
+SCENARIO_TITLE_MAX = 120
+SCENARIO_FIELD_MAX = 2000
+SCENARIO_OPENING_MAX = 4000
+
+
+class Scenario(_Data):
+    """A roleplay's scenario card (FR-MODE-6, D-074). Every field may be empty."""
+
+    title: str = Field(default="", max_length=SCENARIO_TITLE_MAX)
+    setting: str = Field(default="", max_length=SCENARIO_FIELD_MAX)
+    user_role: str = Field(default="", max_length=SCENARIO_FIELD_MAX)
+    her_role: str = Field(default="", max_length=SCENARIO_FIELD_MAX)
+    rules: str = Field(default="", max_length=SCENARIO_FIELD_MAX)
+    opening: str = Field(default="", max_length=SCENARIO_OPENING_MAX)
+
+
+class ThreadNew(_Data):
+    """FR-MODE-1: a new thread's mode, fixed for its life. `{}` is a chat thread, as
+    before modes. (Not to be confused with ScreenCompanion.mode.)"""
+
+    mode: Literal["chat", "roleplay"] = "chat"
+    scenario: Scenario | None = None
+
+
 class ScreenCompanion(_Data):
     """K1-05b (FR-SC-1..4): turn Task Guide or OCR watch on or off; Task Guide may
     carry the task in the user's words."""
@@ -177,7 +201,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "camera_frame": CameraFrame,      # the answer to camera_request (K2-07)
     "thread_list": Empty,
     "thread_search": ThreadSearch,
-    "thread_new": Empty,
+    "thread_new": ThreadNew,          # FR-MODE-1: chat, or a roleplay with its scenario card
     "thread_open": ThreadRef,
     "thread_delete": ThreadRef,
     "thread_rename": ThreadRename,

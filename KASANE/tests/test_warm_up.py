@@ -15,14 +15,18 @@ import conversation
 import hub
 import llm
 import model_loader
+import prompting
 import router
 import session
 import tools
+import waifus
 from config import CONFIG, ChatConfig
 from kernel_fixtures import set_config
 from memory import embeddings, writer
 from router.decision import LOCAL_PROVIDER, model_for
 from router.types import ModelChunk
+from waifu_fixtures import make_pack
+from waifus import WaifuRegistry
 
 
 @pytest.fixture
@@ -84,7 +88,9 @@ async def test_boot_never_starts_a_llamacpp_model(monkeypatch, calls):
 @pytest.mark.asyncio
 async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_then_the_helpers(monkeypatch, calls):
     use(monkeypatch, "local:llamacpp/big")
-    monkeypatch.setattr(companions, "system_message", lambda waifu: "PERSONA")
+    monkeypatch.setattr(
+        companions, "system_message", lambda waifu, *, mode, scenario: f"PERSONA {mode} {scenario}"
+    )
     await model_loader.LOADER.request("local:llamacpp/big")   # what a pick in the chip does
     # only the embedding model, which recall uses on every message (D-072: no classifier warm)
     assert calls["helpers"] == [] and calls["embed"] == ["warm-up"]
@@ -92,10 +98,35 @@ async def test_a_picked_llamacpp_model_is_started_with_the_persona_and_tools_the
     assert calls["load"] == [] and calls["stopped"] == []
     [(ref, messages, offered)] = calls["warm"]
     assert ref == "local:llamacpp/big"
-    assert messages[0] == {"role": "system", "content": "PERSONA"}   # the same first message a turn sends
+    # the same first message a turn sends: no thread yet, so a chat one (FR-MODE-2)
+    assert messages[0] == {"role": "system", "content": "PERSONA chat None"}
     assert offered == tools.offered_schemas(already_looked=False)  # same tool list, so the prefix matches
     # every window saw it load, then become ready (the "waking up" card, K1-10)
     assert calls["status"] == [("loading", "local:llamacpp/big"), ("ready", "local:llamacpp/big")]
+
+
+@pytest.mark.parametrize("mode", ["chat", "roleplay"])
+@pytest.mark.asyncio
+async def test_the_warm_up_reads_the_first_message_and_tools_of_the_last_threads_mode(monkeypatch, calls, tmp_path, mode):
+    """FR-MODE-2, D-052: llama-server caches the prefix of the first turn, which runs in
+    the last thread; a roleplay one has its own layer and card and offers no tools."""
+    premade = tmp_path / "premade"
+    make_pack(premade, "alpha", name="Alpha", ref_text="alpha transcript")
+    registry = WaifuRegistry(premade, tmp_path / "user")
+    monkeypatch.setattr(waifus.registry, "_registry", registry)
+    use(monkeypatch, "local:llamacpp/big")
+    card = {"title": "Rain", "opening": "*She waves.* Over here!"} if mode == "roleplay" else None
+    thread = await conversation.get_manager().new_thread(waifu_id="alpha", mode=mode, scenario=card)
+    await model_loader.LOADER.request("local:llamacpp/big")
+    [(_ref, messages, offered)] = calls["warm"]
+    # exactly what the window's history[0] will be in that thread (Session.system_prompt)
+    expected = companions.system_message(registry.get("alpha"), **conversation.prompt_layers(thread))
+    assert messages[0] == {"role": "system", "content": expected}
+    if mode == "roleplay":
+        assert prompting.ROLEPLAY_LAYER in expected and "Title: Rain" in expected
+        assert prompting.TOOL_GUIDANCE not in expected and offered == []
+    else:
+        assert prompting.CHAT_LAYER in expected and offered == tools.offered_schemas(already_looked=False)
 
 
 @pytest.mark.parametrize(("ref", "loaded", "stopped", "states"), [

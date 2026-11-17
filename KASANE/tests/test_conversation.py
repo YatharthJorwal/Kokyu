@@ -11,6 +11,7 @@ from fastapi.testclient import TestClient
 import app
 import conversation
 import hub
+import prompting
 import router
 import turns
 import waifus
@@ -436,3 +437,106 @@ def test_regenerate_with_nothing_to_redo_is_refused(kernel):
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         err, _ = _until(ws, "error")
     assert err["data"]["code"] == "bad_message"
+
+
+# -- conversation modes over the socket (FR-MODE-1, 2, 4; D-074) --------------
+
+CARD = {"title": "Rain at the station", "setting": "A station at night.", "user_role": "  ", "opening": "*She waves.*"}
+
+
+def _systems(monkeypatch):
+    """Records each turn's system message and tool list."""
+    seen = []
+
+    async def recording(role, messages, tools, **kwargs):
+        seen.append({"role": role, "system": messages[0]["content"], "tools": list(tools)})
+        yield {"type": "content", "text": "Mm. [happy]"}
+
+    monkeypatch.setattr(router, "stream_with_tools", recording)
+    return seen
+
+
+def _new_roleplay(ws, scenario=CARD):
+    ws.send_json({"v": 1, "type": "thread_new", "data": {"mode": "roleplay", "scenario": scenario}})
+    opened, _ = _until(ws, "thread_opened")
+    return opened["data"]["thread"]
+
+
+def test_a_roleplay_thread_starts_from_its_card_and_keeps_its_layer(kernel, monkeypatch):
+    """FR-MODE-1, 2, 4, 6: the mode and the filled-in card are the thread's; the card's
+    title names it; the system message carries the roleplay layer and the card."""
+    seen = _systems(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        first, _ = _until(ws, "thread_opened")
+        assert first["data"]["thread"]["mode"] == "chat" and first["data"]["thread"]["scenario"] == {}
+        _temp_on(ws)   # Temp is not carried into the new thread (as before modes)
+        thread = _new_roleplay(ws)
+        assert thread["mode"] == "roleplay" and thread["temp"] is False
+        assert thread["title"] == "Rain at the station"
+        assert thread["scenario"] == {"title": "Rain at the station", "setting": "A station at night.", "opening": "*She waves.*"}
+        _temp_on(ws)
+        _chat(ws, "Hi!")
+    system = seen[-1]["system"]
+    assert prompting.ROLEPLAY_LAYER in system and prompting.CHAT_LAYER not in system
+    assert "Setting: A station at night." in system and "The user plays" not in system
+    assert prompting.TOOL_GUIDANCE not in system
+    assert seen[-1]["role"] == "chat"   # the same router role in both modes (D-074)
+    stored = conversation.get_manager().store.get_thread(thread["id"])
+    assert stored.title == "Rain at the station"   # the first user line does not rename it
+
+
+def test_a_blank_roleplay_has_no_card_and_a_new_thread_after_it_is_chat(kernel, monkeypatch):
+    seen = _systems(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        blank = _new_roleplay(ws, scenario={"title": " ", "opening": ""})
+        assert blank["mode"] == "roleplay" and blank["scenario"] == {} and blank["title"] == ""
+        _temp_on(ws)
+        _chat(ws, "Once upon a time")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
+        chat, _ = _until(ws, "thread_opened")
+        assert chat["data"]["thread"]["mode"] == "chat"
+        _temp_on(ws)
+        _chat(ws, "What is 2 + 2?")
+    assert prompting.ROLEPLAY_LAYER in seen[0]["system"] and prompting.SCENARIO_HEADING not in seen[0]["system"]
+    assert prompting.CHAT_LAYER in seen[1]["system"] and prompting.TOOL_GUIDANCE in seen[1]["system"]
+
+
+def test_a_chat_thread_ignores_a_card_sent_with_it(kernel):
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {"mode": "chat", "scenario": CARD}})
+        opened, _ = _until(ws, "thread_opened")
+    assert opened["data"]["thread"]["mode"] == "chat" and opened["data"]["thread"]["scenario"] == {}
+    assert opened["data"]["thread"]["title"] == ""
+
+
+def test_a_companion_switch_and_a_regenerate_keep_the_roleplay_layer(kernel, monkeypatch):
+    """FR-MODE-2: every place history[0] is rebuilt uses the thread's mode, so neither
+    a switch nor a regenerate drops a roleplay back to chat."""
+    seen = _systems(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        thread = _new_roleplay(ws)
+        _temp_on(ws)
+        _chat(ws, "Hello")
+        ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
+        _until(ws, "thread_message")
+        _chat(ws, "Who are you now?")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {}})
+        _until(ws, "turn_done")
+        ws.send_json({"v": 1, "type": "thread_new", "data": {}})
+        _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "thread_open", "data": {"id": thread["id"]}})
+        _until(ws, "thread_opened")
+        _chat(ws, "Back again")
+    assert len(seen) == 4
+    for turn in seen:
+        assert prompting.ROLEPLAY_LAYER in turn["system"] and "Title: Rain at the station" in turn["system"]
+        assert prompting.TOOL_GUIDANCE not in turn["system"]
+    assert seen[0]["system"].startswith("You are Alpha")
+    assert all(turn["system"].startswith("You are Beta") for turn in seen[1:])
+    # only the persona changed with the switch (FR-W-3)
+    registry = waifus.get_registry()
+    alpha, beta = registry.get("alpha").prompt.rstrip(), registry.get("beta").prompt.rstrip()
+    assert seen[0]["system"].removeprefix(alpha) == seen[1]["system"].removeprefix(beta)

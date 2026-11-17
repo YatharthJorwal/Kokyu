@@ -18,6 +18,12 @@ test("a client frame carries the version, a unique id and the data", () => {
   assert.notEqual(a.id, b.id);
 });
 
+test("thread_new carries the mode and the scenario card as given (FR-MODE-1, FR-MODE-6)", () => {
+  const roleplay = clientFrame("thread_new", { mode: "roleplay", scenario: { title: "Rain", opening: "*waves*" } });
+  assert.deepEqual(roleplay.data, { mode: "roleplay", scenario: { title: "Rain", opening: "*waves*" } });
+  assert.deepEqual(clientFrame("thread_new", {}).data, {}); // the kernel reads {} as a chat thread
+});
+
 test("v1 frames parse; anything else, a flat message included, is a stated problem (D-062)", () => {
   assert.equal(parseFrame({ type: "speak", text: "hi" }).kind, "error");
   assert.equal(parseFrame("nope").kind, "error");
