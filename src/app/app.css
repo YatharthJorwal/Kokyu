@@ -725,6 +725,111 @@ button:disabled {
   background: none;
 }
 
+.code-lang {
+  font-weight: 600;
+}
+
+.icon-action.labelled {
+  display: flex;
+  gap: 5px;
+  width: auto;
+  padding: 0 8px;
+  font-size: 12px;
+}
+
+/* Code colours (UI1-08, D-093): readable on the code block's panel in both schemes. */
+:root {
+  --code-kw: #c9a2ff;
+  --code-str: #95d9a8;
+  --code-num: #f2b66d;
+  --code-fn: #79c8ec;
+  --code-lit: #f28fb3;
+}
+
+[data-scheme="light"] {
+  --code-kw: #7a3db8;
+  --code-str: #2a7a45;
+  --code-num: #9a5800;
+  --code-fn: #1f6a9e;
+  --code-lit: #b0306a;
+}
+
+.tok-kw {
+  color: var(--code-kw);
+}
+
+.tok-str {
+  color: var(--code-str);
+}
+
+.tok-num {
+  color: var(--code-num);
+}
+
+.tok-fn {
+  color: var(--code-fn);
+}
+
+.tok-lit {
+  color: var(--code-lit);
+}
+
+.tok-com {
+  color: var(--muted);
+  font-style: italic;
+}
+
+/* Tables (UI1-08): wide ones scroll on their own, never the whole reply. */
+.md .table-wrap {
+  max-width: 100%;
+  margin: 0 0 10px;
+  overflow-x: auto;
+  border: 1px solid var(--line);
+  border-radius: 10px;
+}
+
+.md table {
+  min-width: 100%;
+  border-collapse: collapse;
+  font-size: 0.95em;
+}
+
+.md th,
+.md td {
+  padding: 7px 12px;
+  border-bottom: 1px solid var(--line);
+  text-align: left;
+  vertical-align: top;
+}
+
+.md th {
+  background: var(--panel-2);
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.md tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* Nested lists and blocks inside an item (UI1-08) */
+.md li > ul,
+.md li > ol,
+.md li > .code-block,
+.md li > p,
+.md li > blockquote,
+.md li > .table-wrap {
+  margin: 4px 0 6px;
+}
+
+.md ul ul {
+  list-style-type: circle;
+}
+
+.md ul ul ul {
+  list-style-type: square;
+}
+
 /* UI1-07: the bar over a message's top edge, on hover or keyboard focus; transparent
    (not hidden) so Tab reaches it. Time and model first, then the icons. */
 .msg-actions {

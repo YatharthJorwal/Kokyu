@@ -8,8 +8,10 @@
 // `(OOC …)` or `((…))`, is its own node (shown small and muted). Chat parsing is
 // unchanged, so "install it (with pip)" stays plain text there.
 //
-// shortcut: no tables, nested lists, images or reference links; add them (or a
-// vetted library) if replies need them.
+// UI1-08 (D-093): GitHub-style tables and nested lists (an item holds blocks of its
+// own: a sub-list, a code fence).
+//
+// shortcut: no images, footnotes or reference links; add them if replies need them.
 
 export type Inline =
   | { t: "text"; v: string }
@@ -28,11 +30,20 @@ export interface ParseOptions {
   roleplay?: boolean;
 }
 
+/** A list item: its first lines, then any blocks nested under it (UI1-08). */
+export interface ListItem {
+  c: Inline[];
+  blocks: Block[];
+}
+
+export type Align = "left" | "center" | "right" | null;
+
 export type Block =
   | { t: "p"; c: Inline[] }
   | { t: "h"; level: 1 | 2 | 3; c: Inline[] }
   | { t: "code"; lang: string; v: string; open: boolean }
-  | { t: "list"; ordered: boolean; start: number; items: Inline[][] }
+  | { t: "list"; ordered: boolean; start: number; items: ListItem[] }
+  | { t: "table"; align: Align[]; head: Inline[][]; rows: Inline[][][] }
   | { t: "quote"; c: Block[] }
   | { t: "hr" };
 
@@ -44,6 +55,8 @@ const BULLET = /^ {0,3}[-*+]\s+(.*)$/;
 const ORDERED = /^ {0,3}(\d{1,9})[.)]\s+(.*)$/;
 const RULE = /^ {0,3}([-*_])(\s*\1){2,}\s*$/;
 const QUOTE = /^ {0,3}>\s?(.*)$/;
+// A list marker at any indent; the list decides whether it is a sibling or nested.
+const ITEM = /^( *)([-*+]|\d{1,9}[.)])\s+(.*)$/;
 // Deeper nesting stays plain text, so a hostile reply cannot overflow the stack.
 const MAX_DEPTH = 16;
 // An aside longer than this stays text: keeps a hostile "((((…" from costing n² work.
@@ -59,8 +72,65 @@ function headingText(s: string): string {
   return j === t.length || (j > 0 && !/\s/.test(t[j - 1])) ? t : t.slice(0, j).trim();
 }
 
+const indentOf = (line: string): number => line.length - line.trimStart().length;
+
+/** A table row's cells: outer pipes dropped, `\|` kept as a pipe. */
+function splitRow(line: string): string[] {
+  let s = line.trim();
+  if (s.startsWith("|")) s = s.slice(1);
+  if (s.endsWith("|") && !s.endsWith("\\|")) s = s.slice(0, -1);
+  const cells: string[] = [];
+  let cur = "";
+  for (let j = 0; j < s.length; j += 1) {
+    if (s[j] === "\\" && s[j + 1] === "|") {
+      cur += "|";
+      j += 1;
+    } else if (s[j] === "|") {
+      cells.push(cur.trim());
+      cur = "";
+    } else {
+      cur += s[j];
+    }
+  }
+  cells.push(cur.trim());
+  return cells;
+}
+
+const RULE_CELL = /^:?-+:?$/;
+
+/** A header line followed by its |---|:--:| rule, with as many cells (GitHub's rule). */
+function tableAt(lines: string[], i: number): boolean {
+  const head = lines[i];
+  const rule = lines[i + 1];
+  if (rule === undefined || !head.includes("|") || !rule.includes("-") || indentOf(head) > 3) return false;
+  if (!rule.includes("|") && !head.trim().startsWith("|")) return false;
+  const cells = splitRow(rule);
+  return cells.every((c) => RULE_CELL.test(c)) && cells.length === splitRow(head).length;
+}
+
+function alignOf(cell: string): Align {
+  const left = cell.startsWith(":");
+  const right = cell.endsWith(":");
+  return left && right ? "center" : right ? "right" : left ? "left" : null;
+}
+
+/** Lines that open a block inside a list item's body (they end its first paragraph). */
+function opensBlock(line: string): boolean {
+  return line.trim() === "" || FENCE.test(line) || QUOTE.test(line) || BULLET.test(line) || ORDERED.test(line);
+}
+
+function dedent(lines: string[]): string[] {
+  const used = lines.filter((l) => l.trim() !== "");
+  const cut = used.length ? Math.min(...used.map(indentOf)) : 0;
+  return lines.map((l) => l.slice(Math.min(cut, indentOf(l))));
+}
+
 export function parseMarkdown(text: string, options: ParseOptions = {}, depth = 0): Block[] {
-  const lines = text.replace(/\r\n?/g, "\n").split("\n");
+  // Leading tabs count as four spaces, so nesting by tab works like nesting by spaces.
+  const lines = text
+    .replace(/\r\n?/g, "\n")
+    .split("\n")
+    .map((l) => l.replace(/^\t+/, (tabs) => "    ".repeat(tabs.length)));
   const out: Block[] = [];
   let i = 0;
   while (i < lines.length) {
@@ -111,18 +181,42 @@ export function parseMarkdown(text: string, options: ParseOptions = {}, depth = 
       });
       continue;
     }
+    if (tableAt(lines, i)) {
+      const head = splitRow(line);
+      const align = splitRow(lines[i + 1]).map(alignOf);
+      const fit = (cells: string[]) => head.map((_, n) => parseInline(cells[n] ?? "", options, depth + 1));
+      const rows: Inline[][][] = [];
+      i += 2;
+      while (i < lines.length && lines[i].trim() !== "" && lines[i].includes("|")) {
+        rows.push(fit(splitRow(lines[i])));
+        i += 1;
+      }
+      out.push({ t: "table", align, head: fit(head), rows });
+      continue;
+    }
     const bullet = BULLET.exec(line);
     const ordered = ORDERED.exec(line);
     if (bullet || ordered) {
       const isOrdered = !bullet;
-      const pattern = isOrdered ? ORDERED : BULLET;
-      const items: string[] = [];
+      const base = indentOf(line);
+      // A sibling: a marker of this list's kind, not indented past this list's own.
+      const sibling = (l: string) => {
+        const m = ITEM.exec(l);
+        return m !== null && indentOf(l) < base + 2 && /\d/.test(m[2]) === isOrdered ? m[3] : null;
+      };
+      const items: string[][] = [];
       while (i < lines.length) {
-        const m = pattern.exec(lines[i]);
-        if (m) {
-          items.push(isOrdered ? m[2] : m[1]);
-        } else if (lines[i].trim() !== "" && /^\s+/.test(lines[i]) && items.length > 0 && !FENCE.test(lines[i])) {
-          items[items.length - 1] += `\n${lines[i].trim()}`; // an indented continuation line
+        const l = lines[i];
+        const lead = sibling(l);
+        if (lead !== null) {
+          items.push([lead]);
+        } else if (l.trim() === "") {
+          // A blank line keeps the list going when what follows still belongs to it.
+          const next = lines[i + 1];
+          if (next === undefined || next.trim() === "" || (sibling(next) === null && indentOf(next) <= base)) break;
+          items[items.length - 1].push("");
+        } else if (indentOf(l) > base) {
+          items[items.length - 1].push(l); // a continuation line, or a nested block
         } else {
           break;
         }
@@ -132,7 +226,16 @@ export function parseMarkdown(text: string, options: ParseOptions = {}, depth = 
         t: "list",
         ordered: isOrdered,
         start: ordered ? Number(ordered[1]) : 1,
-        items: items.map((it) => parseInline(it, options)),
+        items: items.map(([lead, ...rest]) => {
+          const body = dedent(rest);
+          let k = 0;
+          while (k < body.length && !opensBlock(body[k])) k += 1;
+          const inner = body.slice(k).join("\n");
+          return {
+            c: parseInline([lead, ...body.slice(0, k).map((l) => l.trim())].join("\n"), options, depth + 1),
+            blocks: !inner.trim() ? [] : depth < MAX_DEPTH ? parseMarkdown(inner, options, depth + 1) : [{ t: "p", c: [{ t: "text", v: inner }] }],
+          };
+        }),
       });
       continue;
     }
@@ -141,7 +244,7 @@ export function parseMarkdown(text: string, options: ParseOptions = {}, depth = 
     while (
       i < lines.length &&
       lines[i].trim() !== "" &&
-      !(para.length > 0 && (FENCE.test(lines[i]) || HEADING.test(lines[i]) || QUOTE.test(lines[i]) || BULLET.test(lines[i]) || ORDERED.test(lines[i])))
+      !(para.length > 0 && (FENCE.test(lines[i]) || HEADING.test(lines[i]) || QUOTE.test(lines[i]) || BULLET.test(lines[i]) || ORDERED.test(lines[i]) || tableAt(lines, i)))
     ) {
       para.push(lines[i]);
       i += 1;

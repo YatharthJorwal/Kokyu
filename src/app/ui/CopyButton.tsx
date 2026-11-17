@@ -5,7 +5,18 @@ import { useEffect, useState } from "react";
 
 import { Icon } from "./Icon";
 
-export function CopyButton({ text, label = "Copy", icon = false }: { text: string; label?: string; icon?: boolean }) {
+export function CopyButton({
+  text,
+  label = "Copy",
+  icon = false,
+  showLabel = false,
+}: {
+  text: string;
+  label?: string;
+  icon?: boolean;
+  /** With `icon`: the word "Copy" beside it (a code block's header, UI1-08). */
+  showLabel?: boolean;
+}) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
 
   useEffect(() => {
@@ -18,7 +29,7 @@ export function CopyButton({ text, label = "Copy", icon = false }: { text: strin
   return (
     <button
       type="button"
-      className={icon ? "msg-action icon-action" : "msg-action"}
+      className={icon ? (showLabel ? "msg-action icon-action labelled" : "msg-action icon-action") : "msg-action"}
       aria-label={said ?? label}
       title={said ?? label}
       onClick={() => {
@@ -29,6 +40,7 @@ export function CopyButton({ text, label = "Copy", icon = false }: { text: strin
       }}
     >
       {icon ? <Icon name={state === "copied" ? "check" : "copy"} /> : (said ?? "Copy")}
+      {icon && showLabel ? <span>{said ?? "Copy"}</span> : null}
     </button>
   );
 }

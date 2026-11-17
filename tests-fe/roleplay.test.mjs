@@ -54,7 +54,7 @@ test("chat parsing is unchanged: parentheses stay text, *x* stays emphasis (FR-M
 
 test("roleplay options reach every block: lists, quotes, headings (FR-MODE-7)", () => {
   const [list, quote] = parseMarkdown("- *nods*\n\n> (OOC: aside)", RP);
-  assert.deepEqual(list.items[0], [{ t: "action", c: [text("nods")] }]);
+  assert.deepEqual(list.items[0].c, [{ t: "action", c: [text("nods")] }]);
   assert.deepEqual(quote.c[0].c, [{ t: "ooc", c: [text("(OOC: aside)")] }]);
   assert.deepEqual(parseMarkdown("## *bows*", RP)[0].c, [{ t: "action", c: [text("bows")] }]);
 });

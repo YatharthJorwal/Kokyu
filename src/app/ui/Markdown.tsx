@@ -1,12 +1,29 @@
 // Renders a reply's Markdown (K1-04, FR-C-8) from the tree in ../markdown.ts.
 // Only React elements, never innerHTML, so model output cannot inject markup.
-// Code blocks get a Copy button. In a roleplay thread (FR-MODE-7) actions are
-// italic and softer and out-of-character asides small and muted (app.css).
+// Code blocks get a header with the language and Copy, and their code coloured
+// (UI1-08, D-093); tables scroll sideways when wide. In a roleplay thread (FR-MODE-7)
+// actions are italic and softer and out-of-character asides small and muted (app.css).
 
 import { useMemo, type ReactNode } from "react";
 
+import { highlight, languageLabel } from "../highlight";
 import { parseMarkdown, type Block, type Inline } from "../markdown";
 import { CopyButton } from "./CopyButton";
+
+function Code({ lang, v, open }: { lang: string; v: string; open: boolean }) {
+  const tokens = useMemo(() => highlight(v, lang), [v, lang]);
+  return (
+    <div className="code-block">
+      <div className="code-head">
+        <span className="code-lang">{languageLabel(lang)}</span>
+        {open ? null : <CopyButton text={v} label="Copy code" icon showLabel />}
+      </div>
+      <pre>
+        <code>{tokens.map((t, n) => (t.k ? <span key={n} className={`tok-${t.k}`}>{t.v}</span> : t.v))}</code>
+      </pre>
+    </div>
+  );
+}
 
 function inline(nodes: Inline[]): ReactNode[] {
   return nodes.map((n, i) => {
@@ -53,19 +70,41 @@ function block(b: Block, i: number): ReactNode {
       return <H key={i}>{inline(b.c)}</H>;
     }
     case "code":
+      return <Code key={i} lang={b.lang} v={b.v} open={b.open} />;
+    case "table":
       return (
-        <div key={i} className="code-block">
-          <div className="code-head">
-            <span>{b.lang || "code"}</span>
-            {b.open ? null : <CopyButton text={b.v} label="Copy code" />}
-          </div>
-          <pre>
-            <code>{b.v}</code>
-          </pre>
+        <div key={i} className="table-wrap">
+          <table>
+            <thead>
+              <tr>
+                {b.head.map((c, n) => (
+                  <th key={n} style={b.align[n] ? { textAlign: b.align[n] ?? undefined } : undefined}>
+                    {inline(c)}
+                  </th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {b.rows.map((row, r) => (
+                <tr key={r}>
+                  {row.map((c, n) => (
+                    <td key={n} style={b.align[n] ? { textAlign: b.align[n] ?? undefined } : undefined}>
+                      {inline(c)}
+                    </td>
+                  ))}
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       );
     case "list": {
-      const items = b.items.map((it, n) => <li key={n}>{inline(it)}</li>);
+      const items = b.items.map((it, n) => (
+        <li key={n}>
+          {inline(it.c)}
+          {it.blocks.map(block)}
+        </li>
+      ));
       return b.ordered ? (
         <ol key={i} start={b.start}>
           {items}
