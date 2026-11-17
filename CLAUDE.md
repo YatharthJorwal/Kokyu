@@ -4,153 +4,163 @@ Instructions for any AI coding agent working in this repository. **Read this fil
 
 ## 1. What this project is
 
-Kōkyū is a Windows desktop chat app for a roster of AI companions ("waifus"). It looks like a normal chatbot UI (sidebar, one input box, one model switcher) and adds a VRM **stage view**, 2D **desktop pets**, a walkable **3D mode**, per-waifu **zero-shot voices** and an in-app **waifu creator**.
+Kōkyū is a Windows desktop app for AI companions, **primarily a roleplay character app** (D-079). It looks like a normal chatbot (sidebar, one input box, one model switcher), and each thread is either a **Chat** or a **Roleplay** (D-074). Planned on top: a VRM **stage view** with voice (K2), an in-app **companion creator** (K3), **desktop pets** and a walkable **3D apartment** (1.1).
 
-- **A waifu is a voice and a persona, nothing more.** Switching her never changes the model, intelligence, tools, permissions or memory scope.
-- **KASANE** is the kernel (Python, in the `KASANE/` folder). Clients are Tauri 2 + TypeScript + three.js / `@pixiv/three-vrm` (`src/`, `src-tauri/`).
-- Seeded from the author's earlier project **Yuri** (which succeeded **Luna**). Both live at `github.com/YatharthJorwal/Yuri` and `.../Luna`.
+- **A companion ("waifu") is a voice and a persona, nothing more.** Switching her never changes the model, intelligence, tools, permissions, memory scope or conversation mode.
+- **KASANE** is the kernel (Python, `KASANE/`). The client is Tauri 2 + React + TypeScript (`src/`, `src-tauri/`), with three.js / `@pixiv/three-vrm` waiting in `src/engine/` for K2.
+- Seeded from the author's earlier projects **Yuri** and **Luna** (`github.com/YatharthJorwal/Yuri`, `.../Luna`); Yuri and Luna are now only premade characters. Luna's apartment code is the base for the 3D apartment (D-078).
 - One user per install, one Windows PC, local-first. Development machine: RTX 3060 12 GB, i5-14400F, 32 GB DDR5-4800.
 - Commercial direction: a paid, one-time-purchase app where users bring their own models and keys (`docs/PRODUCT.md`). Ordinary users and a clean-machine install shape priorities.
-- Windows packaging comes later (phase K7) but constrains design from day one (RULES §9).
 
-Current status and plan: `docs/STATE.md`, `docs/TODO.md`.
+Current status: `docs/STATE.md`. Plan: `docs/TODO.md`.
 
-## 2. Session protocol
+## 2. Session protocol (D-076)
 
-### At the start (mandatory, in order)
+### At the start
 
-1. Read `docs/HANDOFF.md` completely. It is the narrative from the last session.
-2. Read `docs/STATE.md` (current state, known issues, what is verified).
-3. Read `docs/TODO.md`, at least the current phase.
-4. Skim `docs/RULES.md`. Read the `docs/SPEC.md` and `docs/ARCHITECTURE.md` sections relevant to the task. Search `docs/DECISIONS.md` before changing anything that looks settled. Read `docs/PRODUCT.md` when a task touches onboarding, packaging, licensing, assets or providers.
-5. Run `git status`, `git log -5 --oneline` and the check command (§5). If reality disagrees with `STATE.md`, **tell the user before doing anything else**.
+1. Read `docs/HANDOFF.md` (short: last session, stopping point, first actions).
+2. Read `docs/STATE.md` (what is true now, open questions, issues).
+3. Read the current phase in `docs/TODO.md`.
+4. Read the `docs/SPEC.md` and `docs/ARCHITECTURE.md` sections the task touches. Check `docs/DECISIONS.md` (compact, with an index) before changing anything that looks settled. Read `docs/PRODUCT.md` when a task touches onboarding, packaging, assets or providers.
+5. Run `git status`, `git log -5 --oneline` and `npm run check`. If reality disagrees with `STATE.md`, **tell the user before doing anything else**.
 
 ### During the session
 
-- Work on **one TODO item at a time**, in order, inside the current phase. Do not start the next phase until its gate passed and the user approved.
-- Before a large change, **state the plan and wait for approval**. The user reviews plans before code lands.
-- Anything not in `docs/SPEC.md` needs a `docs/DECISIONS.md` entry and the user's approval first.
-- Record every decision that is not obvious in `docs/DECISIONS.md` (append only).
-- Never claim something works that you did not run. Label results **verified** or **not verified** (RULES §4).
+- One TODO item at a time, in order, inside the current phase. A new phase starts only with the user's approval.
+- Before a large change, **state the plan and wait for approval**.
+- Anything not in `SPEC.md` needs a `DECISIONS.md` entry and the user's approval first. When a decision amends a SPEC row, rewrite the row in the same commit.
+- **Autonomous mode** (the user says to continue while they are away): take the recommended answer to an open question, record it as **Assumed** in `DECISIONS.md`, keep it reversible, and do not start a new phase.
+- Never claim something works that you did not run (RULES R-21).
+- Commit on the user's PC after a green `npm run check`. **Push only when the user says.**
 
-### At the end (mandatory, even if the session was short)
+### At the end (once per session)
 
-1. `docs/TODO.md`: tick finished items and add the commit hash; add newly discovered tasks.
-2. `docs/STATE.md`: rewrite the snapshot, the verification table and the issues list so it is true *now*.
-3. `docs/HANDOFF.md`: rewrite thoroughly: what happened, exactly where you stopped, what to do first next time, traps you found, questions for the user. Assume the next reader remembers nothing.
-4. `docs/DECISIONS.md`: append new entries; never edit old ones (supersede them with a new entry).
-5. Commit the docs with a `docs:` message.
-
-`HANDOFF.md` and `STATE.md` are **living documents**: they go stale within a session and are only trustworthy if updated at every session end.
+1. `docs/TODO.md`: tick finished items with their commit hash; add new tasks.
+2. `docs/STATE.md`: rewrite it so it is true *now*.
+3. `docs/HANDOFF.md`: rewrite it: what happened, where you stopped, the first actions next time, new traps, questions for the user.
+4. `docs/DECISIONS.md`: add new entries (short; old bodies are never rewritten, only status-stamped).
+5. Check that this file is still true. Commit the docs with a `docs:` message.
 
 ## 3. Hard invariants
 
-These are never traded away for convenience. Full list with rationale: `docs/RULES.md`.
+Never traded away for convenience. Full list: `docs/RULES.md`.
 
-1. **Waifu invariance.** No code path may branch on a waifu id except to pick her prompt, voice parameters, VRM and pet sprites. Model choice, effort, routing, tools, permissions and memory scope are independent of the waifu. Tests enforce this.
-2. **One model entry point.** Every model call goes through `router.decide()` with a role. No direct provider calls from features.
-3. **Local-only data.** Camera frames, mic audio, screen captures and memory-writer jobs never leave the machine.
-4. **No silent fallback.** If the user's chosen API model fails, show the error with *Retry* and *Switch model*. Do not quietly change models.
-5. **No secrets or assets in git.** Keys, `.vrm`, `.wav`, model weights, databases and logs are gitignored and must never be committed.
+1. **Waifu invariance.** No code branches on a companion id except to pick her prompt, voice parameters, VRM and pet sprites. Tests enforce this.
+2. **One model entry point.** Every model call goes through `router.decide()` with a role.
+3. **Local-only data.** Camera frames, mic audio, screen captures and memory-writer jobs never leave the machine. Roleplay fiction never reaches `memory.db`.
+4. **No silent fallback.** A failed user-chosen model shows the error with *Retry* and *Switch model*.
+5. **No secrets or assets in git.** Keys, `.vrm`, `.wav`, model weights, databases and logs are never committed. Stage explicit paths; never `git add -A`.
 6. **No hard-coded paths.** Use `KASANE/paths.py` (dev: `./data`; packaged: `%APPDATA%\Kokyu`).
 7. **Never block** the kernel's asyncio loop or the render loop.
-8. **Honest verification.** No claim without running it.
-9. **The code is proprietary** (D-040): keep the repo private; record provenance for anything copied in or out.
+8. **Only working controls.** No disabled placeholders, phase codes or internal words in the UI (D-082).
+9. **Honest verification.** No claim without running it.
+10. **The code is proprietary** (D-040): keep the repo private; record provenance for anything copied in or out.
 
 ## 4. Repository map
 
 ```
-CLAUDE.md             this file
-README.md  LICENSE    public face (proprietary licence, D-040)
-KASANE/               Python kernel (flat modules, folder on sys.path: `import llm`, `from audio import tts`;
-                      there is NO `kasane` package). D-062 layout:
-                        app.py        the server only: routes, lifespan, entry point
-                        session.py    one Session per window; `on_<type>` per protocol message
-                        turns.py      one model turn (recall, prompt, router, stream, speech)
-                        ambient.py    screen companions (Task Guide, OCR watch)
-                        companions.py the active companion's persona and voice, nothing more
-                        boot.py       start-up order (D-060, D-061); hub.py open windows and the driver
-                        vram.py       GPU memory, measured sizes, the check before a load (D-065)
-                        doctor.py     the Settings → Doctor checks (D-067)
-                        settings_file.py  settings.json over config.yaml, applied live (D-070)
-                        prompting.py  system prompt layers per mode (D-074); story.py roleplay story memory (D-074)
-                        router/ memory/ audio/ senses/ tools/ waifus/ threads/ protocol/ paths.py config.py llm.py
-                        voice_files/  build_premade.py's input (voice clips; .wav gitignored)
-src/                  frontend: app/ React window · engine/ three.js avatar code (K2 Stage) · net/ typed socket
+CLAUDE.md  README.md  LICENSE
+KASANE/               Python kernel. Flat modules; the folder is on sys.path (`import llm`,
+                      `from audio import tts`); there is NO `kasane` package.
+  app.py              the server: routes, lifespan, entry point (port 8780)
+  session.py          one Session per window; `on_<type>` per protocol message
+  turns.py            one model turn: recall, prompt, router, stream, speech
+  prompting.py        system prompt layers per mode (D-074)
+  story.py            roleplay story memory (D-074)
+  conversation.py     threads and history for a window
+  companions.py       the active companion's persona and voice, nothing more
+  ambient.py          screen companions (Task Guide, OCR watch)
+  boot.py  hub.py     start-up order (D-060, D-061); open windows and the driver
+  model_loader.py  vram.py   loading the chat model; GPU memory and the check before a load (D-065, D-072)
+  doctor.py           Settings → Doctor checks (D-067)
+  settings_file.py    settings.json over config.yaml, applied live (D-070)
+  llm.py  config.py  paths.py  persona.py  bus.py  context_budget.py  provider_presets.py  shell_keys.py  check.py
+  router/             decide(), roles, providers, catalog, budget, audit, redaction, listing for the picker
+  memory/             shared facts, recall, writer, consolidation, the viewer's backend
+  audio/              chunking, speech (DialogueFilter), tts, stt, vad, voice mode, arbiter
+  senses/             camera, look intent, OCR watch, Task Guide
+  tools/  waifus/  threads/  protocol/
+  tests/              pytest (fakes only; conftest stubs Ollama unloads and story memory)
+  voice_files/        build_premade.py's input (voice clips; .wav gitignored)
+  vrm/                duplicate VRMs, to be deleted by the user (C-1b)
+src/app/              React window: store.ts, chat-state.ts, ui/ components, theme.ts, markdown.ts, scenario.ts
+src/net/              typed socket (kernel.ts, protocol.ts)
+src/engine/           three.js avatar code for K2
 src-tauri/            Rust: window, tray, child processes (Job Object), API keys (Credential Manager)
-assets/premade/       Luna and Yuri packs (VRM, voice, prompt; untracked user assets, D-041)
+assets/premade/       Luna and Yuri packs (untracked user assets; open question 4)
 config/               config.example.yaml, models.example.yaml, secrets.example.yaml
-scripts/              dev.mjs, doctor.mjs, check.mjs, clean.mjs, test-frontend.mjs, build_premade.py
-tests-fe/             frontend tests (pure logic; Node test runner)
-docs/                 SCOPE, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, HANDOFF, TTS-BACKEND, notes/
+scripts/              dev, doctor, check, clean, test-frontend, build_premade.py
+tests-fe/             frontend pure-logic tests (Node test runner)
+docs/                 SCOPE, PRODUCT, SPEC, ARCHITECTURE, RULES, DECISIONS, TODO, STATE, HANDOFF, THIRD-PARTY,
+                      reference-images/, archive/ (frozen old notes and the full decision log)
 data/                 runtime data (gitignored)
 ```
 
-Seeded from Yuri in K0; since D-062 Yuri is only a premade character and her widget is gone. Yuri's old layout and findings: `docs/notes/yuri-inventory.md`. Check `STATE.md` for what actually exists.
-
 ## 5. Commands
-
-Confirmed on the user's PC (session 4, 2026-11-15).
 
 ```powershell
 python -m venv .venv
 .\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt
 npm install
 
-npm run tauri dev       # desktop shell; starts the kernel, which starts voice only when voice mode is on (D-061)
+npm run tauri dev       # desktop app; starts the kernel, which starts voice only when voice mode is on (D-061)
 npm run dev             # kernel + page for a plain browser tab (reuses a kernel already running)
-npm run dev:ui          # page only (what tauri dev uses). Never run it together with `npm run dev` or `tauri dev`: port 1420
+npm run dev:ui          # page only. Never together with `npm run dev` or `tauri dev`: port 1420
 npm run doctor          # why a window does not load
 npm run build           # tsc + vite build
 npm run test:fe         # frontend pure-logic tests
 npm run clean           # dist, test caches, __pycache__ (`clean:all` adds src-tauri/target)
-npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest (add `-- --skip-cargo` without a Rust toolchain; KOKYU_PYTHON overrides the interpreter)
+npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest (`-- --skip-cargo` without Rust; KOKYU_PYTHON overrides the interpreter)
 .\.venv\Scripts\python.exe -m pytest KASANE -q
 .\.venv\Scripts\python.exe KASANE\check.py --refresh   # config, key, catalog, spend
 ```
 
-`npm run check` (which includes `pytest`) is the **definition of green**. Delivery is by git bundle (D-030).
+`npm run check` is the **definition of green**.
 
 ## 6. Conventions (short)
 
-- **Commits:** Conventional Commits (`feat:`, `fix:`, `docs:`, `refactor:`, `test:`, `chore:`), small and focused. Never force-push `main`.
-- **Python:** 3.11+, type hints on public functions, `logging` not `print`, `pathlib` for paths, async-first.
-- **TypeScript:** `strict`, no unexplained `any`. UI chrome in React; the three.js engine is an imperative module outside React state. Clients hold **no business logic**: they render kernel state.
+- **Commits:** Conventional Commits (`feat:`, `fix:`, `refactor:`, `test:`, `docs:`, `chore:`), small and focused, citing FR and D IDs. Never force-push `main`.
+- **Python:** 3.11+, type hints on public functions, `logging` not `print`, `pathlib`, async-first.
+- **TypeScript:** `strict`, no unexplained `any`. React for the window; the three.js engine is an imperative module outside React state. Clients hold **no business logic**: they render kernel state.
 - **Config:** every tunable is a config key with a default in `config/config.example.yaml`. Windows paths in YAML use **single quotes**.
-- **Tests:** every kernel feature gets pytest coverage; tests that touch models use fakes. No GPU, network or key may be required for the suite.
-- **Docs:** spec IDs (`FR-…`) are referenced from TODO items, tests and commits.
+- **Tests:** every kernel feature gets pytest coverage with fakes. No GPU, network or key may be required, and no test may touch the user's Ollama or data.
+- **Docs:** cite SPEC (`FR-…`) and decision (`D-…`) IDs in TODO items, tests and commits.
 
 ## 7. Things that bite on this machine
 
-- Two dev servers share **port 1420**: run `npm run tauri dev` *or* `npm run dev`, never both.
-- Yuri's kernel uses **8765** and its TTS backend **9880** (both hard-coded in Rust and Python). Kokyu's kernel uses **127.0.0.1:8780** (D-027); the TTS port comes from config and defaults to 9880.
-- **Never bulk-edit source with naive string replacement** (it once replaced every "a" with "w" in five files). Rename with targeted edits and run the tests after each step.
-- Tests stub `llm.<fn>` by module attribute and the router calls through the module; do not switch to `from llm import x`.
-- `WinError 10048` on startup means a leftover `python.exe` holds the port: check Task Manager.
-- Quit through the **tray Quit item**. Killing the process skips graceful shutdown, so that session's memory consolidation is lost.
-- faster-whisper on CUDA failed on this machine with a missing `cublas64_12.dll`; **STT runs on CPU** by default (and that is also the right call for the VRAM budget).
-- YAML with Windows paths: single quotes only (`'C:\Users\...'`).
-- VRM, animation and voice files are user assets: gitignored, never committed.
-- The GPT-SoVITS backend is **outside this repo**, set up by a separate agent from `docs/TTS-BACKEND.md`.
+- **The user may be running the app** (`npm run tauri dev`: the kernel on 8780, Vite on 1420). Never start a kernel on 8780 or a page on 1420 then. Claude's browser preview runs on **1421** (`.claude/launch.json`). With the kernel offline, state can be injected through the store module: `import('/src/app/store.ts')`, using the URL the page actually loaded (check `performance.getEntriesByType('resource')`, since HMR adds `?t=`).
+- **A scratch kernel for live checks:** `KOKYU_DATA_DIR=<scratch>/live .venv/Scripts/python.exe KASANE/app.py` in the background, only when 8780 is free. Copy `config/config.yaml` into the scratch dir first (`KOKYU_DATA_DIR` moves where config is read). Stop it with `curl -X POST http://127.0.0.1:8780/shutdown`.
+- **Never touch the user's Ollama service** beyond read-only GETs. `conftest.py` stubs `boot.unload_ollama`, and gives story memory a keeper that always finds the model busy.
+- **Two config files (D-070):** `settings.json` (app data folder) wins over `config/config.yaml`. Read `CONFIG` at call time; `config.install` swaps it live.
+- **Tests patch the module that owns the name** (`turns.send_speak`, `companions.system_message`, `boot.check_chat_model`, `hub.driver`, `vram.gpu_memory`, `llm.<fn>`). Call through the module; never `from llm import x`. A fixture or local named like a module (`boot`, `tools`) shadows it.
+- **Where things live:** a message handler is `Session.on_<type>`; adding a message type means a `protocol/` model, a `CLIENT_TYPES` entry, `src/net/protocol.ts` and one `on_<type>` (a test checks the handler exists). `turns.run_turn` must never mention a waifu (a test enforces it).
+- **Edits:** single-match replacements in a Python script (`assert s.count(old) == 1`, normalize CRLF). **Never bulk-replace** (it once replaced every "a" with "w" in five files). The Bash tool refuses some heredocs with `${…}` or triple quotes: write the script to a file, then run it.
+- **Vite can keep a stale transform** of a briefly empty file: restart the preview.
+- **The model popover's lists are CSS grids with subgrid rows** (check, name, meta, fit, badges); a new row element must keep the five cells.
+- **`build_premade.py --force` rewrites the packs' `waifu.yaml`**, dropping the `prompt: persona.md` pointer (D-074).
+- `WinError 10048` on startup: a leftover `python.exe` holds the port.
+- Quit through the **tray Quit item** (or `POST /shutdown`); killing the process skips the memory pass.
+- faster-whisper on CUDA failed here (missing `cublas64_12.dll`); **STT runs on CPU**.
+- Ports: 8780 kernel, 8080 llama-server (Ollama's runners are also `llama-server.exe`: check the port, not the name), 1420 Vite, 9880 GPT-SoVITS (dev install at `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228`, a space in the path).
+- Live Credential Manager tests: `cd src-tauri && cargo test --offline --lib -- --ignored --test-threads=1`, then `cmdkey /list:Kokyu/*` must show NONE.
 
 ## 8. Definition of done (for any TODO item)
 
-1. Code and tests written; `npm run check` and `pytest` green (or the failure is explained in `STATE.md`).
-2. Matching SPEC requirement IDs satisfied, or the gap recorded.
-3. Verified vs not-verified stated honestly in the commit body or `STATE.md`.
-4. TODO ticked with commit hash; docs updated per the session protocol.
+1. Code and tests written; `npm run check` green (or the failure is explained in `STATE.md`).
+2. The SPEC rows it touches are satisfied, or the gap is recorded.
+3. Verified vs not verified stated honestly in the commit body.
+4. TODO ticked with the commit hash at the session's end.
 
 ## 9. Where to look
 
 | Question | Doc |
 |---|---|
-| What are we building and why? | `docs/SCOPE.md` |
-| What is the product and what ships when? | `docs/PRODUCT.md` |
+| What are we building, what is cut, what ships when? | `docs/SCOPE.md` |
+| Product, buyers, distribution, business questions | `docs/PRODUCT.md` |
 | What exactly must it do? | `docs/SPEC.md` |
-| How is it put together? | `docs/ARCHITECTURE.md` |
+| How is it put together (incl. the voice backend contract)? | `docs/ARCHITECTURE.md` |
 | What must I never do? | `docs/RULES.md` |
-| Why was X decided? | `docs/DECISIONS.md` |
+| Why was X decided? What is still open? | `docs/DECISIONS.md` (full old text: `docs/archive/`) |
 | What is next? | `docs/TODO.md` |
 | What is true right now? | `docs/STATE.md` |
 | What happened last time? | `docs/HANDOFF.md` |
-| How do I set up voice? | `docs/TTS-BACKEND.md` |

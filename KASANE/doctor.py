@@ -94,7 +94,7 @@ async def voice_row(cfg: Config) -> dict[str, Any]:
     if not voice_mode.VOICE.on:
         return _row("tts", "Voice (TTS)", OFF, "Starts when you turn voice on")   # D-061
     return _row("tts", "Voice (TTS)", FAIL, f"GPT-SoVITS not answering at {cfg.tts.gpt_sovits.api_url}",
-                "Check tts.gpt_sovits.launch in config.yaml and logs/gpt_sovits.log (docs/TTS-BACKEND.md).")
+                "Check tts.gpt_sovits.launch in config.yaml and logs/gpt_sovits.log.")
 
 
 def stt_row(cfg: Config) -> dict[str, Any]:

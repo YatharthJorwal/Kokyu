@@ -74,7 +74,7 @@ models:
     # in memory (D-072). These entries apply only while a llama.cpp or API model is
     # picked; then the model loads for its call and leaves. null = the reflex model.
     classifier: null              # intent, task, JSON
-    memory_writer: null           # summarization; local by policy (D-015)
+    memory_writer: null           # summarization; local by policy (CLAUDE.md invariant 3)
     embed: 'nomic-embed-text'     # 768-dim; sqlite-vec width is fixed to this
     mind: 'qwen3.5:9b'            # local fallback for the mind role
   cloud:
@@ -106,7 +106,7 @@ roles:
     local_only: true
   memory_writer:
     chain: [local_ollama]
-    local_only: true      # D-015: the most personal text never leaves
+    local_only: true      # local-only data: the most personal text never leaves
     max_tokens: 800
     temperature: 0.3
   mind:

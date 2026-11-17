@@ -1,3 +1,5 @@
+> Archived 2026-11-17, frozen. Superseded by `docs/ARCHITECTURE.md` (how Kōkyū is built today); kept for history.
+
 # Yuri and Luna inventory (K0-02)
 
 Findings from reading the code that Kōkyū will be seeded from. Written 2026-11-11 (session 1) before any porting, so the specs can be corrected against reality.

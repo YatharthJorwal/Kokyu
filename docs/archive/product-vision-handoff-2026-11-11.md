@@ -1,3 +1,5 @@
+> Archived 2026-11-17, frozen. Superseded by docs/SCOPE.md and docs/PRODUCT.md; kept for history.
+
 > **Provenance:** verbatim copy of an external product-vision handoff that the user produced by researching and discussing with ChatGPT, supplied on 2026-11-11. It is **input, not an authority**: `docs/PRODUCT.md` §8 records how each item was treated (adopted, adapted, deferred, rejected). Where it disagrees with `DECISIONS.md`, the decisions win until the user changes them.
 
 ---

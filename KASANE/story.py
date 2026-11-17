@@ -3,7 +3,7 @@
 Each roleplay thread keeps a running summary of its older scenes in `threads.db`
 (`story_memory`, deleted with its thread), so a long story keeps its beginning
 after the early messages fall out of the history window. It is written locally by
-the `memory_writer` role (D-015) from the thread's own messages and fed to every
+the `memory_writer` role (local-only, CLAUDE.md invariant 3) from the thread's own messages and fed to every
 turn of that thread as part of the ephemeral note (`prompting.STORY_NOTE`), never
 into history[0], so llama-server's cached prefix holds.
 
@@ -37,7 +37,7 @@ from threads import Message
 
 log = logging.getLogger(__name__)
 
-ROLE = "memory_writer"   # local-only by policy (D-015); the router keeps it on this machine
+ROLE = "memory_writer"   # local-only by policy (CLAUDE.md invariant 3); the router keeps it on this machine
 
 INSTRUCTION = (
     "You keep the running summary of a roleplay story. Rewrite the summary to include the new "

@@ -1,3 +1,5 @@
+> Archived 2026-11-17, frozen. Superseded by `docs/ARCHITECTURE.md` §8 (the GPT-SoVITS contract) and D-080 (automatic first-run setup); kept for history.
+
 # TTS-BACKEND — brief for the setup agent
 
 This is a **self-contained task brief** for a CLI agent. Goal: a clean, headless GPT-SoVITS API server on the user's Windows machine that Kōkyū can drive per request with a different zero-shot reference clip. Kokyu's repo contains only an adapter; **this install lives outside the repo**.

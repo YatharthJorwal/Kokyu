@@ -1,3 +1,5 @@
+> Archived 2026-11-17, frozen. Superseded by `docs/SPEC.md` (FR-MODE-1..10), D-074, D-075 and `docs/ARCHITECTURE.md` §4; kept for history.
+
 # Modes plan: Chat, Roleplay and Live (proposal, not approved)
 
 - **Status:** draft for the user's review, 2026-11-15 (session 4). Nothing here is built.

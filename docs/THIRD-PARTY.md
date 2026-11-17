@@ -1,58 +1,80 @@
 # THIRD-PARTY: dependencies and shipped assets
 
-RULES R-38 (dependencies) and R-51 (assets). **The license names below are from memory and have
-not been checked against each package's current metadata.** Verify every row at release
-(TODO K7-06). Anything not permissive for closed-source commercial distribution needs a
-`DECISIONS.md` entry first.
+RULES R-38 (dependencies) and R-51 (assets). Every dependency must permit closed-source commercial distribution; anything else needs a `DECISIONS.md` entry first.
 
-Last updated: 2026-11-12 (session 2, seed from Yuri `e32af4f`).
+Last updated: 2026-11-17. The tables list the **direct** dependencies in `package.json`, `KASANE/requirements*.txt` and `src-tauri/Cargo.toml`. Versions are the installed ones; licences were read from each package's own metadata (`node_modules/<pkg>/package.json`, the `.dist-info/METADATA` in `.venv`, the crate's `Cargo.toml` in the Cargo registry). Transitive dependencies are checked at release (TODO K7).
 
 ## Frontend (npm)
 
-| Package | Role | License (believed) |
-|---|---|---|
-| `three` | 3D rendering | MIT |
-| `@pixiv/three-vrm` | VRM loading, spring bones, expressions | MIT |
-| `@pixiv/three-vrm-animation` | VRMA animation clips | MIT |
-| `three-mesh-bvh` | Fast raycasting and collision | MIT |
-| `@tauri-apps/api` | Shell bridge | MIT or Apache-2.0 |
-| `vite`, `typescript`, `@types/three`, `@tauri-apps/cli` (dev only) | Build tooling | MIT, Apache-2.0, MIT, MIT or Apache-2.0 |
+| Package | Version | Role | Licence |
+|---|---|---|---|
+| `react`, `react-dom` | 19.3.1 | UI chrome | MIT |
+| `zustand` | 5.1.0 | UI state store | MIT |
+| `three` | 0.185.1 | 3D rendering | MIT |
+| `@pixiv/three-vrm` | 3.5.5 | VRM loading, spring bones, expressions | MIT |
+| `@pixiv/three-vrm-animation` | 3.5.5 | VRMA animation clips | MIT |
+| `three-mesh-bvh` | 0.9.18 | Fast raycasting and collision | MIT |
+| `@tauri-apps/api` | 2.12.4 | Shell bridge | Apache-2.0 OR MIT |
+
+Development only (not shipped):
+
+| Package | Version | Role | Licence |
+|---|---|---|---|
+| `@tauri-apps/cli` | 2.12.4 | Build and bundle | Apache-2.0 OR MIT |
+| `vite` | 5.4.21 | Dev server and bundler | MIT |
+| `@vitejs/plugin-react` | 4.7.0 | React support for Vite | MIT |
+| `typescript` | 5.9.3 | Type checker | Apache-2.0 |
+| `@types/react`, `@types/react-dom` | 19.3.0 | Type definitions | MIT |
+| `@types/three` | 0.185.4 | Type definitions | MIT |
 
 ## Rust shell (Cargo)
 
-| Crate | Role | License (believed) |
-|---|---|---|
-| `tauri`, `tauri-plugin-global-shortcut` | Windows, tray, hotkeys | MIT or Apache-2.0 |
-| `serde`, `serde_json` | Serialization | MIT or Apache-2.0 |
-| `win32job` (Windows only) | Job Object: children die with the app | MIT or Apache-2.0 (verify) |
-| `windows-sys` 0.59 (Windows only) | Credential Manager calls for the API key (FR-R-6, D-059); already in the lock file through tauri | MIT or Apache-2.0 |
+| Crate | Version | Role | Licence |
+|---|---|---|---|
+| `tauri` | 2.11.5 | Windows, tray, child processes | Apache-2.0 OR MIT |
+| `tauri-build` (build only) | 2.6.3 | Build script | Apache-2.0 OR MIT |
+| `serde`, `serde_json` | 1.0.229, 1.0.151 | Serialization | MIT OR Apache-2.0 |
+| `win32job` (Windows only) | 2.0.3 | Job Object: children end with the app | MIT OR Apache-2.0 |
+| `windows-sys` (Windows only) | 0.59.0 | Credential Manager calls for API keys (FR-R-6, D-059) | MIT OR Apache-2.0 |
 
 ## Kernel (Python)
 
-| Package | Role | License (believed) |
-|---|---|---|
-| `fastapi`, `pydantic`, `pyyaml`, `pytest` | Server, schemas, config, tests | MIT |
-| `uvicorn`, `httpx`, `pyperclip` | ASGI server, HTTP client, clipboard | BSD-3-Clause |
-| `faster-whisper` | Speech to text (CPU) | MIT |
-| `sqlite-vec` | Vector search in SQLite | MIT or Apache-2.0 |
-| `Pillow` | Screen capture and images | HPND (permissive) |
-| `pytest-asyncio` | Tests | Apache-2.0 |
-| `pyttsx3` | Opt-in placeholder voice (off by default) | **MPL-2.0 (file-level copyleft; fine as an unmodified library, but flag for review before release)** |
+`KASANE/requirements.txt`:
 
-## External programs (not bundled, installed by the user or a component recipe)
+| Package | Version | Role | Licence |
+|---|---|---|---|
+| `fastapi` | 0.162.7 | Server | MIT |
+| `uvicorn[standard]` | 0.54.0 | ASGI server | BSD-3-Clause |
+| `httpx` | 0.28.1 | HTTP client | BSD-3-Clause |
+| `pyyaml` | 6.0.3 | Config | MIT |
+| `pydantic` | 2.14.3 | Schemas | MIT |
+| `faster-whisper` | 1.2.1 | Speech to text (CPU) | MIT |
+| `sqlite-vec` | 0.1.9 | Vector search in SQLite | MIT OR Apache-2.0 |
+| `Pillow` | 10.4.0 | Screen capture and images | HPND (permissive) |
+| `pyperclip` | 1.11.0 | Clipboard | BSD |
+| `pyttsx3` | 2.99 | Opt-in placeholder voice (off by default) | **MPL-2.0** (file-level copyleft; fine as an unmodified library, but review before release) |
 
-| Program | Role | License (believed) |
+`KASANE/requirements-dev.txt` (development only):
+
+| Package | Version | Role | Licence |
+|---|---|---|---|
+| `pytest` | 8.4.2 | Tests | MIT |
+| `pytest-asyncio` | 0.26.0 | Async tests | Apache-2.0 |
+
+## External programs (not bundled)
+
+Installed by the user or by the first-run setup (D-080). Re-check each when the setup manifests are pinned.
+
+| Program | Role | Licence |
 |---|---|---|
-| Ollama | Local model runtime | MIT |
-| llama.cpp | Local model runtime | MIT |
-| GPT-SoVITS | Zero-shot voice backend (`api_v2.py`) | MIT |
-| Model weights (Qwen and others) | Chat models | Each model's own license; never bundled |
+| Ollama | Local model runtime (its official installer) | MIT (per its repository; no licence file in the local install to read) |
+| llama.cpp (`llama-server`) | Local model runtime | MIT (`LLAMA_CPP_LICENSE` shipped inside Ollama's install) |
+| GPT-SoVITS | Zero-shot voice backend (`api_v2.py`) | MIT (`LICENSE` in the development install) |
+| Model weights (Qwen and others) | Chat, speech-to-text and voice models | Each model's own licence; never bundled |
 
 ## Animation clips
 
-Luna's open-licensed VRMA pack, with its Apache-2.0 and MIT notices, is documented in
-`public/vrm-animations/` (`NOTICE.md`, `LICENSES/`). The `.vrma` files themselves are not
-committed (the pattern is gitignored); decide whether to track them at K4.
+Luna's open-licensed VRMA pack is documented in `public/vrm-animations/` (`NOTICE.md`, `LICENSES/APACHE-2.0.txt`, `LICENSES/MIT.txt`). The notices are committed; the `.vrma` files are not (gitignored). Decide whether to ship them at K4.
 
 ## Shipped assets (the premade companions, D-041)
 

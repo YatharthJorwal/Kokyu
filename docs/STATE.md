@@ -1,181 +1,94 @@
 # STATE — Kōkyū
 
-**Living document.** The truth *right now*. Rewrite it at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. Narrative lives in `HANDOFF.md`; the plan is `TODO.md`.
+**What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-17, session 5 close (phase K1c, conversation modes: D-074, D-075)
-- **Current phase:** **K1 and K1c are code-complete; both gates need the user** (§6). K1c (Chat and Roleplay per thread, story memory, scenario cards, dialogue-only voice) was built on **assumed answers** to the six modes questions (D-074): the user confirms or reverses them at the K1c gate. Left in K1: C-1b (the user deletes `KASANE/vrm/`). The K0 manual gate (window, voice) is still open.
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`. Last code commit `2b99262`, then this docs commit. **Not pushed:** the user pushes (`git log origin/main..HEAD` lists every commit from `470a05e` on).
-- **License:** proprietary, all rights reserved (D-040). The repository should be private.
-- **Seed:** Yuri `e32af4f710cdf4e8c141df667a18c53046557ea3`, copied verbatim in commit `0cd2d20`.
-- **Last green run (the user's PC, 2026-11-17, after `97de53a`):** `npm run check`: tsc, frontend tests 140, vite build, `cargo check`, pytest 1209.
+- **Last updated:** 2026-11-17, session 5 (K1c finished, then the docs reset, D-076)
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **Next: UI-1, chat app polish, model names first** (D-084, D-085 provisional).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `7c16e95`; the docs reset commit follows.
+- **Last green run (the user's PC, 2026-11-17, after `97de53a`):** `npm run check`: tsc, frontend tests 140, vite build, cargo check, pytest 1209. pytest 1209 and test:fe 140 again after `2b99262`.
+- **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
 
-| Area | State |
+Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch kernel, or with injected state where noted); **D** = end to end in the desktop app with a real model. A level not listed was not reached.
+
+| Feature | Level |
 |---|---|
-| Docs, README, proprietary LICENSE, `THIRD-PARTY.md` | Written |
-| Kernel `KASANE/` (flat modules), split by job (D-062): `app.py` server only, `session.py` (one `Session` per window, `on_<type>` per message), `turns.py`, `ambient.py`, `companions.py`, `boot.py`, `hub.py`, `doctor.py`, `vram.py`; port 8780, `paths.py`, waifu packs and registry, per-waifu TTS, shared memory | Done and tested; live verified in the browser pane |
-| No Yuri in the code (D-062) | Done and tested; **the tray was not looked at** |
-| Protocol v1 only; the avatar code waits in `src/engine/` for K2 | Done and tested |
-| Threads store, per-thread model and effort (per model, `threads.efforts`), D-025 egress rules | Done and tested; live local calls verified |
-| Token counts per reply where the backend reports them (K1-04b) | Done and tested; stored, not shown |
-| Lazy boot (D-060, D-061); default chat model on this PC `local:ollama/qwen3.5:9b` | Done; live verified |
-| Voice mode switch in the tray (D-061) | Done; live verified (47 s to start GPT-SoVITS); **no audible playback checked** |
-| llama.cpp backend, Qwen3.6-35B-A3B on demand (D-051, D-052) | Done; live verified |
-| **Window layout to the reference (K1-15, D-068, D-069):** frameless window with its own minimize / maximize / close; top bar with the companion chip and a Temp Chat switch; sidebar with logo, pink New chat, search, history, Settings gear; one-row input box (paperclip tray, mic disabled until K2, round Send / Stop); a status line and the model chip under it; replies end right above the heart | Done; live verified in the browser pane at 1586×992, 1000×625, 900×600; **the frameless Tauri window not seen** |
-| Model chip and popover: one line per row (name, size or price, fits, badges), vision / thinking / tools badges from Ollama's `capabilities`, effort slider, "Spent today" footer; a "waking up" card with Try again / Switch model (K1-07a, K1-10, K1-11) | Done; live verified |
-| Effort data in `config/models.yaml` / `models.example.yaml` (D-064); thinking gets `llm.reasoning_tokens` of room; an empty reply is an error | Done and tested; live verified on `qwen3.5:9b` |
-| VRAM manager v1 (K1-09, D-065): NVML from the driver, measured sizes in `data/vram_measured.json`, fits hints, a refusal before any unload that names what holds the memory | Done and tested; live verified (refusal card, fits / won't fit); the llama-server measurement on a real start not seen |
-| *Unload X* on that card (K1-09b, D-071): offered for a named Ollama model the kernel does not reload at once (the memory writer), not the classifier or the embedding model; one click unloads it and tries the load again | Done and tested (planner, loader, WebSocket path); **not seen in a window** (the user's `tauri dev` held the kernel port) |
-| Inline turn failures (K1-12, D-066): a card under the failed turn, plain words per kind (key refused, out of credit, rate limit, timeout, provider error), the provider's words under Details | Done and tested; live verified with Ollama unreachable; **no live API failure** (no key) |
-| Settings (K1-13, D-067): Models, Screen, Memory (correct, forget, restore), Doctor (one row per component with a fix hint), About | Done and tested; live verified in the browser pane |
-| Editable settings (K1-13b, D-070): `settings.json` in the app data folder wins over `config/config.yaml`, applied with no restart: the Ollama address (this PC only), a custom API endpoint, the budget caps, screen companions "On now" / "On at start" | Done and tested; live verified in the browser pane against a scratch kernel (refusals, saves, the API slot and spend line following, the file, a restart); "On at start" with a vision model and the key form's custom entry in the desktop window not seen |
-| **Conversation modes (K1c, D-074, D-075):** `threads.mode` chat / roleplay fixed per thread (schema 3), scenario card JSON; system message = persona + mode layer (+ scenario card) + shared addendum (+ tool guidance in chat), one builder `Session.system_prompt()`; roleplay turns with no tools, forget, look intent or Task Guide, profile-only recall, nothing to `transcript_log`; delivery layer per mode while voice is on | Done and tested; **not run against a real model** |
-| Story memory (`KASANE/story.py`, `story_memory`, schema 4): batched local folds by the memory writer, waits for the chat model, fed per turn in the ephemeral note | Done and tested with fakes; **no fold run against real Ollama** |
-| Dialogue-only speech in roleplay (`speech.DialogueFilter`), trailing emotion tag held back from speech in both modes | Done and tested; **not heard** |
-| Saved scenario cards (`scenarios`, schema 5; `scenario_list` / `scenario_save` / `scenario_delete`), the opening line stored as her first message (`meta.opening`) | Done and tested; dialog seen in the browser pane |
-| Client: *New roleplay…* under *New chat*, the dialog (pick, save, delete a card, or blank), Roleplay badge, `*action*` italic and soft, `(OOC …)` muted, roleplay placeholder | Done and tested (frontend); seen in the browser pane with the kernel offline and injected state, in the Kōkyū and Light themes |
-| Persona-only prompts `assets/premade/{luna,yuri}/persona.md` (`waifu.yaml` → `prompt: persona.md`; the original `prompt.md` kept) | Written; both packs load; **untracked** (D-041); not judged in a real chat |
-| Sidebar history (grouped, search, rename, delete), Markdown replies, Copy, Regenerate, Retry, heart and thinking lines, screen companions, companion chip with dividers | Done; live verified (screen companion remarks not seen end to end) |
-| AI Router and one API endpoint at a time; key in the Windows Credential Manager (D-058, D-059) | Done and tested with fakes; **no live API call** (no key on this PC) |
-| App icon | Done; not looked at in the taskbar or tray |
-| Premade packs `assets/premade/{luna,yuri}/` | Built by a peer session, **untracked**; the user decides about committing VRM/WAV (D-041) |
-| TTS backend (Track T) | Not started; development uses the existing install (D-042) |
+| Kernel split by job (D-062), port 8780, `paths.py`, companion packs and registry, shared memory with speakers | T, B |
+| Waifu invariance (FR-W-3), one router door, egress rules (D-025), every message type has a handler | T |
+| Threads (history, search, rename, delete, Temp Chat), Markdown replies, Copy, Regenerate, Stop | T, B |
+| Lazy boot (D-060), voice only when voice mode is on (D-061, 47 s to start GPT-SoVITS) | T, B; no audible playback checked |
+| Model picker: Local and API sections, fits hints, capability badges, effort slider per model (D-064), "waking up" card | T, B (real Ollama and GPU) |
+| One chat model in memory, helpers follow the pick (D-072) | T only (fakes) |
+| VRAM check before a load, refusal naming the blockers (D-065), *Unload X* (D-071) | T, B (refusal card); *Unload X* T only |
+| Failure card with Retry / Switch model (D-066) | T, B (Ollama pointed at a dead port); no live API failure |
+| One API endpoint at a time, key in the Credential Manager (D-059) | T; Credential Manager live-tested; **no live API call** (no key) |
+| Settings: Models, Screen, Memory (correct, forget, restore), Doctor, About, Appearance (D-067, D-070, D-073) | T, B |
+| Window layout to the reference (D-068, D-069), frameless window with its own buttons | B; the frameless window in the desktop app not confirmed |
+| Screen companions: Task Guide, OCR watch (D-048, D-056); quiet in roleplay | T; remarks not seen live |
+| **Modes:** Chat and Roleplay per thread, layered prompts, no tools in roleplay, fiction kept out of memory (D-074) | T; the user ran the build on their PC |
+| Story memory (`story.py`, folds logged as `story memory: folded …`) | T; no fold confirmed on real Ollama |
+| Dialogue-only speech in roleplay (`DialogueFilter`) | T; not confirmed heard |
+| Saved scenario cards, opening line as her first message | T, B (injected state) |
+| New roleplay dialog, Roleplay badge, `*action*` and `(OOC …)` rendering | T, B (injected state) |
+| Persona-only `persona.md` for Luna and Yuri | Written; packs load; untracked (open question 4) |
+| App icon | Not looked at in the taskbar or tray |
 
 ## 2. Environment
-
-### Stated by the user
 
 | Item | Value |
 |---|---|
 | GPU / CPU / RAM | RTX 3060 12 GB; i5-14400F; 32 GB DDR5-4800 |
-| OS | Windows 11 (PowerShell); repo at `D:\AI\Kokyu.ai` |
-| GPT-SoVITS install | `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (**a space in the path**) |
-| Ollama models | `hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L`, `qwen3.5:9b`, `qwen3.5:4b`, `nomic-embed-text` |
-| llama.cpp | **Qwen3.6**-35B-A3B `UD-Q4_K_XL` (unsloth, ~21 GB) under `D:\AI\hf_cache\hub\models--unsloth--Qwen3.6-35B-A3B-GGUF\...`; the kernel uses the `llama-server.exe` inside Ollama |
-| API | An AI Router account; **no key is set up on this PC** |
-| Assets | VRMs made by the user; voices generated on the ElevenLabs website (AI-generated) |
+| OS | Windows 11; repo at `D:\AI\Kokyu.ai` |
+| Toolchain (measured) | Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5, Ollama 0.40.16 |
+| Ollama models | `hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L`, `qwen3.5:9b` (default chat model, D-060), `qwen3.5:4b`, `nomic-embed-text` |
+| llama.cpp | Qwen3.6-35B-A3B `UD-Q4_K_XL` (~21 GB) through the `llama-server.exe` inside Ollama; about 3.0 GB VRAM, 19.5 GB RAM, ~23 tok/s generation; 109 s to load (D-051) |
+| GPT-SoVITS (dev) | `D:\AI\GPT SoVITS\GPT-SoVITS-v3lora-20250228` (a space in the path); 47 s to answer after start |
+| GPU at rest with the chat model up | 12,288 MB total, 394 MB free (9B 5,590 MB; 4B 3,207 MB; embeddings 320 MB; other programs ~2.7 GB), measured before D-072 |
+| API | An AI Router account; **no key on this PC** |
 | VR headset | None |
 
-### Measured on the user's PC
+## 3. Open questions (the user will come back to them)
 
-Node 26.13.0, npm 11.20.0, cargo/rustc 1.97.1, venv Python 3.13.5; Ollama 0.40.16 (its `/api/tags` returns each model's `capabilities`).
-
-**K1-01 spike: Qwen3.6-35B-A3B Q4 on llama.cpp** (ctx 8192, flash attention, thinking off): with `n_cpu_moe 40, threads 10` about 3.0 GB VRAM, 19.5 GB RAM mapped, 54 to 58 prompt tok/s, about 23 gen tok/s (D-051). Loading the 35B from the picker took 109 s.
-
-**Session 4 (2026-11-15):**
-- `import app` 750 ms before the lazy imports, 615 ms after (D-062).
-- A cold `qwen3.5:9b` load took 104.6 s once while the `qwen3.5:4b` classifier and the 9B swapped each other out of VRAM.
-- **GPU at rest with the chat model up** (NVML): 12,288 MB total, 394 MB free; `qwen3.5:9b` 5,590 MB, `qwen3.5:4b` 3,207 MB, `nomic-embed-text` 320 MB, other programs about 2.7 GB. Nothing else large fits beside them.
-- GPT-SoVITS took 47 s to answer after voice mode was turned on.
-
-## 3. Verification status
-
-| Claim | Status |
-|---|---|
-| Current tree on Windows: `npm run check` green (tsc, frontend 140, vite build, cargo check, pytest 1209) | **Verified** (user's PC, after `97de53a`) |
-| K1c invariance: mode comes from the thread only; the system message differs between companions only in the persona; `run_turn` never mentions a waifu; router role `chat` in both modes | **Verified** (tests) |
-| K1c roleplay turn: no tools offered, a tool call not offered is refused, no forget / look intent / Task Guide, nothing written to `transcript_log`, profile-only recall | **Verified** with fakes (tests) |
-| Roleplay rendering, badge, placeholder, New roleplay dialog (fill from a saved card, save, delete confirm), the stacked sidebar buttons at 900 px | **Verified** in the browser pane (kernel offline, state injected); not in the Tauri window |
-| A real model following the mode layers (chat short and plain, roleplay in the c.ai format, no decisions for the user); story folds on real Ollama; dialogue-only voice heard | **Not verified** |
-| One chat model in memory (D-072): a pick unloads every other Ollama model but embeddings (an API pick also stops llama-server); classifier, memory writer and vision run on the picked Ollama model; `keep_alive` 30m for it, 0 for others | Done and tested with fakes; **not run against the real Ollama** |
-| Appearance (D-073): three themes, accent, bubbles, text size, kept in localStorage | **Verified** in the browser pane with the kernel offline; not seen in the Tauri window |
-| Effort slider: no overshoot past the track | **Verified** (browser pane, measured) |
-| Invariance: a turn differs between waifus only in the system prompt and the TTS parameters; memory and the Doctor never look at a waifu | **Verified** (tests) |
-| Every protocol client message type has a `Session.on_<type>` handler | **Verified** (test) |
-| Effort slider: per-model levels, remembered per model per thread, the chip glows while generating; High on `qwen3.5:9b` answers instead of thinking itself out of room | **Verified** (browser pane) |
-| VRAM: fits / won't fit hints; a model too big is refused before anything unloads, naming the blockers | **Verified** (browser pane, real GPU) |
-| A failed turn shows the card under the turn with Retry / Switch model | **Verified** (browser pane, Ollama URL pointed at a dead port) |
-| Settings → Memory: correct (a new fact supersedes the old), forget, restore; Settings → Doctor rows on this PC | **Verified** (browser pane, scratch data dir) |
-| K1-15 layout, popovers, tray, Temp Chat switch (saved by the kernel, shown in the sidebar), status line, replies right above the heart | **Verified** (browser pane) |
-| Settings → Models: a LAN Ollama address and a plain-http endpoint refused with the reason beside Save; a localhost address, a custom endpoint (the API heading switched to it) and caps (the spend line followed) saved to `settings.json` and back after a kernel restart; Settings → Screen "On at start" saved | **Verified** (browser pane, scratch data dir) |
-| A screen companion turned on at start through the vision check | **Verified** with fakes only (test); not run live, it would capture the screen |
-| *Unload X*: offered only for a model the card names and the kernel will not reload at once; a ref not offered is refused; an offered one is unloaded and the load runs again | **Verified** with fakes (tests); the card and a real unload not seen |
-| Anything inside the Tauri window (`npm run tauri dev`): the frameless window (drag, resize, the three buttons, close to tray), the tray menu, voice playback in WebView2, drag-drop, the native file dialog, the Key form | **Not verified** (Claude cannot see the window) |
-| Credential Manager and the kernel's stdin key pipe | **Verified** (`cargo test -- --ignored`, live vault) |
-| A live API model call; an API failure card from a real provider | **Not verified** (no key on this PC) |
-| llama-server's measured VRAM on a real start (D-065) | **Not verified** |
-| llama.cpp with tool calls made by the model; thinking on | **Not verified** |
-| Audible voice per waifu; screen companion remarks live; the voice and screen chips in their new place under the input box | **Not verified** |
-| Latency, fps, VRAM targets | Targets and spot measurements only |
+1. A written design standard for the UI (`docs/DESIGN.md`, at the start of UI-1).
+2. The 1.0 voice for buyers: the premades' voices exist only as GPT-SoVITS clips (ties to D-080).
+3. Content stance and payment fit: the premade personas carry explicit sexual instructions; does the payment provider accept a companion and roleplay app? An age gate?
+4. Premade packs in git: the VRM, WAV and `persona.md` drafts are untracked; decide what is versioned.
+5. An API key for testing the API path.
+6. A face for the companion (a portrait from the VRM thumbnail).
+7. The six assumed K1c answers (D-074): confirm or reverse.
+8. D-057: move the WebSocket token check earlier?
+9. C-1b: the user deletes `KASANE/vrm/`.
 
 ## 4. Known issues and risks
 
-- **Two files set the same keys (D-070):** what Settings saved in `settings.json` (app data folder; `data/` in a checkout) wins over `config/config.yaml`. If a config.yaml edit seems ignored, look there first: Settings shows which values come from it ("Use the default" / Remove drops them). Hand edits to config.yaml still need a restart; Settings changes do not.
-- **Helper roles now run on the picked chat model** (D-072): `models.local.classifier` / `memory_writer` in the user's config (`qwen3.5:4b`) apply only while a llama.cpp or API model is picked, and then load per call (cold). Task Guide's classifier on the 9B is slower per call than the 4B was.
-- **The frameless window is unseen.** If dragging or edge resizing misbehaves in WebView2, `"decorations": true` in `src-tauri/tauri.conf.json` brings the system frame back (the in-page buttons would then be duplicates; `TopBar.tsx` draws them only in the desktop app).
-- **`KASANE/vrm/`** still holds duplicate VRMs (TODO C-1b; the user deletes it).
-- **Luna answered a request for a bullet list in prose** (live, session 4): the old persona's "no markdown" rule won. The persona-only prompts and the chat layer (Markdown when it helps) should fix it (D-074 answers D-055 in part); not checked with a real model.
-- **The Doctor's GPU row counts an unmeasured llama-server as "other programs"** until it has been measured once.
-- **K1c rests on assumed answers (D-074):** mode fixed per thread; chat about 3 to 4 lines; no tools in roleplay; voice speaks only dialogue; no premade scenario cards; persona-only `persona.md`. Each is reversible; the user confirms them at the K1c gate.
-- **The persona-only prompts are untracked drafts** in `assets/premade/*/persona.md`. Going back is one line in each `waifu.yaml` (`prompt: prompt.md`). `scripts/build_premade.py --force` rebuilds the packs and **would overwrite** `waifu.yaml` (and so the pointer).
-- **K1c known limits (TODO K1c-10, D-075):** a reply quoted only with U+201D speaks its narration; a screen remark partly spoken is dropped if the thread changes during speech; a story fold cut short by the token cap is not detected; a scenario save pending over a disconnect stays "Saving…" until the dialog is reopened; Temp Chat lines in a roleplay thread can later be folded into its story summary.
-- **The mic button is drawn but disabled** until voice input (K2).
-- **No API key on this PC**, so nothing on the API side has run against a real provider. First live check: `npm run tauri dev`, model chip → API → Key, save a key, pick an API model, send; then a wrong key for the failure card.
-- **Open questions waiting for the user:** the six assumed K1c answers (D-074), D-058 (unpriced models; a custom endpoint's models are unpriced too), D-057 (websocket token check), premade packs in git. See `HANDOFF.md` §6.
-- **Untracked in the tree:** `assets/premade/` (VRM/WAV), `.claude/`, and an unrelated `package-lock.json` change. Always stage explicit paths.
+- **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, raw model ids, emoji glyphs, developer words in the UI. That is phase UI-1.
+- **Raw model ids everywhere** (`hf.co/bartowski/Qwen_Qwen3.5-9B-GGUF:Q6_K_L` in the chip). Fixed by UI1-01 (D-084).
+- **Disabled placeholders** (the mic, "arrives in K2/K3" tooltips) break D-082. Fixed by UI1-02.
+- **Unpriced models are refused while a cap is on** until UI1-03 lands (D-083 allows them).
+- **Two files set the same keys (D-070):** `settings.json` wins over `config/config.yaml`.
+- **Helper roles run on the picked chat model** (D-072): Task Guide's classifier on the 9B is slower per call than the 4B was.
+- **`build_premade.py --force`** rewrites the packs' `waifu.yaml`, dropping the `prompt: persona.md` pointer.
+- **The kernel port 8780 is hard-coded in several places** (`app.py`, `kernel.ts`, `lib.rs`, the CSP, dev scripts; `ARCHITECTURE.md` §12); a packaging risk (K7-08).
 - **Tests read the user's `config/config.yaml`** when it exists; the suite passes, but it is not isolated from local config.
-- **Inherited:** faster-whisper on CUDA failed on this machine (CPU STT); port 1420 is shared by `dev:ui` and `tauri dev`; killing the process instead of tray Quit loses that session's memory pass until the next start; the 35B needs about 2 minutes to load and maps ~19.5 GB of RAM.
+- **K1c follow-ups** (D-075, TODO backlog), none blocking.
+- Inherited: faster-whisper on CUDA failed here (CPU STT); killing the process instead of tray Quit loses that session's memory pass.
 
-## 5. Recent issues log
+## 5. Checkpoint (the user ticks; date each item)
 
-| Date | Area | Issue | Status |
-|---|---|---|---|
-| 2026-11-17 | ambient | A screen remark checked before a thread switch could land in a roleplay thread | Fixed (`4e698f9`, D-075) |
-| 2026-11-17 | speech | The chunker's tag hold-back regex was cubic on long input (could block the loop) | Fixed (`4e698f9`) |
-| 2026-11-17 | story | The fold was capped at 512 tokens; a catch-up fold ran during boot | Fixed (`5a1d972`, D-075) |
-| 2026-11-17 | client | Saving a card stuck on "Saving…"; Start roleplay closed the dialog before the kernel accepted; Escape in the delete confirm closed the dialog | Fixed (`5a1d972`, `c83f054`) |
-| 2026-11-17 | client | *New chat* wrapped and *Roleplay…* was cut in a narrow sidebar | Fixed (`97de53a`): stacked |
-| 2026-11-15 | Settings | The Settings form fields stretched 220 px tall (a flex basis in a column) | Fixed before commit (`0222d2e`) |
-| 2026-11-15 | Settings | A hand-edited `settings.json` with a plain value for a section would have replaced that whole section with the defaults | Fixed before commit (`0222d2e`): such a value is dropped with a warning |
-| 2026-11-15 | UI | Replies ended about 66 px above the heart (an invisible actions row); blank space left of the model chip | Fixed (`3d87f72`, D-069, the user's review) |
-| 2026-11-15 | Doctor | The GPU row warned whenever Kōkyū's own models filled the card | Fixed before commit (`3e62a27`) |
-| 2026-11-15 | VRAM | A load started without room and swapped models in and out (104.6 s) | Fixed (`d7180b8`): refused before any unload, blockers named |
-| 2026-11-15 | models | On High, `qwen3.5:9b` spent the whole 512-token cap thinking and replied with nothing | Fixed (`f69b1f6`, D-064): `llm.reasoning_tokens`; an empty reply is an error |
-| 2026-11-15 | UI | The chip lost its effort label after a reconnect | Fixed (`f69b1f6`) |
-| 2026-11-15 | kernel | Tray Quit could exit while a closing window's memory pass still ran | Fixed (`8e4997b`) |
-| 2026-11-15 | kernel | Screen companion remarks were lost with voice off | Fixed (`d512ac9`) |
+This one list replaces the three stacked manual gates (K0, K1, K1c) (D-076). In the desktop app (`npm run tauri dev`) with `qwen3.5:9b`:
 
-## 6. Manual gates (the user, on the PC)
-
-Tick and date when done.
-
-**K0**
-- [x] `npm run check` passes on the PC (including `cargo check`) — 2026-11-14
-- [x] Premade Luna and Yuri packs built from the real files — 2026-11-14 (by a peer session; untracked)
-- [ ] `npm run tauri dev` opens the Kōkyū window
-- [ ] Switching Luna ↔ Yuri changes persona and voice (existing GPT-SoVITS, voice mode on)
-- [ ] With GPT-SoVITS stopped: the reply still appears, no robotic voice
-
-**K1c** (TODO "Gate K1c")
-- [ ] Start a roleplay from a saved card and one blank; her opening line shows as her first message
-- [ ] Roleplay replies use `*actions*` (italic, soft) and stay in character; she does not decide your character's actions
-- [ ] With voice on in a roleplay, only her dialogue is spoken; in a chat, the reply is short and the tag is never spoken
-- [ ] A chat thread still answers plainly, uses Markdown when asked for a list, and can use tools (screenshot)
-- [ ] After about a dozen roleplay lines, the kernel log shows `story memory: folded …` (and nothing new in Settings → Memory)
-- [ ] Confirm or reverse the six assumed answers in D-074; read `persona.md` for Luna and Yuri
-
-**K1** (TODO "Gate K1")
-- [ ] The frameless window: drag by the top bar, resize from the edges, minimize / maximize / close (close hides to the tray)
-- [ ] Chat with one local and one API model (needs a key)
+- [ ] The window opens; drag by the top bar, resize from the edges, minimize / maximize / close (close hides to the tray)
+- [ ] A chat: a plain short answer; a list when asked; a screenshot tool call works
+- [ ] A roleplay from a saved card and one blank: the opening line shows first; `*actions*` in italic; she never decides your character's actions
+- [ ] Voice mode on: Luna and Yuri sound different; in a roleplay only dialogue is spoken; the emotion tag is never spoken; with GPT-SoVITS stopped the reply still appears
 - [ ] Change model, effort and companion mid-thread, each without changing the others
-- [ ] A forced API error (for example a wrong key) shows the failure card with Retry / Switch model
-- [ ] Layout signed off against `docs/reference-images/chat-ui.webp`
-- [ ] Settings → Models: a custom endpoint saved, its key saved with Key in the model picker (it is listed there), one of its models answers with the budget off
-- [ ] A model marked *won't fit* picked: the card names what holds the memory; *Unload X* shows where offered (for example after switching away from the 9B) and loads the model when it frees enough
+- [ ] A forced failure (Ollama stopped, or later a wrong API key) shows the failure card with Retry / Switch model
+- [ ] After about a dozen roleplay lines the kernel log shows `story memory: folded …`, and Settings → Memory shows nothing from the story
 
-| Gate | Date | Evidence | Signed by |
+| Checkpoint | Date | Evidence | Signed by |
 |---|---|---|---|
-| K0 (automated) | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
-| K0 (manual, PC) | | | |
-| K1 (automated) | 2026-11-15 | `npm run check` green after `89bdb95`; browser-pane checks in §3 | Claude |
-| K1 (manual, PC) | | | |
-| K1c (automated) | 2026-11-17 | `npm run check` green after `97de53a`; browser-pane checks in §3 | Claude |
-| K1c (manual, PC) | | | |
-
-## 7. Update checklist (end of every session)
-
-- [x] Snapshot header rewritten
-- [x] "What exists" matches the repo
-- [x] Verification table honest
-- [x] Issues logged; gate sign-offs recorded
+| K0 automated | 2026-11-12 | `npm run check -- --skip-cargo` green | Claude |
+| K1 automated | 2026-11-15 | `npm run check` green after `89bdb95` | Claude |
+| K1c automated | 2026-11-17 | `npm run check` green after `97de53a` | Claude |
+| K0 + K1 + K1c in the desktop app | | The user ran the K1c build on their PC (2026-11-17); the items above not yet ticked | |
