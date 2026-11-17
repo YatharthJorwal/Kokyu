@@ -7,10 +7,12 @@ import {
   canSend,
   canStartThread,
   currentMode,
+  editableKey,
   fromStored,
   initialState,
   lastExchange,
   reduce,
+  startsGroup,
   turnFailure,
   visibleStream,
 } from "../src/app/chat-state.ts";
@@ -270,6 +272,69 @@ test("her profile opens and closes; an unreadable picture does not end a reply (
   s = reduce(s, frame("error", { code: "picture_unreadable", message: "Not a picture.", reply_to: null }, null));
   assert.equal(s.turn, "thinking");
   assert.equal(s.notice.text, "Not a picture.");
+});
+
+// UI1-07: the message list
+
+test("a run of messages from one voice starts one group; a divider or another speaker starts a new one", () => {
+  const her = (key, id) => ({ key, role: "assistant", text: key, speaker: id, speakerId: id });
+  const me = (key) => ({ key, role: "user", text: key, speaker: null });
+  const list = [me("a"), me("b"), her("c", "luna"), her("d", "luna"), her("e", "yuri"), { key: "f", role: "divider", text: "", speaker: null }, her("g", "yuri")];
+  assert.deepEqual(list.map((_, i) => startsGroup(list, i)), [true, false, true, false, true, true, true]);
+});
+
+test("saved messages keep their time, a reply its model, and a file line says it is one", () => {
+  const s = run(
+    online,
+    frame("thread_opened", {
+      thread: thread("t1"),
+      messages: [
+        { ...stored(1, "user", "(shared a file) milk", { attachment: "text" }), ts: 100 },
+        { ...stored(2, "assistant", "ok"), model_ref: "ollama:gemma3" },
+      ],
+    }),
+  );
+  assert.deepEqual(
+    s.messages.map((m) => [m.ts, m.model ?? null, m.file ?? false]),
+    [[100, null, true], [1, "ollama:gemma3", false]],
+  );
+  assert.equal(editableKey(s), null); // a file line is the engine's words: no Edit
+});
+
+test("a live reply gets a time and the thread's model; Edit sits on the last line (D-092)", () => {
+  let s = run(online, frame("hello", { default_model_ref: "ollama:qwen" }), frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "sent", text: "hi" });
+  s = reduce(s, frame("turn_start", { user_text: "hi", file: false }));
+  s = reduce(s, frame("turn_done", { text: "hello", stopped: false }));
+  const [line, reply] = s.messages;
+  assert.equal(typeof line.ts, "number");
+  assert.equal(reply.model, "ollama:qwen");
+  assert.equal(editableKey(s), line.key);
+  assert.equal(editableKey(reduce(s, { kind: "sent", text: "more" })), null); // not while a turn runs
+});
+
+test("an edited resend replaces the last line's words and waits for the kernel (D-092)", () => {
+  let s = run(
+    online,
+    frame("thread_opened", { thread: thread("t1"), messages: [stored(1, "user", "helo"), stored(2, "assistant", "hm?")] }),
+  );
+  s = reduce(s, { kind: "regenerating", text: "hello" });
+  assert.deepEqual(s.messages.map((m) => [m.role, m.text, m.pending ?? false]), [["user", "hello", true]]);
+  s = reduce(s, frame("turn_start", { user_text: "hello" }));
+  assert.equal(s.messages.length, 1);
+  assert.equal(s.messages[0].pending, false);
+  // nothing came back: the old exchange returns, typo and all
+  s = reduce(s, frame("turn_done", { text: "", stopped: false }));
+  assert.deepEqual(s.messages.map((m) => m.text), ["helo", "hm?"]);
+});
+
+test("a file line from turn_start cannot be edited", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "sent", text: null });
+  s = reduce(s, frame("turn_start", { user_text: "(shared a file) milk", file: true }));
+  s = reduce(s, frame("turn_done", { text: "ok", stopped: false }));
+  assert.equal(s.messages[0].file, true);
+  assert.equal(editableKey(s), null);
 });
 
 test("companion name, observer role and a lost connection", () => {

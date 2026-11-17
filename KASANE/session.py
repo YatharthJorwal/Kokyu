@@ -485,6 +485,12 @@ class Session:
             await self.refuse("bad_message", "There is no reply to regenerate.")
             return
         again, old_ids, old_meta = found
+        if msg.data.text is not None:
+            # A file's line is the engine's words about the file: there is nothing to edit.
+            if old_meta.get("attachment"):
+                await self.refuse("bad_message", "A message with a file can't be edited. Send the file again instead.")
+                return
+            again = msg.data.text
         old_log_id = old_meta.get("log_id")
         # Rebuilt from the thread without the old exchange, so a remark or a divider
         # after it cannot leave it in the model's context.

@@ -311,7 +311,9 @@ async def run_turn(
     # shortcut: badged before the router decides, so a blocked call is badged too (over-warns); fine until routing reports back.
     sent_to = model_listing.effective_ref(model_ref, CONFIG) if attachment and not local_model else None
     with contextlib.suppress(Exception):
-        await websocket.send_json(protocol.frame("turn_start", {"user_text": user_text, "sent_to": sent_to}, thread=thread_id))
+        await websocket.send_json(
+            protocol.frame("turn_start", {"user_text": user_text, "sent_to": sent_to, "file": bool(attachment)}, thread=thread_id)
+        )
     timings = LATENCY.begin()
     arbiter.ARBITER.on_turn_started()
     writer.WRITER.preempt()  # a timer-driven memory pass must not hold the model during a reply

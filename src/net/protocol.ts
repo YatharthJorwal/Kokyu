@@ -242,7 +242,8 @@ export interface ServerData {
   thread_list: { query: string; threads: ThreadInfo[] };
   thread_message: { message: ThreadMessage };
   thread_updated: { thread: ThreadInfo };
-  turn_start: { user_text: string };
+  /** `file`: the line came from a file (it cannot be edited, D-092). */
+  turn_start: { user_text: string; sent_to?: string | null; file?: boolean };
   token: { text: string };
   turn_done: { text: string; stopped: boolean; emotion?: string | null };
   error: {
@@ -344,7 +345,8 @@ export interface ClientData {
   model_list: { refresh?: boolean };
   model_load: Record<string, never>;
   model_unload: { ref: string };
-  regenerate: Record<string, never>;
+  /** With `text`, the last user line is edited first (UI1-07, D-092). */
+  regenerate: { text?: string };
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
   voice_mode: { on: boolean };

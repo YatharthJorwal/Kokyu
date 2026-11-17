@@ -113,6 +113,16 @@ export const actions = {
     dispatch({ kind: "regenerating" });
   },
 
+  /** Edit and resend the last line (UI1-07, D-092): the kernel replaces the last
+   * exchange with the new words and runs it. Returns false when it can't run now. */
+  resend(text: string): boolean {
+    const line = text.trim();
+    if (!line || !canRegenerate(useChat.getState()) || !socket.send("regenerate", { text: line })) return false;
+    voice.stop();
+    dispatch({ kind: "regenerating", text: line });
+    return true;
+  },
+
   dismissNotice(): void {
     dispatch({ kind: "dismiss_notice" });
   },

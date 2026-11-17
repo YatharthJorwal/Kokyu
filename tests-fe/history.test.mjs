@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 
-import { groupOf, groupThreads, toMs } from "../src/app/history.ts";
+import { groupOf, groupThreads, messageTime, toMs } from "../src/app/history.ts";
 
 // K1-03 (FR-C-6): the sidebar groups history by day.
 
@@ -81,4 +81,12 @@ test("search results live apart from the history and follow renames and deletes"
   s = reduce(s, frame("thread_list", { query: "", threads: [{ ...a, title: "Pizza night" }] }));
   assert.deepEqual(s.search.threads.map((t) => [t.id, t.title]), [["a", "Pizza night"]]);
   assert.equal(s.search.query, "pizza");
+});
+
+test("a message's hover time is the clock today and adds the day before (UI1-07)", () => {
+  const today = messageTime(at(2026, 11, 14, 9) / 1000, NOW);
+  const older = messageTime(at(2026, 11, 12, 9) / 1000, NOW);
+  assert.match(today, /9/);
+  assert.ok(!today.includes(","));
+  assert.ok(older.includes(", ") && older.endsWith(today));
 });

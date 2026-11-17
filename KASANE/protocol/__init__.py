@@ -115,6 +115,13 @@ class SendText(_Data):
     text: str = Field(min_length=1, max_length=TEXT_MAX)
 
 
+class Regenerate(_Data):
+    """K1-04 (FR-C-9): run the last exchange again. With `text`, the user line is
+    edited first and the exchange runs with the new words (UI1-07, FR-C-9, D-092)."""
+
+    text: str | None = Field(default=None, min_length=1, max_length=TEXT_MAX)
+
+
 class SendFile(_Data):
     filename: str = Field(default="uploaded file", max_length=260)
     kind: Literal["image", "text"]
@@ -233,7 +240,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "model_list": ModelListRequest,   # K1-10: what the chip's popover lists
     "model_load": Empty,              # K1-10: Try again after a failed load
     "model_unload": ModelUnload,      # K1-09b: Unload X on that card, then try again
-    "regenerate": Empty,              # K1-04: run the last exchange again (FR-C-9, Retry)
+    "regenerate": Regenerate,         # K1-04: run the last exchange again (FR-C-9, Retry); edit it (FR-C-9, D-092)
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
     "voice_mode": VoiceModeData,      # D-061: voice on or off; it starts only when turned on

@@ -46,6 +46,12 @@ export interface ChatMessage {
   failed?: boolean;
   /** An attachment on this line went to this API model (FR-R-7 badge). */
   sentTo?: string;
+  /** When it was said, Unix seconds (UI1-07: shown on hover). */
+  ts?: number;
+  /** The model that wrote a reply (UI1-07: shown on hover). */
+  model?: string | null;
+  /** The line came from a file: the engine words it, so it cannot be edited. */
+  file?: boolean;
 }
 
 export interface Notice {
@@ -142,7 +148,8 @@ export type ChatEvent =
   | { kind: "problem"; reason: string }
   /** `text` null: a file went out; its line arrives with turn_start (the kernel words it). */
   | { kind: "sent"; text: string | null }
-  | { kind: "regenerating" }
+  /** `text`: the last line was edited first (UI1-07, D-092). */
+  | { kind: "regenerating"; text?: string }
   | { kind: "dismiss_notice" }
   | { kind: "picker"; open: boolean }
   | { kind: "settings"; section: SettingsSection | null }
@@ -199,7 +206,30 @@ export function fromStored(m: ThreadMessage): ChatMessage {
     speakerId: m.speaker_waifu_id,
     stopped: m.meta?.stopped === true ? true : undefined,
     sentTo: typeof m.meta?.sent_to === "string" ? m.meta.sent_to : undefined,
+    ts: m.ts,
+    model: m.role === "assistant" ? m.model_ref : null,
+    file: m.meta?.attachment ? true : undefined,
   };
+}
+
+const nowS = () => Date.now() / 1000;
+
+/** UI1-07: a message continues the one before it when the same voice said it, so
+ * her face and name show once per run of messages. */
+export function startsGroup(messages: ChatMessage[], i: number): boolean {
+  const m = messages[i];
+  const before = messages[i - 1];
+  if (!before || m.role === "divider" || before.role !== m.role) return true;
+  return m.role === "assistant" && (before.speakerId ?? before.speaker) !== (m.speakerId ?? m.speaker);
+}
+
+/** The key of the user line Edit may change (UI1-07, D-092): the last exchange's,
+ * when Regenerate could run and the line is the user's own words. */
+export function editableKey(state: ChatState): string | null {
+  if (!canRegenerate(state)) return null;
+  const exchange = lastExchange(state.messages);
+  const line = exchange ? state.messages[exchange[0]] : undefined;
+  return line && line.role === "user" && !line.file ? line.key : null;
 }
 
 /** What the streaming bubble shows: the reply so far without a trailing emotion tag. */
@@ -385,13 +415,14 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
     }
     case "turn_start": {
       if (!forCurrentThread(state, frame)) return state;
-      const { user_text, sent_to } = frame.data as { user_text: string; sent_to?: string | null };
+      const { user_text, sent_to, file } = frame.data as ServerData["turn_start"];
       const sentTo = sent_to ?? undefined;
       const last = state.messages[state.messages.length - 1];
+      const line = { sentTo, file: file || undefined };
       const messages =
         last && last.role === "user" && last.pending && last.text === user_text
-          ? [...state.messages.slice(0, -1), { ...last, pending: false, sentTo }]
-          : [...state.messages, { key: localKey(), role: "user" as const, text: user_text, speaker: null, sentTo }];
+          ? [...state.messages.slice(0, -1), { ...last, pending: false, ...line }]
+          : [...state.messages, { key: localKey(), role: "user" as const, text: user_text, speaker: null, ts: nowS(), ...line }];
       return { ...state, messages, turn: "thinking", streamRaw: "" };
     }
     case "token": {
@@ -417,6 +448,9 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
               speaker: state.companion?.name ?? null,
               speakerId: state.companion?.id ?? null,
               stopped: stopped || undefined,
+              ts: nowS(),
+              // What the kernel stores with it: the thread's model, else the default.
+              model: currentModelRef(state),
             },
           ]
         : state.messages;
@@ -515,7 +549,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
         messages:
           event.text === null
             ? state.messages
-            : [...state.messages, { key: localKey(), role: "user", text: event.text, speaker: null, pending: true }],
+            : [...state.messages, { key: localKey(), role: "user", text: event.text, speaker: null, pending: true, ts: nowS() }],
         turn: "thinking",
         notice: null,
         pickerOpen: false,
@@ -526,7 +560,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // have it, and waits for turn_start. The old view is kept in case nothing comes back.
       const drop = lastExchange(state.messages);
       if (!drop) return state;
-      const line = { ...state.messages[drop[0]], key: localKey(), pending: true, failed: false };
+      const old = state.messages[drop[0]];
+      const line = { ...old, key: localKey(), pending: true, failed: false, text: event.text ?? old.text, ts: event.text ? nowS() : old.ts };
       const messages = [...state.messages.filter((_, i) => !drop.includes(i)), line];
       return { ...state, messages, beforeRegenerate: state.messages, notice: null, turn: "thinking", streamRaw: "" };
     }

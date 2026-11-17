@@ -33,6 +33,15 @@ export function groupOf(updatedAt: number, nowMs: number): GroupName {
   return "Older";
 }
 
+/** A message's time for its hover line (UI1-07): the clock today, else the day too. */
+export function messageTime(ts: number, nowMs: number): string {
+  const t = toMs(ts);
+  const clock = new Date(t).toLocaleTimeString([], { hour: "numeric", minute: "2-digit" });
+  if (t >= startOfDay(nowMs)) return clock;
+  const day = new Date(t).toLocaleDateString([], { month: "short", day: "numeric" });
+  return `${day}, ${clock}`;
+}
+
 const ORDER: GroupName[] = ["Today", "Yesterday", "Previous 7 days", "Older"];
 
 /** Newest first inside each group; empty groups are left out. */

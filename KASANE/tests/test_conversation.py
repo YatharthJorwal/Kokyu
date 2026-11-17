@@ -485,6 +485,42 @@ def test_a_failed_regenerate_keeps_the_old_reply(kernel, monkeypatch):
     assert seen[0] == ["hello", "You said: hello.", "and then?"]
 
 
+def test_an_edited_last_line_replaces_the_exchange_with_the_new_words(kernel, monkeypatch):
+    # UI1-07 (FR-C-9, D-092): edit and resend the last message
+    seen = []
+
+    async def recording(role, messages, tools, **kwargs):
+        seen.append([m["content"] for m in messages if m["role"] in ("user", "assistant")])
+        yield {"type": "content", "text": "reply %d [happy]" % len(seen)}
+
+    monkeypatch.setattr(router, "stream_with_tools", recording)
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        _temp_on(ws)
+        _chat(ws, "first")
+        _chat(ws, "tell me abuot cats")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {"text": "  tell me about cats  "}})
+        start, _ = _until(ws, "turn_start")
+        done, _ = _until(ws, "turn_done")
+    assert start["data"]["user_text"] == "tell me about cats" and start["data"]["file"] is False
+    assert seen[2] == ["first", "reply 1", "tell me about cats"]          # the typo never reaches the model
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
+    assert [m.content for m in stored] == ["first", "reply 1", "tell me about cats", done["data"]["text"]]
+
+
+def test_a_line_with_a_file_cannot_be_edited(kernel, monkeypatch):
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send_file", "data": {"filename": "a.txt", "kind": "text", "content": "milk"}})
+        start, _ = _until(ws, "turn_start")
+        _until(ws, "turn_done")
+        ws.send_json({"v": 1, "type": "regenerate", "data": {"text": "something else"}})
+        err, _ = _until(ws, "error")
+    assert start["data"]["file"] is True
+    assert err["data"]["code"] == "bad_message" and "file" in err["data"]["message"]
+
+
 def test_regenerate_with_nothing_to_redo_is_refused(kernel):
     with kernel.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")

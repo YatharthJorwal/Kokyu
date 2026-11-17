@@ -515,6 +515,15 @@ button:disabled {
   gap: 6px;
 }
 
+/* Holds the thread and its jump-to-latest pill (UI1-07). */
+.thread-wrap {
+  position: relative;
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-height: 0;
+}
+
 .thread {
   flex: 1;
   min-height: 0;
@@ -541,9 +550,15 @@ button:disabled {
 }
 
 .msg {
+  position: relative;
   display: flex;
   flex-direction: column;
   margin: 0 0 22px;
+}
+
+/* UI1-07: the next message from the same voice sits close under the one before. */
+.msg.cont {
+  margin-top: -16px;
 }
 
 /* the newest item sits right above the heart (the end marker is the last child) */
@@ -710,16 +725,37 @@ button:disabled {
   background: none;
 }
 
+/* UI1-07: the bar over a message's top edge, on hover or keyboard focus; transparent
+   (not hidden) so Tab reaches it. Time and model first, then the icons. */
 .msg-actions {
+  position: absolute;
+  z-index: 2;
+  top: -14px;
+  right: 0;
   display: flex;
-  gap: 4px;
+  align-items: center;
+  gap: 2px;
+  padding: 2px 4px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
   opacity: 0;
+  pointer-events: none;
+  transition: opacity 120ms ease;
 }
 
-/* Shown on hover or keyboard focus; transparent (not hidden) so Tab reaches them. */
 .msg:hover .msg-actions,
 .msg:focus-within .msg-actions {
   opacity: 1;
+  pointer-events: auto;
+}
+
+.msg-when {
+  padding: 0 6px;
+  color: var(--muted);
+  font-size: 12px;
+  white-space: nowrap;
 }
 
 .msg-action {
@@ -734,6 +770,129 @@ button:disabled {
 
 .msg-action:hover {
   color: var(--text);
+}
+
+.icon-action {
+  display: grid;
+  place-items: center;
+  width: 26px;
+  height: 26px;
+  padding: 0;
+  border: 0;
+}
+
+.icon-action:hover,
+.icon-action:focus-visible {
+  background: var(--panel-2);
+}
+
+.icon {
+  fill: none;
+  stroke: currentColor;
+  stroke-width: 1.8;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* Edit and resend the last line (D-092) */
+.msg.editing {
+  align-items: stretch;
+}
+
+.edit-box {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 10px;
+  border: 1px solid var(--accent);
+  border-radius: var(--radius);
+  background: var(--panel);
+}
+
+.edit-box textarea {
+  width: 100%;
+  resize: none;
+  border: 0;
+  background: transparent;
+  color: var(--text);
+  font: inherit;
+  font-size: var(--chat-size);
+  line-height: 1.55;
+  outline: none;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.edit-actions button {
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: transparent;
+  font-size: 13px;
+}
+
+.edit-actions .primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+/* The thinking line, where her reply will appear (UI1-07) */
+.msg.thinking .bubble {
+  min-height: 1.55em;
+}
+
+/* A caret at the end of the reply being streamed (UI1-07) */
+.msg.streaming .md > :last-child:not(ul, ol, blockquote, .code-block, .table-wrap)::after,
+.msg.streaming .md > :is(ul, ol):last-child > li:last-child::after {
+  content: "";
+  display: inline-block;
+  width: 0.5em;
+  height: 1.05em;
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  border-radius: 2px;
+  background: var(--accent);
+  animation: caret-blink 1s steps(2, start) infinite;
+}
+
+@keyframes caret-blink {
+  to {
+    visibility: hidden;
+  }
+}
+
+/* Back to the newest message without losing your place until you ask (UI1-07) */
+.jump-latest {
+  position: absolute;
+  bottom: 10px;
+  left: 50%;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 14px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: var(--panel);
+  box-shadow: 0 4px 14px rgb(0 0 0 / 25%);
+  color: var(--text);
+  font-size: 13px;
+  transform: translateX(-50%);
+}
+
+.jump-latest:hover {
+  background: var(--panel-2);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .msg.streaming .md > :last-child::after,
+  .msg.streaming .md li:last-child::after {
+    animation: none;
+  }
 }
 
 .msg.failed .bubble {

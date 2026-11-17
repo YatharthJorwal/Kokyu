@@ -1,8 +1,11 @@
-// Copy to the clipboard with a short "Copied" confirmation (FR-C-8, FR-C-9).
+// Copy to the clipboard with a short "Copied" confirmation (FR-C-8, FR-C-9). With
+// `icon`, the message bar's icon button (UI1-07): a tick says it worked.
 
 import { useEffect, useState } from "react";
 
-export function CopyButton({ text, label = "Copy" }: { text: string; label?: string }) {
+import { Icon } from "./Icon";
+
+export function CopyButton({ text, label = "Copy", icon = false }: { text: string; label?: string; icon?: boolean }) {
   const [state, setState] = useState<"idle" | "copied" | "failed">("idle");
 
   useEffect(() => {
@@ -11,12 +14,13 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
     return () => window.clearTimeout(t);
   }, [state]);
 
+  const said = state === "copied" ? "Copied" : state === "failed" ? "Couldn't copy" : null;
   return (
     <button
       type="button"
-      className="msg-action"
-      aria-label={label}
-      title={label}
+      className={icon ? "msg-action icon-action" : "msg-action"}
+      aria-label={said ?? label}
+      title={said ?? label}
       onClick={() => {
         navigator.clipboard.writeText(text).then(
           () => setState("copied"),
@@ -24,7 +28,7 @@ export function CopyButton({ text, label = "Copy" }: { text: string; label?: str
         );
       }}
     >
-      {state === "copied" ? "Copied" : state === "failed" ? "Couldn't copy" : "Copy"}
+      {icon ? <Icon name={state === "copied" ? "check" : "copy"} /> : (said ?? "Copy")}
     </button>
   );
 }
