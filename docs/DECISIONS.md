@@ -194,7 +194,7 @@ One transparent always-on-top overlay with alpha hit-testing; K4 starts with a s
 **D-055 In-house Markdown; Regenerate and Retry in the kernel** · Accepted · Claude · 2026-11-14
 Model output never becomes HTML. Regenerate and Retry take the last exchange back out, so nothing is stored twice. The "no markdown" persona line is answered by D-074's persona.md.
 
-**D-063 Heart and thinking lines above the input; threads fill from the bottom** · Accepted · User · 2026-11-15
+**D-063 Heart and thinking lines above the input; threads fill from the bottom** · Heart and lines amended by D-096 · Accepted · User · 2026-11-15
 "the messages should start at bottom not top." Rotating thinking lines beside a tracing heart; reduced motion respected.
 
 **D-066 A failed turn says why, on the turn** · Accepted · Claude · 2026-11-15
@@ -288,6 +288,9 @@ UI1-09. One slim header (companion chip, thread title, Temp, window buttons). Ne
 
 **D-095 Keyboard shortcuts and a palette** · Assumed · Claude · 2026-11-17
 UI1-10. Ctrl+N a new chat, Ctrl+K a palette, Ctrl+, Settings, Esc stops a reply. While a dialog or pop-up is open, it owns Escape and the shortcuts wait. The palette lists what works now: actions, companions (talk to, profile) and conversations, filtered by every typed word; it hides what a running reply forbids. Hints sit beside the controls (the New menu, Settings, Stop). No rebinding.
+
+**D-096 Thinking beside her face, typed replies, a compact loading strip, a dragged slider** · Accepted · User · 2026-11-18
+"the heart must be right to her pfp in chat, must show animation when model thinks along with some more creative text … must stop when response comes in a typing animation (not fat chunks)". While she thinks, her face, the heart and one short animated word (the user's list plus more in its voice, none from the waking lines) sit where her reply will appear; nothing above the input box. Replies type out letter by letter, catching up with any model. The model loading card becomes one line above the input box ("compact and professional"). The effort slider follows the pointer and settles on the nearest level on release ("i need smoothness"; no new component). "Waifu-mode-engaging" is left out under D-082. Amends D-063, FR-C-5, FR-M-6, FR-M-8.
 
 ## Superseded
 

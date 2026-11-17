@@ -44,6 +44,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [x] UI1-08 Markdown (D-093, FR-C-8) `12af2b8`: tables, nested lists, highlighted code with a header and copy; in-house parser and highlighter, no dependency
 - [x] UI1-09 Shell (D-094, FR-C-6) `cb24949`: one slim header (portrait chip, thread title, Temp toggle, window buttons), a split New button (Chat / Roleplay…), a sidebar context menu and pinning (`thread_pin`, schema 6), an empty state with her face and starter chips, toasts, in-app confirms instead of `window.confirm`
 - [x] UI1-10 Keyboard (D-095) `77af8c0`: Ctrl+N, Ctrl+K palette, Ctrl+comma, Esc stops a reply
+- [x] UI1-11 The user's notes of 2026-11-18 (D-096): Tauri crate and npm on 2.12 `514e5c6`; the effort slider dragged smoothly `3565673`; thinking beside her face with animated words, replies typed out, a compact loading strip `7203bb0`
 - **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
 
 ## Phase UI-2: Design standard (D-086)

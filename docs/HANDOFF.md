@@ -2,7 +2,7 @@
 
 **Read this at the start of every session; rewrite it at the end.** Short by design (D-076): status is in `STATE.md`, the plan in `TODO.md`, decisions in `DECISIONS.md`. If the date is old, trust `git log` and ask the user.
 
-- **Last updated:** 2026-11-17, session 5
+- **Last updated:** 2026-11-18, session 5
 - **Written by:** Claude, with the user (Yatharth)
 
 ## 1. How the user works
@@ -44,9 +44,11 @@ A solo developer who wants direct commands, no manual file shuffling, phases wit
    - **UI1-09** `cb24949` (D-094): one slim header, split New, a thread menu with pins (`thread_pin`, schema 6), toasts, in-app confirms, an empty chat with her face and starters.
    - **UI1-10** `77af8c0` (D-095): Ctrl+N, Ctrl+K palette, Ctrl+, and Esc to stop.
 
+13. **The user's notes after UI1-10** (2026-11-18, D-096): `tauri dev` warned that the Tauri packages mismatched (an npm update had moved `@tauri-apps/api` to 2.12, the crate stayed 2.11): the crate is now 2.12.6, both pinned to 2.12, and `package-lock.json` is committed with that update (`514e5c6`). The effort slider follows the pointer (`3565673`). While she thinks, her face, the heart and an animated word from the user's list sit in the reply slot; replies type out letter by letter; the model loading card is one line above the input box (`7203bb0`).
+
 ## 3. Where we stopped
 
-UI-1 is code-complete. **Nothing from item 12 is pushed**: the user reviews first, then says push. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
+UI-1 is code-complete. **Nothing from items 12 and 13 is pushed**: the user said "dont push yet". Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`.
 
 ## 4. Next session: start here
 
