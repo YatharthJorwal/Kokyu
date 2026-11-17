@@ -2,7 +2,8 @@
 // logo, New chat and search at the top, history in the middle (grouped Today /
 // Yesterday / Previous 7 days / Older, each with its companion's badge,
 // searchable, renamable, deletable) and the Settings gear at the bottom. The
-// companions moved to the chip in the top bar.
+// companions moved to the chip in the top bar. New roleplay… sits beside New chat
+// and a roleplay thread carries a badge (K1c-08; FR-MODE-6, 7).
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
@@ -46,17 +47,33 @@ export function Sidebar() {
         <span className="brand-name">Kōkyū</span>
       </div>
 
-      <button
-        type="button"
-        className="new-chat"
-        onClick={() => actions.newThread()}
-        disabled={busy || connection !== "online"}
-      >
-        <svg viewBox="0 0 16 16" aria-hidden="true">
-          <path d="M8 2.5v11M2.5 8h11" />
-        </svg>
-        New chat
-      </button>
+      <div className="new-row">
+        <button
+          type="button"
+          className="new-chat"
+          onClick={() => actions.newThread()}
+          disabled={busy || connection !== "online"}
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M8 2.5v11M2.5 8h11" />
+          </svg>
+          New chat
+        </button>
+        {/* FR-MODE-6: a story from a scenario card, or blank */}
+        <button
+          type="button"
+          className="new-roleplay"
+          onClick={() => actions.openRoleplay()}
+          disabled={busy || connection !== "online"}
+          aria-label="New roleplay…"
+          title="New roleplay…"
+        >
+          <svg viewBox="0 0 16 16" aria-hidden="true">
+            <path d="M3 2.5h7.5l2.5 2.5v8.5H3z M5.5 7h5 M5.5 9.5h5" />
+          </svg>
+          Roleplay…
+        </button>
+      </div>
 
       <label className="thread-search">
         <svg viewBox="0 0 16 16" aria-hidden="true">
@@ -198,6 +215,7 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
           </span>
         ) : null}
         <span className="thread-title">{label}</span>
+        {thread.mode === "roleplay" ? <span className="badge">Roleplay</span> : null}
         {thread.temp ? <span className="badge">Temp</span> : null}
       </button>
       <span className="thread-actions">

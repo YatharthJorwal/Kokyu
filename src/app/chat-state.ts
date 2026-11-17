@@ -12,12 +12,14 @@ import {
   type MemoryFact,
   type ModelListData,
   type ModelStatus,
+  type SavedScenario,
   type ScreenCompanions,
   type ServerData,
   type SettingsData,
   type VoiceStatus,
   type ThreadInfo,
   type ThreadMessage,
+  type ThreadMode,
 } from "../net/protocol";
 import { shortRef } from "./models";
 
@@ -93,6 +95,10 @@ export interface ChatState {
   memory: MemoryFact[] | null;
   /** K1-13b: the editable settings (FR-SET-2); null until asked. */
   prefs: SettingsData | null;
+  /** FR-MODE-6: the saved scenario cards, newest first; null until asked. */
+  scenarios: SavedScenario[] | null;
+  /** FR-MODE-6: the New roleplay dialog is open. */
+  roleplayOpen: boolean;
 }
 
 export type ChatEvent =
@@ -104,7 +110,8 @@ export type ChatEvent =
   | { kind: "regenerating" }
   | { kind: "dismiss_notice" }
   | { kind: "picker"; open: boolean }
-  | { kind: "settings"; section: SettingsSection | null };
+  | { kind: "settings"; section: SettingsSection | null }
+  | { kind: "roleplay"; open: boolean };
 
 export const initialState: ChatState = {
   connection: "connecting",
@@ -130,6 +137,8 @@ export const initialState: ChatState = {
   doctor: null,
   memory: null,
   prefs: null,
+  scenarios: null,
+  roleplayOpen: false,
 };
 
 let localCounter = 0;
@@ -173,6 +182,16 @@ export function barNotice(state: ChatState): Notice | null {
 /** Regenerate and Retry need a saved thread with a line in it (the kernel replaces its last exchange). */
 export function canRegenerate(state: ChatState): boolean {
   return canSend(state) && state.thread !== null && state.messages.some((m) => m.role === "user");
+}
+
+/** A new thread (chat or roleplay) waits for the reply and needs the kernel. */
+export function canStartThread(state: ChatState): boolean {
+  return state.connection === "online" && state.turn === "idle";
+}
+
+/** The open thread's mode, from the thread alone (FR-MODE-1); before one opens, chat. */
+export function currentMode(state: ChatState): ThreadMode {
+  return state.thread?.mode ?? "chat";
 }
 
 /** Switching models waits for the reply (the kernel refuses it mid-turn). */
@@ -376,6 +395,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, memory: (frame.data as ServerData["memory_facts"]).facts };
     case "settings":
       return { ...state, prefs: frame.data as SettingsData };
+    case "scenarios":
+      return { ...state, scenarios: (frame.data as ServerData["scenarios"]).cards };
     case "error": {
       const data = frame.data as ServerData["error"];
       const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };
@@ -439,5 +460,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, pickerOpen: event.open && canPickModel(state) };
     case "settings":
       return { ...state, settings: event.section, pickerOpen: false };
+    case "roleplay":
+      // Opens only when a new thread could start; closing always works.
+      return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false };
   }
 }

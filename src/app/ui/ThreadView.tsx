@@ -1,10 +1,19 @@
 // The open thread (K1-02, K1-04): saved messages, companion dividers, the reply
 // being streamed. Replies render as Markdown (FR-C-8) with Copy, and the last one
-// with Regenerate (FR-C-9). The user's own lines stay plain text.
+// with Regenerate (FR-C-9). The user's own lines stay plain text in a chat; in a
+// roleplay thread both sides render the story's way (FR-MODE-7).
 
 import { useEffect, useRef } from "react";
 
-import { canPickModel, canRegenerate, lastExchange, turnFailure, visibleStream, type ChatMessage } from "../chat-state";
+import {
+  canPickModel,
+  canRegenerate,
+  currentMode,
+  lastExchange,
+  turnFailure,
+  visibleStream,
+  type ChatMessage,
+} from "../chat-state";
 import { shortRef } from "../models";
 import { actions, useChat } from "../store";
 import { CopyButton } from "./CopyButton";
@@ -20,7 +29,7 @@ function Avatar({ name }: { name: string | null }) {
   );
 }
 
-function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
+function Message({ m, lastReply, roleplay }: { m: ChatMessage; lastReply: boolean; roleplay: boolean }) {
   const regenerable = useChat((s) => lastReply && canRegenerate(s));
   if (m.role === "divider") {
     return (
@@ -47,7 +56,9 @@ function Message({ m, lastReply }: { m: ChatMessage; lastReply: boolean }) {
           </span>
         </div>
       ) : null}
-      <div className="bubble">{m.role === "assistant" ? <Markdown text={m.text} /> : m.text}</div>
+      <div className="bubble">
+        {m.role === "assistant" || roleplay ? <Markdown text={m.text} roleplay={roleplay} /> : m.text}
+      </div>
       {m.stopped ? <div className="meta">Stopped</div> : null}
       {m.failed ? <div className="meta">Not answered</div> : null}
       {m.sentTo ? (
@@ -100,6 +111,9 @@ export function ThreadView() {
   const streaming = useChat(visibleStream);
   const companion = useChat((s) => s.companion?.name ?? null);
   const modelState = useChat((s) => s.modelStatus?.state ?? null);
+  // The mode is the open thread's (FR-MODE-1), never the companion's.
+  const roleplay = useChat((s) => currentMode(s) === "roleplay");
+  const scenario = useChat((s) => s.thread?.scenario ?? null);
   const end = useRef<HTMLDivElement>(null);
   // Regenerate sits on the reply the kernel would replace, even with a divider after it.
   const exchange = lastExchange(messages);
@@ -126,16 +140,24 @@ export function ThreadView() {
       }}
     >
       {messages.length === 0 && turn === "idle" ? (
-        <div className="empty">
-          <p className="empty-title">{companion ? `Talk to ${companion}` : "Start a conversation"}</p>
-          <p className="muted">Your conversations are saved on this PC.</p>
-        </div>
+        roleplay ? (
+          <div className="empty">
+            <p className="empty-title">{scenario?.title || "A new story"}</p>
+            {scenario?.setting ? <p className="empty-setting">{scenario.setting}</p> : null}
+            <p className="muted">Write *actions* in asterisks, and (OOC …) to step out of the story.</p>
+          </div>
+        ) : (
+          <div className="empty">
+            <p className="empty-title">{companion ? `Talk to ${companion}` : "Start a conversation"}</p>
+            <p className="muted">Your conversations are saved on this PC.</p>
+          </div>
+        )
       ) : (
         // A short thread sits on the input box, like a messenger; a long one scrolls as usual.
         <div className="thread-spacer" aria-hidden="true" />
       )}
       {messages.map((m) => (
-        <Message key={m.key} m={m} lastReply={m.key === lastReplyKey} />
+        <Message key={m.key} m={m} lastReply={m.key === lastReplyKey} roleplay={roleplay} />
       ))}
       <TurnFailure />
       <WakingCard />
@@ -145,7 +167,7 @@ export function ThreadView() {
           <Avatar name={companion} />
           <div className="msg-head">{companion ? <span className="speaker">{companion}</span> : null}</div>
           <div className="bubble">
-            <Markdown text={streaming} />
+            <Markdown text={streaming} roleplay={roleplay} />
           </div>
         </div>
       ) : null}

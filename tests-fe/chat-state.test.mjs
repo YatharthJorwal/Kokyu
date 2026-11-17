@@ -5,6 +5,8 @@ import {
   barNotice,
   canRegenerate,
   canSend,
+  canStartThread,
+  currentMode,
   initialState,
   lastExchange,
   reduce,
@@ -328,4 +330,49 @@ test("the editable settings arrive as one frame, a refusal with its reason (K1-1
   s = reduce(s, frame("settings", { ...prefs, problem: "Ollama must run on this PC." }, null));
   assert.equal(s.prefs.problem, "Ollama must run on this PC.");
   assert.equal(s.settings, "models"); // the dialog stays open on its section
+});
+
+// K1c-08 (FR-MODE-1, 6): the mode comes from the open thread; the New roleplay dialog.
+
+test("the open thread's mode decides how it is shown; before one opens, chat (FR-MODE-1)", () => {
+  assert.equal(currentMode(initialState), "chat");
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  assert.equal(currentMode(s), "chat");
+  const card = { title: "Rainy café", setting: "A café at night" };
+  s = reduce(s, frame("thread_opened", { thread: thread("t2", { mode: "roleplay", scenario: card }), messages: [] }, "t2"));
+  assert.equal(currentMode(s), "roleplay");
+  assert.deepEqual(s.thread.scenario, card);
+  // a companion switch does not touch the mode: it is the thread's, not hers
+  s = reduce(s, frame("waifu_state", { active: "luna", waifus: [{ id: "luna", name: "Luna" }], problems: [], pending: null }, null));
+  assert.equal(currentMode(s), "roleplay");
+});
+
+test("the saved scenario cards arrive as one frame (FR-MODE-6)", () => {
+  assert.equal(initialState.scenarios, null); // not asked yet
+  const cards = [{ id: "c1", title: "Rainy café", card: { title: "Rainy café" }, updated_at: 2 }];
+  const s = reduce(run(online), frame("scenarios", { cards }, null));
+  assert.deepEqual(s.scenarios, cards);
+  assert.deepEqual(reduce(s, frame("scenarios", { cards: [] }, null)).scenarios, []);
+});
+
+test("New roleplay opens only when a new thread could start, and always closes (FR-MODE-6)", () => {
+  const open = { kind: "roleplay", open: true };
+  const close = { kind: "roleplay", open: false };
+  assert.equal(canStartThread(initialState), false); // still connecting
+  assert.equal(reduce(initialState, open).roleplayOpen, false);
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  assert.equal(canStartThread(s), true);
+  s = reduce(s, { kind: "picker", open: true });
+  s = reduce(s, open);
+  assert.equal(s.roleplayOpen, true);
+  assert.equal(s.pickerOpen, false); // one popup at a time
+  assert.equal(reduce(s, close).roleplayOpen, false);
+  // mid-turn: no new thread (the kernel refuses one too)
+  const busy = reduce(reduce(s, close), { kind: "sent", text: "hi" });
+  assert.equal(canStartThread(busy), false);
+  assert.equal(reduce(busy, open).roleplayOpen, false);
+  // offline: no new thread
+  const offline = reduce(reduce(s, close), { kind: "status", status: "offline" });
+  assert.equal(canStartThread(offline), false);
+  assert.equal(reduce(offline, open).roleplayOpen, false);
 });

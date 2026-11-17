@@ -3,6 +3,11 @@
 // page as HTML: nothing to sanitize, nothing to inject (D-013 "sanitizing renderer").
 // It also copes with a reply that is still streaming (an unclosed code fence).
 //
+// Roleplay threads (K1c-08, FR-MODE-7) parse with `{ roleplay: true }`: a `*…*`
+// span is an action (shown italic and softer), and an out-of-character aside,
+// `(OOC …)` or `((…))`, is its own node (shown small and muted). Chat parsing is
+// unchanged, so "install it (with pip)" stays plain text there.
+//
 // shortcut: no tables, nested lists, images or reference links; add them (or a
 // vetted library) if replies need them.
 
@@ -12,7 +17,16 @@ export type Inline =
   | { t: "strong"; c: Inline[] }
   | { t: "em"; c: Inline[] }
   | { t: "link"; href: string; c: Inline[] }
-  | { t: "br" };
+  | { t: "br" }
+  /** Roleplay only: `*…*`, an action or narration. */
+  | { t: "action"; c: Inline[] }
+  /** Roleplay only: an out-of-character aside, parentheses included. */
+  | { t: "ooc"; c: Inline[] };
+
+export interface ParseOptions {
+  /** Parse for a roleplay thread (FR-MODE-7). */
+  roleplay?: boolean;
+}
 
 export type Block =
   | { t: "p"; c: Inline[] }
@@ -32,6 +46,10 @@ const RULE = /^ {0,3}([-*_])(\s*\1){2,}\s*$/;
 const QUOTE = /^ {0,3}>\s?(.*)$/;
 // Deeper nesting stays plain text, so a hostile reply cannot overflow the stack.
 const MAX_DEPTH = 16;
+// An aside longer than this stays text: keeps a hostile "((((…" from costing n² work.
+const OOC_MAX = 2000;
+// "(OOC", "(ooc:", "( OOC -" … : the word OOC right after the parenthesis.
+const OOC_START = /^\(\s*ooc\b/i;
 
 /** A heading's text without its closing #s ("C#" keeps its #). A loop, not a regex: no backtracking. */
 function headingText(s: string): string {
@@ -41,7 +59,7 @@ function headingText(s: string): string {
   return j === t.length || (j > 0 && !/\s/.test(t[j - 1])) ? t : t.slice(0, j).trim();
 }
 
-export function parseMarkdown(text: string, depth = 0): Block[] {
+export function parseMarkdown(text: string, options: ParseOptions = {}, depth = 0): Block[] {
   const lines = text.replace(/\r\n?/g, "\n").split("\n");
   const out: Block[] = [];
   let i = 0;
@@ -71,7 +89,7 @@ export function parseMarkdown(text: string, depth = 0): Block[] {
     }
     const heading = HEADING.exec(line);
     if (heading) {
-      out.push({ t: "h", level: Math.min(3, heading[1].length) as 1 | 2 | 3, c: parseInline(headingText(heading[2])) });
+      out.push({ t: "h", level: Math.min(3, heading[1].length) as 1 | 2 | 3, c: parseInline(headingText(heading[2]), options) });
       i += 1;
       continue;
     }
@@ -89,7 +107,7 @@ export function parseMarkdown(text: string, depth = 0): Block[] {
       const inner = body.join("\n");
       out.push({
         t: "quote",
-        c: depth < MAX_DEPTH ? parseMarkdown(inner, depth + 1) : [{ t: "p", c: [{ t: "text", v: inner }] }],
+        c: depth < MAX_DEPTH ? parseMarkdown(inner, options, depth + 1) : [{ t: "p", c: [{ t: "text", v: inner }] }],
       });
       continue;
     }
@@ -114,7 +132,7 @@ export function parseMarkdown(text: string, depth = 0): Block[] {
         t: "list",
         ordered: isOrdered,
         start: ordered ? Number(ordered[1]) : 1,
-        items: items.map((it) => parseInline(it)),
+        items: items.map((it) => parseInline(it, options)),
       });
       continue;
     }
@@ -128,7 +146,7 @@ export function parseMarkdown(text: string, depth = 0): Block[] {
       para.push(lines[i]);
       i += 1;
     }
-    out.push({ t: "p", c: parseInline(para.join("\n")) });
+    out.push({ t: "p", c: parseInline(para.join("\n"), options) });
   }
   return out;
 }
@@ -139,7 +157,7 @@ export function safeHref(href: string): string | null {
   return /^(https?:\/\/|mailto:)/i.test(h) ? h : null;
 }
 
-export function parseInline(text: string, depth = 0): Inline[] {
+export function parseInline(text: string, options: ParseOptions = {}, depth = 0): Inline[] {
   if (depth > MAX_DEPTH) return [{ t: "text", v: text }];
   const out: Inline[] = [];
   let buf = "";
@@ -172,11 +190,21 @@ export function parseInline(text: string, depth = 0): Inline[] {
         continue;
       }
     }
+    if (options.roleplay && ch === "(" && (rest.startsWith("((") || OOC_START.test(rest))) {
+      const end = asideEnd(text, i, rest.startsWith("(("));
+      if (end > i) {
+        flush();
+        // Inside the aside, ordinary Markdown (an aside has no actions or asides of its own).
+        out.push({ t: "ooc", c: parseInline(text.slice(i, end + 1), {}, depth + 1) });
+        i = end + 1;
+        continue;
+      }
+    }
     if ((ch === "*" || ch === "_") && rest.startsWith(ch + ch)) {
       const end = text.indexOf(ch + ch, i + 2);
       if (end > i + 2) {
         flush();
-        out.push({ t: "strong", c: parseInline(text.slice(i + 2, end), depth + 1) });
+        out.push({ t: "strong", c: parseInline(text.slice(i + 2, end), options, depth + 1) });
         i = end + 2;
         continue;
       }
@@ -185,7 +213,9 @@ export function parseInline(text: string, depth = 0): Inline[] {
       const end = findEmphasisEnd(text, i + 1, ch);
       if (end > i + 1) {
         flush();
-        out.push({ t: "em", c: parseInline(text.slice(i + 1, end), depth + 1) });
+        const c = parseInline(text.slice(i + 1, end), options, depth + 1);
+        // In a roleplay, *…* is an action; _…_ stays ordinary emphasis.
+        out.push(options.roleplay && ch === "*" ? { t: "action", c } : { t: "em", c });
         i = end + 1;
         continue;
       }
@@ -196,7 +226,7 @@ export function parseInline(text: string, depth = 0): Inline[] {
       const href = m ? safeHref(m[2]) : null;
       if (m && href) {
         flush();
-        out.push({ t: "link", href, c: parseInline(m[1], depth + 1) });
+        out.push({ t: "link", href, c: parseInline(m[1], options, depth + 1) });
         i += m[0].length;
         continue;
       }
@@ -216,6 +246,28 @@ export function parseInline(text: string, depth = 0): Inline[] {
   }
   flush();
   return out;
+}
+
+/** Where an aside opened at `from` closes: its balancing parenthesis, on the same line
+ * and within OOC_MAX; a `((` aside must close with `))`. -1 when it does not close
+ * (yet: a reply still streaming shows it as text until it does). */
+function asideEnd(text: string, from: number, double: boolean): number {
+  let depth = 0;
+  const stop = Math.min(text.length, from + OOC_MAX);
+  for (let j = from; j < stop; j += 1) {
+    const c = text[j];
+    if (c === "\n") return -1;
+    if (c === "\\") {
+      j += 1; // an escaped parenthesis does not count
+      continue;
+    }
+    if (c === "(") depth += 1;
+    else if (c === ")") {
+      depth -= 1;
+      if (depth === 0) return !double || text[j - 1] === ")" ? j : -1;
+    }
+  }
+  return -1;
 }
 
 function findEmphasisEnd(text: string, from: number, ch: string): number {

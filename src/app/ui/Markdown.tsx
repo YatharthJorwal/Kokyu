@@ -1,6 +1,7 @@
 // Renders a reply's Markdown (K1-04, FR-C-8) from the tree in ../markdown.ts.
 // Only React elements, never innerHTML, so model output cannot inject markup.
-// Code blocks get a Copy button.
+// Code blocks get a Copy button. In a roleplay thread (FR-MODE-7) actions are
+// italic and softer and out-of-character asides small and muted (app.css).
 
 import { useMemo, type ReactNode } from "react";
 
@@ -27,6 +28,18 @@ function inline(nodes: Inline[]): ReactNode[] {
         );
       case "br":
         return <br key={i} />;
+      case "action":
+        return (
+          <em key={i} className="rp-action">
+            {inline(n.c)}
+          </em>
+        );
+      case "ooc":
+        return (
+          <span key={i} className="rp-ooc">
+            {inline(n.c)}
+          </span>
+        );
     }
   });
 }
@@ -68,7 +81,7 @@ function block(b: Block, i: number): ReactNode {
   }
 }
 
-export function Markdown({ text }: { text: string }) {
-  const blocks = useMemo(() => parseMarkdown(text), [text]);
+export function Markdown({ text, roleplay = false }: { text: string; roleplay?: boolean }) {
+  const blocks = useMemo(() => parseMarkdown(text, { roleplay }), [text, roleplay]);
   return <div className="md">{blocks.map(block)}</div>;
 }

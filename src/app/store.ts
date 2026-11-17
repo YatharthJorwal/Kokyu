@@ -6,11 +6,12 @@
 import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
-import type { Effort, ServerData, SettingsChange } from "../net/protocol";
+import type { Effort, Scenario, ServerData, SettingsChange } from "../net/protocol";
 import {
   canPickModel,
   canRegenerate,
   canSend,
+  canStartThread,
   initialState,
   reduce,
   type ChatEvent,
@@ -100,8 +101,40 @@ export const actions = {
   },
 
   newThread(): void {
-    if (useChat.getState().turn !== "idle") return;
+    if (!canStartThread(useChat.getState())) return;
     socket.send("thread_new", {});
+  },
+
+  // ── roleplay (K1c-08; FR-MODE-6) ────────────────────────────────────
+
+  /** A roleplay thread from a card, or blank (null). The mode is fixed for the
+   * thread's life; the kernel opens it and answers with thread_opened. */
+  newRoleplay(scenario: Scenario | null): boolean {
+    if (!canStartThread(useChat.getState())) return false;
+    if (!socket.send("thread_new", { mode: "roleplay", scenario })) return false;
+    dispatch({ kind: "roleplay", open: false });
+    return true;
+  },
+
+  /** The New roleplay dialog; it asks the kernel for the saved cards each time. */
+  openRoleplay(): void {
+    if (!canStartThread(useChat.getState())) return;
+    dispatch({ kind: "roleplay", open: true });
+    socket.send("scenario_list", {});
+  },
+
+  closeRoleplay(): void {
+    dispatch({ kind: "roleplay", open: false });
+  },
+
+  /** Saves a card (with `id`, replaces that saved card); the kernel answers with the fresh list. */
+  saveScenario(card: Scenario, id?: string): boolean {
+    return socket.send("scenario_save", id ? { id, card } : { card });
+  },
+
+  /** Threads started from the card stay as they are. */
+  deleteScenario(id: string): boolean {
+    return socket.send("scenario_delete", { id });
   },
 
   /** Temp Chat for the open thread (FR-MEM-5); the kernel saves it and answers with thread_updated. */

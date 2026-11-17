@@ -4,6 +4,7 @@
 
 import { Composer } from "./ui/Composer";
 import { NoticeBar } from "./ui/NoticeBar";
+import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
 import { Sidebar } from "./ui/Sidebar";
 import { ThinkingRow } from "./ui/ThinkingRow";
@@ -22,6 +23,7 @@ export function App() {
         <Composer />
       </main>
       <SettingsDialog />
+      <RoleplayDialog />
     </div>
   );
 }

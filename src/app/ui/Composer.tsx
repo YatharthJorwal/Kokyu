@@ -10,7 +10,7 @@
 import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 
 import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
-import { canSend } from "../chat-state";
+import { canSend, currentMode } from "../chat-state";
 import { actions, useChat, type Attachment } from "../store";
 import { ModelChip } from "./ModelChip";
 
@@ -35,6 +35,7 @@ export function Composer() {
   const ready = useChat(canSend);
   const role = useChat((s) => s.role);
   const companion = useChat((s) => s.companion?.name ?? null);
+  const roleplay = useChat((s) => currentMode(s) === "roleplay");
   const box = useRef<HTMLTextAreaElement>(null);
 
   const attach = async (file: File | undefined) => {
@@ -84,9 +85,11 @@ export function Composer() {
   const placeholder =
     role === "observer"
       ? "Another Kōkyū window is talking to the kernel"
-      : companion
-        ? `Message ${companion}…`
-        : "Message…";
+      : roleplay
+        ? `Write to ${companion ?? "her"}… *actions* in asterisks`
+        : companion
+          ? `Message ${companion}…`
+          : "Message…";
 
   return (
     <div className="composer-area">
