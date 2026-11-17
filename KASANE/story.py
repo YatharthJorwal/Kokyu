@@ -264,6 +264,7 @@ class StoryKeeper:
             summary = new_summary
             pending = pending[len(batch):]
             folded += len(batch)
+            log.info(f"story memory: folded {len(batch)} lines of thread {thread_id} ({len(summary)} chars)")
             self._notify(thread_id, summary)
         return folded
 
