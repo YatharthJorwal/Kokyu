@@ -11,6 +11,10 @@
 // UI1-08 (D-093): GitHub-style tables and nested lists (an item holds blocks of its
 // own: a sub-list, a code fence).
 //
+// D-097: her emotion tags (`[angry]`, `[teasing]`) are a `tag` node in every mode,
+// shown muted and italic like an action. They stay in the text: the Luna and Yuri
+// shells drive her expressions from them. A link `[x](url)` is never a tag.
+//
 // shortcut: no images, footnotes or reference links; add them if replies need them.
 
 export type Inline =
@@ -23,7 +27,9 @@ export type Inline =
   /** Roleplay only: `*…*`, an action or narration. */
   | { t: "action"; c: Inline[] }
   /** Roleplay only: an out-of-character aside, parentheses included. */
-  | { t: "ooc"; c: Inline[] };
+  | { t: "ooc"; c: Inline[] }
+  /** An emotion tag, brackets included (D-097): `[angry]`, `[softly smiling]`. */
+  | { t: "tag"; v: string };
 
 export interface ParseOptions {
   /** Parse for a roleplay thread (FR-MODE-7). */
@@ -63,6 +69,10 @@ const MAX_DEPTH = 16;
 const OOC_MAX = 2000;
 // "(OOC", "(ooc:", "( OOC -" … : the word OOC right after the parenthesis.
 const OOC_START = /^\(\s*ooc\b/i;
+// An emotion tag (D-097): 2 to 24 characters of letters, spaces, hyphens and
+// apostrophes, starting and ending with a letter, and not followed by "(" (a link),
+// "[" or ":" (reference links). "[1]", "[x]" and "[]" are not tags.
+const TAG = /^\[(\p{L}[\p{L}' -]{0,22}\p{L})\](?![([:])/u;
 
 /** A heading's text without its closing #s ("C#" keeps its #). A loop, not a regex: no backtracking. */
 function headingText(s: string): string {
@@ -331,6 +341,14 @@ export function parseInline(text: string, options: ParseOptions = {}, depth = 0)
         flush();
         out.push({ t: "link", href, c: parseInline(m[1], options, depth + 1) });
         i += m[0].length;
+        continue;
+      }
+      // Not right after a word character: "items[index]" is prose about code.
+      const tag = m || (i > 0 && /[\p{L}\p{N}_]/u.test(text[i - 1])) ? null : TAG.exec(rest);
+      if (tag) {
+        flush();
+        out.push({ t: "tag", v: tag[0] });
+        i += tag[0].length;
         continue;
       }
     }

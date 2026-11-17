@@ -2768,7 +2768,8 @@ button:disabled {
 /* Roleplay threads (K1c-08, FR-MODE-7): actions italic and softer, asides small and
    muted. The action colour sits between the muted and the body text, so it stays
    readable in the Light theme too. */
-.rp-action {
+.rp-action,
+.emotion-tag {
   font-style: italic;
   color: color-mix(in srgb, var(--muted) 60%, var(--text));
 }

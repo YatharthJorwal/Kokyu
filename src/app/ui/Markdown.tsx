@@ -51,6 +51,13 @@ function inline(nodes: Inline[]): ReactNode[] {
             {inline(n.c)}
           </em>
         );
+      case "tag":
+        // D-097: her emotion tag, kept in the text and shown like an action
+        return (
+          <em key={i} className="emotion-tag">
+            {n.v}
+          </em>
+        );
       case "ooc":
         return (
           <span key={i} className="rp-ooc">
