@@ -626,3 +626,17 @@ Accepted (assumed answers) · The user: "we should make modes … brainstorm and
 - **Screen companions** stay quiet while a roleplay thread is open (both loops skip). Uploads stay allowed in Roleplay: the user chose to share.
 - **Client:** New chat stays; a *New roleplay…* dialog takes a card (saved cards can be picked, saved, deleted) or starts blank. Roleplay threads carry a badge, render `*…*` italic and softer and asides muted, and render the user's own lines the same way; Chat threads keep ordinary Markdown.
 **Not in v1:** a model-written opening, a viewer or editor for the story summary, actions driving the avatar (K2, FR-MODE-10), changing a thread's mode, premade cards.
+
+## D-075 K1c build and review: what was settled, what stays open
+Accepted · The user: "continue next step … complete till as far as you can work … then i will push" · Follows D-074; FR-MODE-1..9 · 2026-11-17
+**Context:** K1c was built (b1cd674 to c9dbf95) and then reviewed adversarially; each finding was checked against the code before it was fixed or rejected.
+**Decision:**
+- **Schema:** `threads.db` went 3 (mode, scenario) → 4 (`story_memory`) → 5 (`scenarios`), each added in place like `efforts`; D-074's "schema 3" is only the first step.
+- **Story folds wait for the chat model** (`boot.chat_model_settled_event`): a catch-up fold at start must not compete with the first model load. The fold's token cap is sized from `story.max_chars` (`tokens_for`), not a fixed 512.
+- **A screen-companion remark is dropped if the open thread changed while it was being checked** (`still_valid`), so a remark never lands in a roleplay thread opened mid-check.
+- **Stop keeps the raw text minus an unclosed `[tag` fragment**, the same rule as a finished reply.
+- **The dialogue cut honours curly-quote direction** (U+201C opens, U+201D closes); the speech chunker's tag hold-back is linear (the first regex was cubic on long input and could block the loop, RULES §3.7).
+- **Prompt wording:** the roleplay layer says the scenario sets place, time and her role while her personality and way of talking stay her own (a persona's "you live here" no longer pulls against a card); the chat voice note says the closing emotion tag still applies and is never spoken.
+- **Client:** Start roleplay closes the dialog only when the kernel accepts; a save answers from its own `scenarios` frame; Escape during the delete confirm cancels only the confirm; bold inside an action parses as bold. *New roleplay…* sits under *New chat* (beside it, labels wrapped or cut in a narrow sidebar).
+**Rejected after checking, recorded so they are not re-raised:** the user's own lines parsed as roleplay Markdown in a roleplay thread (intended, D-074 Client); Luna's persona mentions intimate roleplay (her pack text, the user's asset); the persona no longer says "[teasing] by default" (the shared addendum carries the tag rule); the llama.cpp warm-up picking the companion and thread from global state (that state is what the first turn uses).
+**Left open (TODO K1c-10):** a reply quoted only with U+201D speaks its narration; a remark partly spoken is dropped if the thread changes during speech; a fold cut by the token cap is not detected (Ollama's `done_reason` is not read); a save pending over a disconnect stays "Saving…" until reopened; Escape-in-confirm has no automated test; a fold may start before `load_thread`'s delayed model request; Temp Chat lines in a roleplay thread can later be folded into its summary; `thread_list` sends full cards on every refresh.

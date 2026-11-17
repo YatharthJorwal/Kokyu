@@ -134,7 +134,7 @@ The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a t
 - [x] Effort slider thumb flew past the track's end (ea67e85; FR-M-8)
 - [x] One chat model in memory; the helper roles follow the pick; embeddings stay (c3a65a6; FR-M-6, D-072)
 - [x] Settings → Appearance: Kōkyū / Midnight / Light, accent, bubbles with her initial, text size; hard-coded colors follow the theme (89bdb95; D-073)
-- [ ] **Modes** (Chat, Roleplay, Live) and the persona fix: proposal in `docs/notes/modes-plan.md`, **waiting for the user's answers (§9 there)**, then SPEC FR-MODE-*, a decision and a phase (proposed K1c). Includes the c.ai renderer (actions italic and soft, OOC muted) and persona-only pack prompts.
+- [x] **Modes** (Chat, Roleplay) and the persona fix: built as phase K1c below with the assumed answers in D-074 (470a05e docs). Live (Stage + voice per window) waits for K2.
 
 - **Gate K1:** chat with one local and one API model; change model, effort and waifu mid-thread independently; failure UX shown with a forced API error; user sign-off on the layout vs the reference.
 
@@ -142,15 +142,16 @@ The user asked (2026-11-15) for a cleaner, faster kernel than the Yuri copy, a t
 
 Started 2026-11-17 with the user's "continue next step"; the six questions in `docs/notes/modes-plan.md` §9 took their recommended answers (D-074), reversible.
 
-- [ ] K1c-01 Thread mode and scenario stored (schema 3), `thread_new {mode, scenario}`, mode in thread rows (FR-MODE-1)
-- [ ] K1c-02 Prompt layers: persona, mode layer, scenario, shared addendum, tool guidance in Chat only; one builder for every history[0] and the warm-up (FR-MODE-2, 3, 4)
-- [ ] K1c-03 Roleplay turns: no forget, look intent, Task Guide or tools; profile-only recall; no transcript_log write; refused tool calls; delivery layer while voice is on; raw reply text kept (FR-MODE-3, 4, 8)
-- [ ] K1c-04 Story memory: `story_memory`, the batched local summarizer, injection, Temp Chat rules (FR-MODE-5)
-- [ ] K1c-05 Dialogue-only speech in Roleplay (streaming filter) and captions to match (FR-MODE-8)
-- [ ] K1c-06 Scenario cards: storage and protocol, the opening message (FR-MODE-6)
-- [ ] K1c-07 Screen companions quiet in roleplay threads (FR-MODE-9)
-- [ ] K1c-08 Client: New roleplay dialog, badge, roleplay renderer, user lines styled, placeholder and empty state (FR-MODE-6, 7)
-- [ ] K1c-09 Persona-only `persona.md` for Luna and Yuri (untracked assets, D-041); SPEC Appendix A rules 3 and 6 (D-074)
+- [x] K1c-01 Thread mode and scenario stored (schema 3), `thread_new {mode, scenario}`, mode in thread rows (FR-MODE-1) (b1cd674)
+- [x] K1c-02 Prompt layers: persona, mode layer, scenario, shared addendum, tool guidance in Chat only; one builder for every history[0] and the warm-up (FR-MODE-2, 3, 4) (b1cd674; wording 97de53a)
+- [x] K1c-03 Roleplay turns: no forget, look intent, Task Guide or tools; profile-only recall; no transcript_log write; refused tool calls; delivery layer while voice is on; raw reply text kept (FR-MODE-3, 4, 8) (d7021f8; Stop drops an unclosed tag 4e698f9)
+- [x] K1c-04 Story memory: `story_memory`, the batched local summarizer, injection, Temp Chat rules (FR-MODE-5) (38e5f34, schema 4; review fixes 5a1d972; a log line per fold 2b99262)
+- [x] K1c-05 Dialogue-only speech in Roleplay (streaming filter) and captions to match (FR-MODE-8) (cbfe424; review fixes 4e698f9)
+- [x] K1c-06 Scenario cards: storage and protocol, the opening message (FR-MODE-6) (b080b2b, schema 5; review fixes 5a1d972)
+- [x] K1c-07 Screen companions quiet in roleplay threads (FR-MODE-9) (d7021f8; a remark checked before a thread switch is dropped 4e698f9)
+- [x] K1c-08 Client: New roleplay dialog, badge, roleplay renderer, user lines styled, placeholder and empty state (FR-MODE-6, 7) (c9dbf95; review fixes c83f054; New roleplay under New chat 97de53a)
+- [x] K1c-09 Persona-only `persona.md` for Luna and Yuri (untracked assets, D-041); SPEC Appendix A rules 3 and 6 (D-074) (no commit: the packs are untracked; SPEC in 470a05e; `waifu.yaml` `prompt: persona.md`, the original `prompt.md` kept)
+- [ ] K1c-10 Follow-ups found in review (D-075), none blocking: a reply whose quotes are all U+201D speaks its narration; a screen remark partly spoken is dropped if the thread changes during speech; a story fold cut by the token cap is not detected; a scenario save pending over a disconnect stays "Saving…" until the dialog is reopened; no automated test for Escape during the delete confirm; a fold may start in the gap before `load_thread`'s delayed model request; Temp Chat lines in a roleplay thread may later be folded into the summary; `thread_list` carries full cards on every refresh
 - **Gate K1c:** the user starts a roleplay from a card and from blank, talks with voice on and hears only dialogue, checks a chat thread still answers plainly with tools, and confirms or reverses the assumed answers in D-074.
 
 ## Phase K1b: Installer walking skeleton (D-035)
