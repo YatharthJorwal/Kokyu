@@ -22,9 +22,10 @@ internal screenshot-to-text call. Neither touches stream_reply() above,
 which consolidation.py/forget.py's background LLM calls still use
 unchanged.
 
-Context window: every native-Ollama request goes through _ollama_options(),
-which stamps the same options.num_ctx (config.yaml's llm.num_ctx) on all of
-them -- chat, tool-calling, vision, the background classifiers. Left unset,
+Context window: every native-Ollama request goes through _ollama_options(model),
+which stamps that model's options.num_ctx on all of them -- chat, tool-calling,
+vision, the background classifiers: its Chat memory (D-098) if the user set
+one, else config.yaml's llm.num_ctx. Left unset,
 the window is whatever the server defaults to, and once persona prompt +
 tool schemas + memory block + history outgrew it, Ollama ended replies after
 a handful of tokens with done_reason 'length' (docs/DECISIONS.md). Keeping
@@ -43,6 +44,7 @@ from typing import Any, AsyncIterator
 import httpx
 
 import context_budget
+import context_fit
 from config import CONFIG
 
 # D-072: one chat model in memory. The Ollama model the user picked; the helper roles
@@ -69,10 +71,11 @@ def keep_alive_for(model: str) -> dict[str, Any]:
 log = logging.getLogger(__name__)
 
 
-def _ollama_options(**overrides: Any) -> dict[str, Any]:
+def _ollama_options(model: str | None = None, **overrides: Any) -> dict[str, Any]:
     """The `options` block for every native-Ollama request. `overrides` may
     change temperature/num_predict (the vision call wants its own), but
-    never num_ctx: that one value must be identical across all calls."""
+    never num_ctx: that one value must be identical across all calls to a
+    model, so it comes from `model`'s Chat memory (D-098), else llm.num_ctx."""
     options: dict[str, Any] = {
         "temperature": CONFIG.llm.temperature,
         "num_predict": CONFIG.llm.max_tokens,
@@ -82,8 +85,9 @@ def _ollama_options(**overrides: Any) -> dict[str, Any]:
         if value is not None:
             options[key] = value
     options.update(overrides)
-    if CONFIG.llm.num_ctx is not None:
-        options["num_ctx"] = CONFIG.llm.num_ctx
+    num_ctx = context_fit.context_for(f"local:ollama/{model}") if model else CONFIG.llm.num_ctx
+    if num_ctx is not None:
+        options["num_ctx"] = num_ctx
     return options
 
 
@@ -269,7 +273,7 @@ async def stream_reply_with_tools(
         "messages": messages,
         "tools": tools,
         "stream": True,
-        "options": _ollama_options(**_cap(num_predict)),
+        "options": _ollama_options(use_model, **_cap(num_predict)),
         **keep_alive_for(use_model),
     }
     if think is not None:
@@ -470,6 +474,24 @@ def capability_warnings(
     return out
 
 
+async def model_info(model: str, *, transport: httpx.AsyncBaseTransport | None = None) -> dict[str, Any] | None:
+    """Ollama's facts about a pulled model (POST /api/show `model_info`: the GGUF
+    header, e.g. `<arch>.context_length`, `<arch>.block_count`), or None. Read-only,
+    for Chat memory (D-098); never raises."""
+    if CONFIG.llm.api_style != "ollama_native":
+        return None
+    url = f"{CONFIG.llm.base_url.rstrip('/')}/api/show"
+    try:
+        async with httpx.AsyncClient(transport=transport, timeout=httpx.Timeout(10.0, connect=3.0)) as client:
+            response = await client.post(url, json={"model": model})
+            if response.status_code >= 400:
+                return None
+            info = response.json().get("model_info")
+    except (httpx.HTTPError, ValueError, AttributeError):
+        return None
+    return dict(info) if isinstance(info, dict) else None
+
+
 async def model_capabilities(model: str) -> list[str] | None:
     """Ollama's capability list for `model` (e.g. completion, vision, tools,
     thinking) via POST /api/show, or None if the server is unreachable or too
@@ -516,7 +538,7 @@ async def load_model(model: str | None = None) -> None:
         "model": model,
         "prompt": "",
         "stream": False,
-        "options": _ollama_options(),
+        "options": _ollama_options(model),
         **keep_alive_for(model),
     }
     started = time.monotonic()
@@ -659,9 +681,9 @@ async def describe_image(
         "messages": [{"role": "user", "content": prompt, "images": [image_b64]}],
         "stream": False,
         "options": (
-            _ollama_options(temperature=0.2, num_predict=400, presence_penalty=0.0)
+            _ollama_options(model, temperature=0.2, num_predict=400, presence_penalty=0.0)
             if json_schema is not None
-            else _ollama_options(temperature=0.4, num_predict=400, presence_penalty=0.0)
+            else _ollama_options(model, temperature=0.4, num_predict=400, presence_penalty=0.0)
         ),
         **keep_alive_for(model),
     }
@@ -757,7 +779,7 @@ async def _stream_ollama_native(
         "model": model or CONFIG.llm.model,
         "messages": messages,
         "stream": True,
-        "options": _ollama_options(**_cap(num_predict)),
+        "options": _ollama_options(model or CONFIG.llm.model, **_cap(num_predict)),
         **keep_alive_for(model or CONFIG.llm.model),
     }
     if think is not None:

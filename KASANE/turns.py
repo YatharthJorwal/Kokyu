@@ -20,6 +20,7 @@ from fastapi import WebSocket
 
 import companions
 import context_budget
+import context_fit
 import hub
 import llm
 import model_loader
@@ -202,14 +203,18 @@ def fit_for_llm(
     messages: list[dict[str, Any]],
     tools_list: list[dict[str, Any]] | None = None,
     extra: list[dict[str, Any]] | None = None,
+    num_ctx: int | None = ...,  # type: ignore[assignment]
 ) -> list[dict[str, Any]]:
     """The messages actually sent to the model: `messages` with the oldest
     history dropped (from this copy only) until prompt + reserved reply fit
-    llm.num_ctx. See context_budget.py for why -- replies were being cut off
-    with done_reason 'length' because nothing bounded the prompt by size."""
+    `num_ctx` (the model's Chat memory, D-098; llm.num_ctx when not given). See
+    context_budget.py for why -- replies were being cut off with done_reason
+    'length' because nothing bounded the prompt by size."""
+    if num_ctx is ...:
+        num_ctx = CONFIG.llm.num_ctx
     fitted, dropped, est_tokens, budget = context_budget.fit_messages(
         messages,
-        num_ctx=CONFIG.llm.num_ctx,
+        num_ctx=num_ctx,
         reply_reserve=CONFIG.llm.max_tokens,
         tools=tools_list,
         extra=extra,
@@ -217,14 +222,14 @@ def fit_for_llm(
     if dropped:
         log.info(
             f"context: left out the {dropped} oldest history message(s) this call "
-            f"to fit num_ctx={CONFIG.llm.num_ctx} (estimated prompt {est_tokens} tokens, "
+            f"to fit num_ctx={num_ctx} (estimated prompt {est_tokens} tokens, "
             f"budget {budget}).",
         )
     if budget and est_tokens > budget:
         log.warning(
             f"the persona prompt + memory block alone (~{est_tokens} tokens) "
-            f"exceed the prompt budget ({budget}) for num_ctx={CONFIG.llm.num_ctx}; raise "
-            "llm.num_ctx.",
+            f"exceed the prompt budget ({budget}) for num_ctx={num_ctx}; give the model "
+            "more Chat memory in the picker.",
         )
     return fitted
 
@@ -439,6 +444,8 @@ async def run_turn(
     # FR-MODE-4: a roleplay offers no tools; the router role stays "chat" in both modes.
     offered_tools = [] if roleplay else tools.offered_schemas(already_looked=bool(look_hint), local_model=local_model)
     offered_names = {schema["function"]["name"] for schema in offered_tools}
+    # D-098: the history budget follows this model's Chat memory, the same value its requests use.
+    chat_memory = context_fit.context_for(model_listing.effective_ref(model_ref, CONFIG))
     try:
         for _ in range(MAX_TOOL_ROUNDS):
             saw_tool_call = False
@@ -447,7 +454,7 @@ async def run_turn(
             # turn is ambient content and may only go to a local model.
             async for event in router.stream_with_tools(
                 "chat",
-                fit_for_llm(messages_for_llm, offered_tools, tool_messages) + tool_messages,
+                fit_for_llm(messages_for_llm, offered_tools, tool_messages, num_ctx=chat_memory) + tool_messages,
                 offered_tools,
                 model_ref=model_ref,
                 effort=effort,

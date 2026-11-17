@@ -210,6 +210,13 @@ class MeasuredCache:
         with self._lock:
             return self._load().get(ref)
 
+    def forget(self, ref: str) -> None:
+        """Drop a measurement that no longer holds: the model's context changed (D-098)."""
+        with self._lock:
+            data = self._load()
+            if data.pop(ref, None) is not None:
+                self._write(data)
+
     def record(self, ref: str, mb: int | None) -> None:
         if not mb or mb <= 0:
             return
@@ -218,13 +225,16 @@ class MeasuredCache:
             if data.get(ref) == int(mb):
                 return
             data[ref] = int(mb)
-            try:
-                self.path.parent.mkdir(parents=True, exist_ok=True)
-                tmp = self.path.with_suffix(".tmp")
-                tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding="utf-8")
-                os.replace(tmp, self.path)
-            except OSError:
-                pass  # a cache, not a record: the estimate still works
+            self._write(data)
+
+    def _write(self, data: dict[str, int]) -> None:
+        try:
+            self.path.parent.mkdir(parents=True, exist_ok=True)
+            tmp = self.path.with_suffix(".tmp")
+            tmp.write_text(json.dumps(data, indent=1, sort_keys=True), encoding="utf-8")
+            os.replace(tmp, self.path)
+        except OSError:
+            pass  # a cache, not a record: the estimate still works
 
 
 def _number(value: Any) -> bool:

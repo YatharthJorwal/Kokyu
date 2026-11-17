@@ -54,3 +54,19 @@ export function trackPosition(stops: readonly number[], tokens: number): number 
   }
   return 1;
 }
+
+/** What the picker's line under the slider says about `tokens` for this model; null
+ * when nothing needs saying. Local models past their fit point get a warning (it
+ * never blocks); API models a note on what longer costs. */
+export function contextNote(
+  ctx: { fit: number | null; spills: boolean },
+  tokens: number,
+  local: boolean,
+): { text: string; warn: boolean } | null {
+  if (!local) return { text: "Longer sends more of the chat with each message, so each one costs more.", warn: false };
+  if (ctx.fit === null || tokens <= ctx.fit) return null;
+  const tail = ctx.spills ? "replies will slow down." : "llama.cpp can't load it then.";
+  if (ctx.fit < MIN_CONTEXT) return { text: `This model barely fits in your graphics memory; ${tail}`, warn: true };
+  const at = ctx.fit >= 1024 * 1024 ? contextLabel(ctx.fit) : `${Math.floor(ctx.fit / 1024)}K`;
+  return { text: `Past ${at} this won't fit in your graphics memory; ${tail}`, warn: true };
+}

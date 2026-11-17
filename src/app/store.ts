@@ -408,6 +408,11 @@ export const actions = {
     return socket.send("set_effort", { effort });
   },
 
+  /** D-098: a model's Chat memory, for every thread. The model in memory reloads with it. */
+  setContext(ref: string, tokens: number | null): boolean {
+    return socket.send("set_context", { ref, tokens });
+  },
+
   /** Try again after a failed load. */
   /** K1-09b: *Unload X* on the graphics-memory card; the kernel then tries the load again. */
   unloadModel(ref: string): void {

@@ -26,6 +26,7 @@ export const CLIENT_TYPES = [
   "thread_pin",
   "set_model",
   "set_effort",
+  "set_context",
   "model_list",
   "model_load",
   "model_unload",
@@ -199,6 +200,17 @@ export interface ModelRow {
   group?: string | null;
   /** The effort slider's detents, lowest first; empty = no slider (FR-M-8, FR-M-10). */
   efforts?: Effort[];
+  /** Chat memory (D-098): the longest context, the one it runs with, the longest that
+   * fits in graphics memory (local only; null when unknown), and whether going past
+   * that spills to RAM (Ollama: slower) or stops the load (llama.cpp). Null: no slider. */
+  context?: ModelContext | null;
+}
+
+export interface ModelContext {
+  max: number;
+  value: number | null;
+  fit: number | null;
+  spills: boolean;
 }
 
 export interface Spend {
@@ -353,6 +365,8 @@ export interface ClientData {
   thread_pin: { id: string; on: boolean };
   set_model: { model_ref: string | null };
   set_effort: { effort: Effort | null };
+  /** D-098: a model's Chat memory (context length) for every thread; null: the default. */
+  set_context: { ref: string; tokens: number | null };
   model_list: { refresh?: boolean };
   model_load: Record<string, never>;
   model_unload: { ref: string };

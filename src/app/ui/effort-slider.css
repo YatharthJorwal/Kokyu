@@ -154,3 +154,31 @@
     display: none;
   }
 }
+
+/* Chat memory (D-098): the same slider; a faint mark where the model stops fitting in
+   graphics memory, and the fill warms past it. */
+.context-fit {
+  position: absolute;
+  top: -3px;
+  bottom: -3px;
+  width: 2px;
+  border-radius: 1px;
+  background: color-mix(in srgb, var(--danger) 55%, transparent);
+  transform: translateX(-50%);
+}
+
+.context-slider.over .effort-fill {
+  background: linear-gradient(to right, var(--accent), color-mix(in srgb, var(--danger) 80%, var(--accent)));
+}
+
+.context-note {
+  margin: 0 12px 6px;
+  color: var(--muted);
+  font-size: 12px;
+  line-height: 1.35;
+}
+
+/* "past-fit", not "warn": .warn is the model chip's round badge (app.css) */
+.context-note.past-fit {
+  color: var(--danger);
+}

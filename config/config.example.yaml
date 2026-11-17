@@ -186,9 +186,13 @@ llm:
   max_tokens: 512
   reasoning_tokens: 4096      # added to max_tokens while a model thinks: thinking counts against the cap (D-064)
   think: false                # hybrid-thinking models: keep reasoning off
-  # One value for every call: Ollama reloads the model when two requests
-  # disagree on it. Raise to 16384 only if nvidia-smi shows headroom.
+  # The context length a model runs with unless it has its own Chat memory below.
+  # One value for every call to a model: Ollama reloads it when two requests disagree.
   num_ctx: 8192
+  # Chat memory per model (D-098): the picker's slider writes this into settings.json;
+  # a model not listed uses num_ctx (a llama.cpp preset, its own ctx). Example:
+  #   context_by_model: { 'local:ollama/qwen3.5:9b': 32768 }
+  context_by_model: {}
   # null = same model as reflex (it reports vision). Set a separate tag only
   # if the reflex model is a text-only build.
   vision_model: null

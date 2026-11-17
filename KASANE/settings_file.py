@@ -178,6 +178,23 @@ def change(saved: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
             if mode in SCREEN and on is not None:
                 out.setdefault(mode, {})["on_at_start"] = bool(on)
 
+    if "context" in request:
+        # D-098: Chat memory per model, in config.yaml's own layout (llm.context_by_model).
+        asked = request["context"] or {}
+        ref = str(asked.get("ref") or "").strip()
+        if not ref:
+            raise SettingsError("Pick a model first.")
+        by_model = dict((out.get("llm") or {}).get("context_by_model") or {})
+        tokens = asked.get("tokens")
+        if tokens is None:
+            by_model.pop(ref, None)
+        else:
+            by_model[ref] = int(tokens)
+        if by_model:
+            out.setdefault("llm", {})["context_by_model"] = by_model
+        else:
+            _drop(out, "llm", "context_by_model")
+
     if "read_aloud" in request:
         # D-097: the composer's Read aloud, kept between restarts.
         out.setdefault("tts", {})["read_aloud"] = bool(request["read_aloud"])

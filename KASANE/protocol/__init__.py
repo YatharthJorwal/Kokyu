@@ -183,6 +183,16 @@ class SetEffort(_Data):
     effort: Literal["off", "low", "medium", "high", "max"] | None = None   # FR-M-8
 
 
+# D-098: a context length the picker can ask for (1K to 16M tokens).
+CONTEXT_MIN, CONTEXT_MAX = 1024, 16 * 1024 * 1024
+
+
+class SetContext(_Data):
+    """Chat memory for one model, every thread alike; None goes back to the default."""
+    ref: str = Field(min_length=1, max_length=300)
+    tokens: int | None = Field(default=None, ge=CONTEXT_MIN, le=CONTEXT_MAX)
+
+
 class ModelUnload(_Data):
     """K1-09b (SPEC §5, D-071): unload a model the failed-load card names, then try again."""
 
@@ -258,6 +268,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "thread_pin": ThreadPin,          # UI1-09 (D-094): pinned threads stay on top
     "set_model": SetModel,
     "set_effort": SetEffort,
+    "set_context": SetContext,        # D-098: a model's Chat memory (context length), kept in settings.json
     "model_list": ModelListRequest,   # K1-10: what the chip's popover lists
     "model_load": Empty,              # K1-10: Try again after a failed load
     "model_unload": ModelUnload,      # K1-09b: Unload X on that card, then try again

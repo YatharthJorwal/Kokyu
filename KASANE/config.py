@@ -301,6 +301,10 @@ class LLMConfig:
     api_style: str = "ollama_native"
     think: bool | None = False
     num_ctx: int | None = 8192
+    # Chat memory (D-098): a context length per model ref, set with the picker's slider
+    # and kept in settings.json. A model not listed uses num_ctx (a llama.cpp preset,
+    # its own ctx). Read through context_fit.context_for, never directly.
+    context_by_model: Mapping[str, int] = field(default_factory=dict)
     vision_model: str | None = None
     warm_up_on_start: bool = True
     top_p: float | None = 0.95
@@ -786,6 +790,11 @@ def _derive_llm(
         "reasoning_tokens": llm_raw.get("reasoning_tokens", defaults.reasoning_tokens),
         "think": llm_raw.get("think", defaults.think),
         "num_ctx": llm_raw.get("num_ctx", defaults.num_ctx),
+        "context_by_model": {
+            str(ref): int(n)
+            for ref, n in dict(llm_raw.get("context_by_model") or {}).items()
+            if isinstance(n, (int, float)) and not isinstance(n, bool) and n > 0
+        },
         "vision_model": llm_raw.get("vision_model", models.local.get("vision")),
         "warm_up_on_start": llm_raw.get("warm_up_on_start", defaults.warm_up_on_start),
         "top_p": llm_raw.get("top_p", defaults.top_p),

@@ -23,6 +23,7 @@ from fastapi import WebSocket, WebSocketDisconnect
 import ambient
 import boot
 import companions
+import context_fit
 import conversation
 import doctor
 import hub
@@ -33,6 +34,7 @@ import router
 import settings_file
 import story
 import turns
+import vram
 import waifus
 from audio import read_aloud, stt
 from config import CONFIG
@@ -823,6 +825,30 @@ class Session:
         if hub.drives(self.ws):
             # A pick loads at once; the chip shows the progress (FR-M-6).
             model_loader.LOADER.request(model_listing.effective_ref(self.thread.model_ref, CONFIG))
+
+    async def on_set_context(self, msg: Any) -> None:
+        """D-098: a model's Chat memory, for every thread, kept in settings.json. If it
+        is the chat model in memory, it loads again with the new context now (the
+        loading strip shows); otherwise it takes effect at its next load."""
+        if not hub.drives(self.ws):
+            return
+        if self.busy:
+            await self.refuse("turn_running", BUSY)
+            return
+        ref = msg.data.ref
+        async with settings_file.LOCK:
+            saved = await asyncio.to_thread(settings_file.read)
+            try:
+                cfg = await settings_file.save(settings_file.change(saved, {"context": {"ref": ref, "tokens": msg.data.tokens}}))
+            except Exception as exc:  # noqa: BLE001 -- shown to the user, nothing applied
+                await self.refuse("bad_message", f"Chat memory was not saved: {exc}")
+                return
+        log.info(f"chat memory: {ref} -> {context_fit.context_for(ref, cfg)} tokens")
+        await asyncio.to_thread(vram.MEASURED.forget, ref)   # measured at the old context
+        loader = model_loader.LOADER
+        if ref.startswith("local:") and loader.model_ref == ref and loader.state != model_loader.IDLE:
+            loader.request(ref, force=True)
+        await hub.broadcast(protocol.frame("model_list", await model_listing.model_list(router.get_router(), cfg=cfg)))
 
     async def on_set_effort(self, msg: Any) -> None:
         if self.thread is None:

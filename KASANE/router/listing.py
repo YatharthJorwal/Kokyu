@@ -25,6 +25,7 @@ from typing import Any
 
 import httpx
 
+import context_fit
 import llm
 import vram
 from config import CONFIG, Config, LlamaCppConfig
@@ -118,6 +119,7 @@ async def ollama_rows(
         size = item.get("size")
         rows.append(
             {
+                "_digest": str(item.get("digest") or ""),   # Chat memory's facts cache key; dropped in with_context
                 "ref": f"local:ollama/{name}",
                 "label": names.short(f"local:ollama/{name}"),
                 "full": name,
@@ -199,19 +201,29 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter", caps
                 "unpriced": unpriced,
                 "tags": list(info.tags) + (["zdr"] if getattr(info, "zdr", False) else []),
                 "efforts": capabilities.efforts_for(f"api:{backend}/{model_id}", info.tags),
+                # D-098: how much of the chat goes with each message; no graphics memory involved
+                "context": {
+                    "max": info.context_length,
+                    "value": context_fit.context_for(f"api:{backend}/{model_id}"),
+                    "fit": None,
+                    "spills": False,
+                } if info.context_length else None,
             }
         )
     return rows
 
 
-def _check(row: Mapping[str, Any], snap: vram.Snapshot, cfg: Config, label: str | None = None) -> vram.LoadCheck:
-    """Would this local row fit as the chat model? Reads the measured cache: off the loop."""
+def _check(
+    row: Mapping[str, Any], snap: vram.Snapshot, cfg: Config, label: str | None = None, *, ctx: int | None = None
+) -> vram.LoadCheck:
+    """Would this local row fit as the chat model, at its Chat memory (D-098) unless
+    `ctx` is given? Reads the measured cache: off the loop."""
     ref = row["ref"]
     preset = cfg.llamacpp.preset(ref.split("/", 1)[1]) if row["backend"] == "llamacpp" else None
     need = vram.need_for(
         ref,
         file_bytes=row["size_bytes"],
-        ctx=preset.ctx if preset else (cfg.llm.num_ctx or 2048),
+        ctx=ctx or context_fit.context_for(ref, cfg) or 2048,
         cfg=cfg.vram,
         experts_on_cpu=bool(preset and preset.n_cpu_moe),
     )
@@ -258,8 +270,84 @@ async def load_check(
     else:
         rows, _ = await ollama_rows(cfg.llm.base_url, transport=transport)
     row = next((r for r in rows if r["ref"] == ref), None)
+    if row is None:
+        return unknown
     # "It": the waking-up card already puts the model's name before the message
-    return unknown if row is None else await asyncio.to_thread(_check, row, snap, cfg, "It")
+    check = await asyncio.to_thread(_check, row, snap, cfg, "It")
+    chosen = context_fit.context_for(ref, cfg) or 0
+    if check.fits is False and row["backend"] == "ollama" and chosen > (cfg.llm.num_ctx or 0):
+        # D-098: a Chat memory past the fit point is a warning, not a block. Ollama keeps
+        # what does not fit in RAM and runs slower; it is refused only if even the
+        # usual context would not fit. (llama.cpp cannot spill: its refusal stands.)
+        usual = await asyncio.to_thread(_check, row, snap, cfg, "It", ctx=cfg.llm.num_ctx)
+        if usual.fits is not False:
+            log.info(f"vram: {ref} at {chosen} tokens of Chat memory will not fit; loading anyway (Ollama spills)")
+            return vram.LoadCheck(None, check.need_mb, check.available_mb)
+    return check
+
+
+# ── Chat memory (D-098): each row's context range, setting and fit point ──────────
+
+# Ollama's model_info per model, by digest: asked once per pulled model version.
+_OLLAMA_FACTS: dict[str, tuple[str, dict[str, Any] | None]] = {}
+
+
+async def _facts(row: Mapping[str, Any], cfg: Config, transport: httpx.AsyncBaseTransport | None) -> dict[str, Any] | None:
+    if row["backend"] == "llamacpp":
+        preset = cfg.llamacpp.preset(row["ref"].split("/", 1)[1])
+        return await asyncio.to_thread(context_fit.gguf_metadata, preset.model_path) if preset else None
+    name, digest = row["full"], str(row.get("_digest") or "")
+    cached = _OLLAMA_FACTS.get(name)
+    if cached is not None and cached[0] == digest and digest:
+        return cached[1]
+    info = await llm.model_info(name, transport=transport)
+    _OLLAMA_FACTS[name] = (digest, info)
+    return info
+
+
+def _room_mb(ref: str, snap: vram.Snapshot, cfg: Config) -> int | None:
+    """Graphics memory this model could have as the chat model: free now, plus what
+    the other chat models (and its own copy) would give back. None when unknown."""
+    if snap.gpu is None:
+        return None
+    keep = {f"local:ollama/{name}" for name in helper_models(cfg)} - {ref}
+    leaving = [mb for r, mb in snap.held.items() if r not in keep]
+    if any(mb is None for mb in leaving):
+        return None
+    return snap.gpu.free_mb + sum(mb or 0 for mb in leaving) - cfg.vram.headroom_mb
+
+
+async def with_context(
+    rows: list[dict[str, Any]], snap: vram.Snapshot | None, cfg: Config, transport: httpx.AsyncBaseTransport | None = None
+) -> list[dict[str, Any]]:
+    """Each local row's `context`: its longest context (`max`), the Chat memory it runs
+    with (`value`), the longest that fits in graphics memory (`fit`, or None), and
+    whether going past that spills to RAM (Ollama) or stops the load (llama.cpp)."""
+    out = []
+    for row in rows:
+        info = None
+        try:
+            info = await _facts(row, cfg, transport)
+        except Exception as exc:  # noqa: BLE001 -- a slider, never a reason to fail the list
+            log.warning(f"chat memory facts skipped for {row['ref']}: {type(exc).__name__}: {exc}")
+        info = info or {}
+        row = {k: v for k, v in row.items() if k != "_digest"}
+        shape = context_fit.kv_shape(info)
+        room = _room_mb(row["ref"], snap, cfg) if snap is not None else None
+        fit = (
+            context_fit.fit_limit(room * 1024 * 1024, row["size_bytes"], shape)
+            if shape is not None and room is not None and row.get("size_bytes")
+            else None
+        )
+        largest = context_fit.context_max(info)
+        row["context"] = {
+            "max": largest,
+            "value": context_fit.context_for(row["ref"], cfg),
+            "fit": fit,
+            "spills": row["backend"] == "ollama",
+        } if largest else None
+        out.append(row)
+    return out
 
 
 def _distinct(rows: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -296,6 +384,11 @@ async def model_list(
         local = await with_fits(local, rt, cfg)
     except Exception as exc:  # noqa: BLE001 -- a hint, never a reason to fail the list
         log.warning(f"fits hints skipped: {type(exc).__name__}: {exc}")
+    try:
+        snap = await _snapshot(rt)
+    except Exception:  # noqa: BLE001 -- no GPU reading: the slider has no fit point
+        snap = None
+    local = await with_context(local, snap, cfg, transport)
 
     catalog = getattr(rt, "catalog", None)
     refresh_error = None

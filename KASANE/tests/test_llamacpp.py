@@ -160,6 +160,13 @@ async def test_the_server_starts_once_unloads_ollama_and_restarts_for_another_pr
     b = LlamaCppPreset(id="other", model_path=a.model_path)
     await server.ensure(b)
     assert first.terminated and len(spawned) == 2 and server.preset_id == "other"
+    # D-098: the same preset with another Chat memory restarts with the new -c
+    import dataclasses
+
+    await server.ensure(dataclasses.replace(b, ctx=32768))
+    assert len(spawned) == 3 and spawned[-1][spawned[-1].index("-c") + 1] == "32768"
+    await server.ensure(dataclasses.replace(b, ctx=32768))   # unchanged: kept
+    assert len(spawned) == 3
     await server.stop()
     assert not server.running()
 

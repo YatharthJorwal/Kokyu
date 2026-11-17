@@ -16,6 +16,7 @@ health check is an async HTTP poll.
 from __future__ import annotations
 
 import asyncio
+import dataclasses
 import json
 import os
 import shutil
@@ -24,6 +25,7 @@ from typing import Any, AsyncIterator, Callable
 
 import httpx
 
+import context_fit
 import llm
 import paths
 import vram
@@ -178,6 +180,7 @@ class LlamaCppServer:
         self._lock = asyncio.Lock()
         self.process: Any = None
         self.preset_id: str | None = None
+        self.preset_ctx: int | None = None   # the -c it runs with: Chat memory may change it (D-098)
         # Set while a started server is still loading its model; None once ready.
         self._deadline: float | None = None
 
@@ -198,7 +201,7 @@ class LlamaCppServer:
 
     async def ensure(self, preset: LlamaCppPreset) -> None:
         async with self._lock:
-            if self.running() and self.preset_id == preset.id:
+            if self.running() and self.preset_id == preset.id and self.preset_ctx == preset.ctx:
                 if await self._healthy():
                     return
                 if self._deadline is not None:
@@ -242,6 +245,7 @@ class LlamaCppServer:
                 raise ProviderError(f"could not start llama-server: {exc}") from exc
             self._log = log
             self.preset_id = preset.id
+            self.preset_ctx = preset.ctx
             self._deadline = asyncio.get_running_loop().time() + self.cfg.startup_timeout_s
             await self._wait_ready_locked(preset)
             taken = vram.measured_delta(before, await vram.gpu_memory())
@@ -265,7 +269,7 @@ class LlamaCppServer:
             await self._stop_locked()
 
     async def _stop_locked(self) -> None:
-        proc, self.process, self.preset_id = self.process, None, None
+        proc, self.process, self.preset_id, self.preset_ctx = self.process, None, None, None
         self._deadline = None
         if proc is not None and proc.returncode is None:
             proc.terminate()
@@ -316,7 +320,9 @@ class LlamaCppProvider(AirouterProvider):
         preset = self.llama_cfg.preset(model)
         if preset is None:
             raise ProviderError(f"no llama.cpp preset called {model!r} in config.yaml")
-        await self.server.ensure(preset)
+        # Chat memory (D-098): -c follows the user's setting; a change restarts the server.
+        ctx = context_fit.context_for(f"local:llamacpp/{model}") or preset.ctx
+        await self.server.ensure(dataclasses.replace(preset, ctx=ctx))
         async for chunk in super().complete(request, model=model):
             yield chunk
 

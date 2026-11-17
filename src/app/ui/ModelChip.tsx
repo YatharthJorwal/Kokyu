@@ -35,6 +35,7 @@ import {
 import { glowFor } from "../effort-slider";
 import { badgesFor, effortLabel, filterRows, formatSize, formatUsd, isLocalRef, modelFacts } from "../models";
 import { actions, useChat } from "../store";
+import { ContextSlider } from "./ContextSlider";
 import { EffortSlider } from "./EffortSlider";
 
 function KindIcon({ local }: { local: boolean }) {
@@ -323,6 +324,11 @@ function ModelPopover({ current }: { current: string | null }) {
     search.current?.focus();
   }, []);
 
+  // Chat memory (D-098): the thread's model's row, for its context range and fit point
+  const currentRow = useMemo(
+    () => [...(models?.local ?? []), ...(models?.api ?? [])].find((r) => r.ref === current) ?? null,
+    [models, current],
+  );
   const local = useMemo(() => filterRows(models?.local ?? [], query), [models, query]);
   const api = useMemo(() => filterRows(models?.api ?? [], query), [models, query]);
   // Keyboard order follows the list; rows that cannot be picked are skipped.
@@ -481,6 +487,18 @@ function ModelPopover({ current }: { current: string | null }) {
         <section className="effort-section" aria-label="Effort">
           <h3 className="list-head">Effort</h3>
           <EffortSlider supported={efforts} value={effort} onChange={(next) => actions.setEffort(next as Effort)} />
+        </section>
+      ) : null}
+      {currentRow?.context ? (
+        <section className="effort-section context-section" aria-label="Chat memory">
+          <h3 className="list-head" title="How much of this chat she can keep in mind, for this model in every chat">
+            Chat memory
+          </h3>
+          <ContextSlider
+            context={currentRow.context}
+            local={currentRow.kind === "local"}
+            onChange={(tokens) => actions.setContext(currentRow.ref, tokens)}
+          />
         </section>
       ) : null}
       {keyOpen && models !== null ? <ApiKeyForm models={models} /> : null}

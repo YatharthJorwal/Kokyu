@@ -12,10 +12,38 @@ leans high, so the warning comes a little early rather than late.
 """
 from __future__ import annotations
 
+import functools
 import math
+import os
+import struct
 from collections.abc import Mapping
 from dataclasses import dataclass
 from typing import Any
+
+import config
+
+# The smallest Chat memory offered (the picker's first detent).
+MIN_CONTEXT = 8192
+
+
+def context_for(ref: str | None, cfg: "config.Config | None" = None) -> int | None:
+    """The context length a model runs with: the user's Chat memory for it (D-098),
+    else a llama.cpp preset's own ctx, else llm.num_ctx. Every Ollama request for the
+    model and the history budget read this one value, so Ollama never reloads a model
+    because two calls disagreed."""
+    cfg = cfg or config.CONFIG
+    if ref and ref in cfg.llm.context_by_model:
+        return cfg.llm.context_by_model[ref]
+    if ref and ref.startswith("local:llamacpp/"):
+        from router import model_ref as model_refs   # here: the router package imports llm, which imports this
+
+        try:
+            preset = cfg.llamacpp.preset(model_refs.parse(ref).model)
+        except model_refs.ModelRefError:
+            preset = None
+        if preset is not None:
+            return preset.ctx
+    return cfg.llm.num_ctx
 
 # Bytes per cache element by Ollama's OLLAMA_KV_CACHE_TYPE (f16 unless set). q8_0 and
 # q4_0 store 32 values in 34 and 18 bytes.
@@ -86,3 +114,72 @@ def fit_limit(budget_bytes: int, weights_bytes: int, shape: KvShape, cache_type:
     if room <= 0:
         return 0
     return int(room // (shape.bytes_per_token(cache_type) + OVERHEAD_PER_TOKEN))
+
+
+# ---------------------------------------------------------------------------
+# llama.cpp presets: the same facts, read from the GGUF file's own header (Ollama's
+# model_info is that header). Arrays (the tokenizer's vocabulary) are skipped.
+
+_GGUF_SCALARS = {0: "<B", 1: "<b", 2: "<H", 3: "<h", 4: "<I", 5: "<i", 6: "<f", 7: "<?", 10: "<Q", 11: "<q", 12: "<d"}
+_GGUF_STRING, _GGUF_ARRAY = 8, 9
+_SKIPPED = object()
+
+
+def _gguf_string(f: Any) -> str:
+    (length,) = struct.unpack("<Q", f.read(8))
+    if length > 1 << 20:
+        raise ValueError("implausible GGUF string")
+    return f.read(length).decode("utf-8")
+
+
+def _gguf_skip_or_read(f: Any, kind: int) -> Any:
+    if kind in _GGUF_SCALARS:
+        fmt = _GGUF_SCALARS[kind]
+        return struct.unpack(fmt, f.read(struct.calcsize(fmt)))[0]
+    if kind == _GGUF_STRING:
+        return _gguf_string(f)
+    if kind == _GGUF_ARRAY:
+        item, count = struct.unpack("<IQ", f.read(12))
+        if item in _GGUF_SCALARS:
+            f.seek(struct.calcsize(_GGUF_SCALARS[item]) * count, 1)
+        else:
+            for _ in range(count):
+                _gguf_skip_or_read(f, item)
+        return _SKIPPED
+    raise ValueError(f"unknown GGUF value type {kind}")
+
+
+def _read_gguf(path: str) -> dict[str, Any]:
+    with open(path, "rb") as f:
+        if f.read(4) != b"GGUF":
+            return {}
+        (version,) = struct.unpack("<I", f.read(4))
+        if version < 2:
+            return {}
+        _tensors, count = struct.unpack("<QQ", f.read(16))
+        out: dict[str, Any] = {}
+        for _ in range(min(count, 100_000)):
+            key = _gguf_string(f)
+            (kind,) = struct.unpack("<I", f.read(4))
+            value = _gguf_skip_or_read(f, kind)
+            if value is not _SKIPPED:
+                out[key] = value
+        return out
+
+
+@functools.lru_cache(maxsize=32)
+def _gguf_cached(path: str, _mtime_ns: int, _size: int) -> dict[str, Any]:
+    try:
+        return _read_gguf(path)
+    except (OSError, ValueError, struct.error, UnicodeDecodeError):
+        return {}
+
+
+def gguf_metadata(path: str) -> dict[str, Any]:
+    """A GGUF file's header keys, {} when it cannot be read. Remembered per file
+    version. File I/O: call it off the event loop."""
+    try:
+        stat = os.stat(path)
+    except OSError:
+        return {}
+    return _gguf_cached(str(path), stat.st_mtime_ns, stat.st_size)

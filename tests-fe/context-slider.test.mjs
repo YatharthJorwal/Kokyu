@@ -52,3 +52,20 @@ test("the track spaces detents evenly", () => {
   assert.ok(Math.abs(trackPosition(stops, 23170) - 0.5) < 0.01); // halfway between 16K and 32K by doubling
   assert.equal(trackPosition([8192], 8192), 0);
 });
+
+test("the line under the slider: a warning past the fit point, a cost note for API models", async () => {
+  const { contextNote } = await import("../src/app/context-slider.ts");
+  const ollama = { fit: 49_400, spills: true };
+  assert.equal(contextNote(ollama, 32768, true), null);
+  assert.deepEqual(contextNote(ollama, 65536, true), {
+    text: "Past 48K this won't fit in your graphics memory; replies will slow down.",
+    warn: true,
+  });
+  assert.match(contextNote({ fit: 49_400, spills: false }, 65536, true).text, /llama\.cpp can't load it/);
+  assert.match(contextNote({ fit: 3000, spills: true }, 8192, true).text, /barely fits/);
+  assert.equal(contextNote({ fit: null, spills: true }, 131072, true), null); // no GPU reading: nothing to say
+  assert.deepEqual(contextNote({ fit: null, spills: false }, 131072, false), {
+    text: "Longer sends more of the chat with each message, so each one costs more.",
+    warn: false,
+  });
+});
