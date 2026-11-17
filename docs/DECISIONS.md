@@ -14,15 +14,16 @@ The compact decision reference: what holds now, what is open, what was replaced.
 
 | # | Question | Blocks |
 |---|---|---|
-| 1 | A written UI design standard (DESIGN.md). | UI-1 |
-| 2 | The 1.0 voice for buyers: the premade voices exist only as GPT-SoVITS clips (D-036, D-080). | K2, W |
-| 3 | Content stance: the premade personas carry explicit sexual instructions (against D-039). Does the payment provider accept adult companion content? An age gate? | K7 |
-| 4 | Premade packs in git: VRM/WAV and persona.md are untracked, but `.gitignore` re-includes `assets/premade/**` (D-041 vs invariant 5). What is versioned? | Every commit |
+| 1 | Design references: which apps and screens the look follows. UI-2 starts by collecting them (D-086). | UI-2 |
+| 2 | The voice a buyer hears. The premades ship their clips and transcripts (D-087) and GPT-SoVITS is set up automatically (D-080). Open: buyers without an NVIDIA GPU (D-036); the ElevenLabs plan's commercial rights for the clips (D-041). | K2, W, K7 |
+| 3 | Age and content (D-088, Provisional): research age-rating norms, laws on sexual content and minors in companion apps, the payment provider's rules, and whether an age gate is needed. | K7, B-3 |
+| 4 | Premade packs in git. Claude's recommendation: track `persona.md`, `waifu.yaml` and the clip transcripts in the private repo; keep VRM and WAV out of git (size, invariant 5) with a separate backup. | Every commit |
 | 5 | An API key for testing the API path. | K1 checkpoint |
 | 6 | A face for the companion (a VRM thumbnail portrait). | UI-1, K2 |
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
 | 8 | D-057's per-launch WebSocket token. | K7 |
 | 9 | Delete `KASANE/vrm/` (C-1b, the user's action). | Nothing |
+| 10 | Where users meet the name KASANE, if anywhere (options in `HANDOFF.md`). The UI says "Kōkyū's engine" until then. | Nothing |
 
 ## In force
 
@@ -54,6 +55,9 @@ Users duplicate a premade to edit it. Every shipped asset gets a rights record i
 
 **D-041 The premades are Luna and Yuri, with the user's own assets** · Accepted · User · 2026-11-12
 Packs in `assets/premade/<id>/`, built by `scripts/build_premade.py`. Before release, check the ElevenLabs plan behind the clips for commercial rights. Committing assets: open question 4.
+
+**D-087 Premade characters are paid content shipped inside the app** · Accepted · User · 2026-11-17
+Buyers pay for the app and for Luna and Yuri. Each ships complete: persona, voice clips with transcripts, VRM. Users can read her traits and how she behaves; the clips and the VRM are used only inside the app, never offered for export. Our assets are not open-sourced; the repository stays private (D-040). A user's own characters come from the creator (D-077): a step-by-step panel where they bring their own keys, models and files. Files on a user's PC cannot be made unreadable: protection is an app-only packed format plus the licence terms (K7). Amends D-039 (what duplicating a premade copies is to be decided in K3).
 
 **D-045 K0 companion handling** · Accepted · Claude · 2026-11-12
 A switch during a turn applies between turns; with the voice backend down a reply is caption-only; the last companion is remembered. With no pack installed a neutral fallback persona answers (amended by D-062).
@@ -258,6 +262,12 @@ A lean doc set (one-page SCOPE, SPEC v1.1, this file, STATE verified by tests / 
 
 **D-085 Phase order after K1c** · Provisional · Claude · 2026-11-17
 Docs reset; UI-1 (model names first); K1b installer skeleton (time-boxed); K2 stage and voice; K3 creator; W first run; K6; K7; then 1.1: K4, K5. To confirm next session.
+
+**D-086 The design standard is its own phase, planned from references** · Accepted · User · 2026-11-17
+"we will *plan* it first by taking actual references and all before finally building. its a real frontend update so a separate phase." Phase UI-2: collect reference apps and screens, agree `docs/DESIGN.md`, then build tokens, type scale, primitives and icons and apply them to every surface. UI-1 keeps the work that does not depend on the look. Amends D-085: UI-2 follows UI-1 (order provisional).
+
+**D-088 Audience: a 16+ roleplay character app** · Provisional · User · 2026-11-17
+"roleplay character app category is already for mature teens (16+) so its fine when we ship it like that. needs some research though". The premade personas ship as written, pending research before release (open question 3). Claude's flag: explicit sexual content usually means an 18+ rating and an age gate; if the research confirms that, the choice is 18+ with a gate, or 16+ with personas that are not explicit.
 
 ## Superseded
 

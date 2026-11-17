@@ -2,10 +2,10 @@
 
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, then UI1-01 model names)
-- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 started** (the user said yes to model names, which starts the D-085 order): UI1-01 is done (`883f4f7`). **Next: UI1-02**, only working controls and plain words (D-082).
-- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Pushed through `5e82558` (the docs reset). `883f4f7` (model names) and its docs commit are local, not pushed.
-- **Last green run (the user's PC, 2026-11-17, at `883f4f7`):** `npm run check`: tsc, frontend tests 141, vite build, cargo check, pytest 1240.
+- **Last updated:** 2026-11-17, session 5 (K1c finished, the docs reset, UI1-01 model names, UI1-02 working controls)
+- **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`) and UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) are done. **Next: UI1-03**, unpriced models under the cap (D-083). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
+- **Repo:** `github.com/YatharthJorwal/Kokyu`, `main`, private (D-040). Everything through this session's docs commit is pushed (the user asked).
+- **Last green run (the user's PC, 2026-11-17, at `a412120`):** `npm run check`: tsc, frontend tests 141, vite build, cargo check, pytest 1240.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
@@ -20,6 +20,7 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | Lazy boot (D-060), voice only when voice mode is on (D-061, 47 s to start GPT-SoVITS) | T, B; no audible playback checked |
 | Model picker: Local and API sections, fits hints, capability badges, effort slider per model (D-064), "waking up" card | T, B (real Ollama and GPU) |
 | Short model names; full id and details muted on hover or focus (D-084, FR-M-12) | T, B (injected rows named by the kernel's code); not seen in the desktop app with the real list |
+| Only working controls; disconnect banner after 6 s offline with Reconnect, which restarts a stopped engine (D-082) | T (cargo check only for `restart_kernel`), B (banner and its states); Reconnect after a killed engine not run in the desktop app |
 | One chat model in memory, helpers follow the pick (D-072) | T only (fakes) |
 | VRAM check before a load, refusal naming the blockers (D-065), *Unload X* (D-071) | T, B (refusal card); *Unload X* T only |
 | Failure card with Retry / Switch model (D-066) | T, B (Ollama pointed at a dead port); no live API failure |
@@ -51,20 +52,22 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 
 ## 3. Open questions (the user will come back to them)
 
-1. A written design standard for the UI (`docs/DESIGN.md`, at the start of UI-1).
-2. The 1.0 voice for buyers: the premades' voices exist only as GPT-SoVITS clips (ties to D-080).
-3. Content stance and payment fit: the premade personas carry explicit sexual instructions; does the payment provider accept a companion and roleplay app? An age gate?
-4. Premade packs in git: the VRM, WAV and `persona.md` drafts are untracked; decide what is versioned.
+1. Design references for UI-2 (D-086): which apps and screens the look follows.
+2. The voice a buyer hears: premades ship clips and transcripts (D-087); buyers without an NVIDIA GPU, and the ElevenLabs rights, are open.
+3. Age and content (D-088, provisional 16+): research before release (TODO B-9).
+4. Premade packs in git: recommendation in `DECISIONS.md` (text tracked, VRM and WAV not).
 5. An API key for testing the API path.
 6. A face for the companion (a portrait from the VRM thumbnail).
 7. The six assumed K1c answers (D-074): confirm or reverse.
 8. D-057: move the WebSocket token check earlier?
 9. C-1b: the user deletes `KASANE/vrm/`.
+10. Where users meet the name KASANE, if anywhere (options in `HANDOFF.md` §4).
 
 ## 4. Known issues and risks
 
-- **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, emoji glyphs, developer words in the UI. That is phase UI-1 (model names are done).
-- **Disabled placeholders** (the mic, "arrives in K2/K3" tooltips) break D-082. Fixed by UI1-02.
+- **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, emoji glyphs. Names, dead controls and developer words are fixed (UI1-01, UI1-02); the look is phase UI-2 (D-086).
+- **Premade personas carry explicit sexual instructions** while the intended audience is 16+ (D-088, provisional): to resolve before release.
+- **Reconnect cannot revive a hung engine:** `restart_kernel` starts one only when the process has exited; a running process that stopped answering needs tray Quit and a restart.
 - **Unpriced models are refused while a cap is on** until UI1-03 lands (D-083 allows them).
 - **Two files set the same keys (D-070):** `settings.json` wins over `config/config.yaml`.
 - **Helper roles run on the picked chat model** (D-072): Task Guide's classifier on the 9B is slower per call than the 4B was.

@@ -4,15 +4,16 @@ The forward plan. Work top to bottom inside the current phase, one item at a tim
 
 Last updated: 2026-11-17 (session 5: docs reset, D-076 to D-085).
 
-## Phase order (D-085, provisional: confirm next session)
+## Phase order (D-085, amended by D-086; provisional)
 
 | Phase | Goal | Release | Status |
 |---|---|---|---|
 | K0 | Skeleton: companion packs, shared memory, invariance | 1.0 | Done (`0cd2d20..ba7c2a3`) |
 | K1 | Chat app: threads, model picker, effort, API endpoint, VRAM checks, failure cards, settings | 1.0 | Done (`5deb6b6..89bdb95`) |
 | K1c | Conversation modes: Chat and Roleplay, story memory, scenario cards (D-074, D-075) | 1.0 | Done (`470a05e..2b99262`); the user ran it on their PC 2026-11-17 |
-| Docs | Docs reset (D-076) | n/a | This session |
-| **UI-1** | **Chat app polish, model names first (D-084)** | 1.0 | **Next** |
+| Docs | Docs reset (D-076) | n/a | Done (`5e82558`) |
+| **UI-1** | **Chat app polish: names, working controls, behaviour (D-084, D-082)** | 1.0 | **In progress** |
+| UI-2 | Design standard: references first, then DESIGN.md, then build (D-086) | 1.0 | Not started |
 | K1b | Installer walking skeleton, time-boxed | 1.0 | Not started |
 | K2 | Stage view, voice providers, voice input | 1.0 | Not started |
 | K3 | Companion creator (D-077) | 1.0 | Not started |
@@ -26,7 +27,7 @@ Not planned: agent mode. Deferred long term: VR (D-079).
 
 ## Now
 
-- [ ] Docs reset (D-076): SCOPE, PRODUCT, README, SPEC v1.1, ARCHITECTURE, DECISIONS compacted, CLAUDE.md, RULES, TODO, STATE, HANDOFF; old notes in `docs/archive/`
+- [x] Docs reset (D-076) `5e82558`: SCOPE, PRODUCT, README, SPEC v1.1, ARCHITECTURE, DECISIONS compacted, CLAUDE.md, RULES, TODO, STATE, HANDOFF; old notes in `docs/archive/`
 - [ ] C-1b Delete `KASANE/vrm/` (the user): byte-identical copies of the pack VRMs, read by nothing
 - [ ] The open questions in `DECISIONS.md` (the user will come back to them)
 
@@ -35,16 +36,24 @@ Not planned: agent mode. Deferred long term: VR (D-079).
 Goal: a chat app that feels finished, not a localhost shell. Each item is one commit with screenshots at 900×600 and 1440×900 in every theme. New dependencies get a decision and a `THIRD-PARTY.md` row first.
 
 - [x] UI1-01 Model names (D-084, FR-M-12) `883f4f7`: kernel `router/names.py` (override, preset label, derivation, collisions get the quant) with a pytest row per example; rows carry `label`, `full` and `detail` (the facts; no separate `facts` field); the chip, picker, loading card, VRAM messages and "Sent to" use them; muted full id and facts on hover or focus (a card on the chip, a strip in the picker). `shortRef` kept only as the fallback before the list arrives
-- [ ] UI1-02 Only working controls and plain words (D-082): hide the mic until voice input works; no "K2"/"K3" tooltips; no "kernel" in UI text; a plain disconnected banner with Reconnect instead of the permanent status line
+- [x] UI1-02 Only working controls and plain words (D-082) `a412120`, `c575b72`: the mic, the "soon" tray items and New waifu removed; no phase codes, "kernel" or "waifu" in UI text; the sidebar status line replaced by a banner after 6 s offline, whose Reconnect restarts a stopped engine (shell `restart_kernel`)
 - [ ] UI1-03 Unpriced models under the cap (D-083): run, label "price unknown, not counted against the cap", one-time notice; remove `budget.on_exhausted`
-- [ ] UI1-04 Design standard: `docs/DESIGN.md` agreed with the user (open question 1); tokens (surfaces, text, accent, focus), a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, visible focus rings, no white flash at startup
-- [ ] UI1-05 Primitives: tooltip, popover, dialog and menus on a headless library (proposed: Radix) and one icon set (proposed: lucide) replacing the emoji and text glyphs; decision first
 - [ ] UI1-06 Her face: a portrait from the VRM thumbnail in the chip, the sidebar and messages (open question 6)
 - [ ] UI1-07 Message list: grouped by speaker, a hover action bar with icons, time and model on hover, no jump to the bottom while reading plus a jump-to-latest pill, the thinking state where the reply appears, a streaming caret, edit and resend of the last message
 - [ ] UI1-08 Markdown: tables, nested lists, highlighted code with a header and copy
 - [ ] UI1-09 Shell: one slim header (portrait chip, thread title, Temp toggle, window buttons), a split New button (Chat / Roleplay…), a sidebar context menu and pinning, an empty state with her face and starter chips, toasts, in-app confirms instead of `window.confirm`
 - [ ] UI1-10 Keyboard: Ctrl+N, Ctrl+K palette, Ctrl+comma, Esc stops a reply
 - **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
+
+## Phase UI-2: Design standard (D-086)
+
+Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's items get their final look here.
+
+- [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
+- [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
+- [ ] UI2-03 Tokens in code; no white flash at startup
+- [ ] UI2-04 Primitives: tooltip, popover, dialog and menus on a headless library (proposed: Radix) and one icon set (proposed: lucide) replacing the emoji and text glyphs; decision first
+- [ ] UI2-05 Apply to every surface: shell, sidebar, message list, composer, picker, settings, dialogs; before and after screenshots in `STATE.md`
 
 ## Phase K1b: Installer walking skeleton (D-035, D-081), time-boxed to about two sessions
 
@@ -68,7 +77,9 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [ ] K2-10 Measure latency and fps targets (FR-V-8, FR-ST-6); record in `STATE.md`
 - **Checkpoint K2:** switch companions mid-conversation on the stage; voice and persona change without a reload; barge-in works; targets recorded.
 
-## Phase K3: Companion creator (D-077)
+## Phase K3: Companion creator (D-077, D-087)
+
+A step-by-step panel with simple instructions; the user brings their own keys, models and files.
 
 - [ ] K3-01 Form: name, slug, validation messages (FR-CR-1)
 - [ ] K3-02 VRM upload, validation, live preview, auto-frame (FR-CR-2)
@@ -105,6 +116,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [ ] K7-06 `THIRD-PARTY.md` complete including asset rights; checksums; release notes
 - [ ] K7-07 A tagged release builds the installer in CI; clean-VM install test
 - [ ] K7-08 The kernel port as a setting (hard-coded in several places today; `ARCHITECTURE.md` §12)
+- [ ] K7-09 Premade assets in an app-only packed format the engine reads; no export path in the UI; the licence forbids extraction (D-087)
 - **Checkpoint K7:** a signed installer from a tagged release installs on a clean machine, completes the first run, updates to the next tag, exports diagnostics.
 
 ## Phase K4: Desktop pets (1.1)
@@ -134,6 +146,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [ ] B-6 Code-signing options and cost
 - [ ] B-7 Website, checkout, downloads, support
 - [ ] B-8 Privacy policy, terms (audience age), refunds
+- [ ] B-9 Research for D-088: age-rating norms for character and companion apps, laws on sexual content and minors (companion-chatbot laws included), the payment provider's adult-content rules, age-gate options; a short report in `docs/` with sources
 - [ ] B-9 Marketing plan
 
 ## Backlog (parked, not approved)

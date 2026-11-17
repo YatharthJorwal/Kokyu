@@ -30,17 +30,24 @@ A solo developer who wants direct commands, no manual file shuffling, phases wit
 
 4. **UI1-01 model names** (`883f4f7`, D-084, FR-M-12): the user said "Yes, start model names", which also starts the D-085 order. `router/names.py` names every model in the kernel (override, preset label, derivation; 26 cases from the proposal's table pass); the chip has a muted hover/focus card with the full id and facts; the picker has a muted strip for the hovered or highlighted row. Rows use the existing `detail` for the facts rather than a new `facts` field (SPEC FR-M-12 rewritten to match).
 
+5. **UI1-02 only working controls** (`a412120`, `c575b72`, D-082): the mic, the "soon" attach items and New waifu are gone; no "kernel", "waifu" or phase codes in UI text. The sidebar status line became a banner shown after 6 s offline; its Reconnect calls a new shell command, `restart_kernel`, that starts the engine again only if it exited.
+6. **The user's notes, recorded:** the design standard is its own phase UI-2, planned from real references before building (D-086); Luna and Yuri are paid content shipped complete inside the app, never exported or open-sourced, and users' own characters come from a step-by-step creator with their own assets (D-087); the audience is 16+, pending research (D-088).
+
 ## 3. Where we stopped
 
-The docs reset is pushed (`5e82558`). UI1-01 (`883f4f7`) and its docs commit are **local, not pushed**: the user had not said to push this one. Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
+Everything is committed and pushed (the user asked). Nothing is half-done. Untracked and staying so: `assets/premade/` (with the `persona.md` drafts), `.claude/`. `package-lock.json` has an unrelated change.
 
 ## 4. Next session: start here
 
-1. `git status`, `git log -5 --oneline`, `npm run check`. Ask whether to push `883f4f7` and the docs commit.
-2. Ask the user to look at the model names in the desktop app with their real list (hover the chip; open the picker).
-3. Confirm D-085's phase order with the user. The user said they "have stuff planned" for the open questions in `STATE.md` §3; ask which they want to settle first.
-4. Ask the user to tick what they already saw in the `STATE.md` §5 checkpoint.
-5. Next item: **UI1-02**, only working controls and plain words (D-082).
+1. `git status`, `git log -5 --oneline`, `npm run check`.
+2. Ask the user to look in the desktop app: the model names (hover the chip, open the picker), and Reconnect (end the engine's `python.exe` in Task Manager, wait for the banner, click Reconnect).
+3. Ask which KASANE option they want (below), and which open question to settle first.
+4. Next item: **UI1-03**, unpriced models under the cap (D-083).
+
+**KASANE: where users could meet it** (open question 10). It stands for *Kernel for Adaptive Synthetic Agents, Networks and Embodiments* (D-001); as a word, *kasane* (重ね) is the Heian court's layered robes, which suits both Kōkyū and an engine that layers persona, mode and voice.
+- A. Internal only: folder, logs, code. The UI keeps "Kōkyū's engine" (today).
+- B. A quiet credit (Claude's recommendation): the sidecar is `kasane.exe` (Task Manager shows something better than `python.exe`), the Doctor row reads "Engine (KASANE)", About shows "Engine: KASANE 1.0" with one line on the name, logs are `kasane.log`. Banners still say "Kōkyū's engine".
+- C. A visible brand ("powered by KASANE", the banner naming it): a second name buyers must learn; not for 1.0.
 
 ## 5. Traps found this session
 
@@ -48,4 +55,5 @@ The docs reset is pushed (`5e82558`). UI1-01 (`883f4f7`) and its docs commit are
 - The Workflow tool's script must be plain JS; an escaped `\\'` inside a single-quoted string fails to parse.
 - Luna's apartment GLB is a Sketchfab download, gitignored there. A shipped room needs its own rights record (R-51).
 - A `disabled` button gets no mouse events in Chrome, not even its parent's `mouseenter`; the picker's `<li>` is `display: contents` (subgrid) and has no box either. Rows that cannot be picked are `aria-disabled` with a guarded click.
+- Chrome and React: a `disabled` button inside the picker's subgrid rows is unhoverable (above); the banner's grace timer depends on the online boolean, so connecting/offline flapping does not reset it.
 - With a kernel running on 8780, the 1421 preview connects to it and its reconnects wipe injected store state; inject with a `useChat.subscribe` that re-applies it. Never pick a model there: it is the user's kernel.

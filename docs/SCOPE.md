@@ -42,13 +42,14 @@ K0, K1 and K1c are code-complete. `docs/STATE.md` holds what is verified and how
 
 ## 5. Release train
 
-Order per D-085 (provisional; the user confirms it next session). Each phase ends with one checkpoint in the desktop app with a real model, ticked by the user (D-076).
+Order per D-085, amended by D-086 (provisional). Each phase ends with one checkpoint in the desktop app with a real model, ticked by the user (D-076).
 
 **Release 1.0**
 
 | Phase | Delivers |
 |---|---|
-| **UI-1** Chat app polish | A design standard, then model names first: a short name shown, the full id and details muted on hover, computed in the kernel (D-084, FR-M-12); companion portrait, message list, Markdown, shell and keyboard polish |
+| **UI-1** Chat app polish | Model names: a short name shown, the full id and details muted on hover (D-084, done); only working controls and a disconnect banner (D-082, done); unpriced models; companion portrait, message list, Markdown and keyboard behaviour |
+| **UI-2** Design standard | Planned from real references before it is built: `DESIGN.md`, tokens, primitives and icons, applied to every surface (D-086) |
 | **K1b** Installer skeleton | A thin per-user NSIS installer with the kernel sidecar, tested on a clean machine (time-boxed) |
 | **K2** Stage and voice | The Ani-style VRM stage with lip-sync and idle life; per-companion voice (the voice a 1.0 buyer gets is still open: D-036, `PRODUCT.md` §9); speech input with barge-in; the mic button appears only when it works (D-082) |
 | **K3** Creator | Name and traits in; **Write it for me** runs the persona instruction through the picked model; the box stays editable; VRM and voice-clip upload with checks (D-077) |
