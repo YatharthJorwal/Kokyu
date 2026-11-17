@@ -263,23 +263,20 @@ button:disabled {
   background: color-mix(in srgb, var(--accent) 88%, #fff);
 }
 
-/* New chat, and New roleplay… beside it as the smaller, secondary choice (K1c-08) */
+/* New chat, and New roleplay… under it as the smaller, secondary choice (K1c-08);
+   stacked, so neither label wraps in a narrow sidebar */
 .new-row {
   display: flex;
-  gap: 8px;
-}
-
-.new-row .new-chat {
-  flex: 1;
-  min-width: 0;
+  flex-direction: column;
+  gap: 6px;
 }
 
 .new-roleplay {
   display: flex;
-  flex: none;
   align-items: center;
+  justify-content: center;
   gap: 6px;
-  padding: 0 12px;
+  padding: 7px 12px;
   border: 1px solid var(--line);
   border-radius: 12px;
   background: transparent;

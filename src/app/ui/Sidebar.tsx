@@ -65,13 +65,11 @@ export function Sidebar() {
           className="new-roleplay"
           onClick={() => actions.openRoleplay()}
           disabled={busy || connection !== "online"}
-          aria-label="New roleplay…"
-          title="New roleplay…"
         >
           <svg viewBox="0 0 16 16" aria-hidden="true">
             <path d="M3 2.5h7.5l2.5 2.5v8.5H3z M5.5 7h5 M5.5 9.5h5" />
           </svg>
-          Roleplay…
+          New roleplay…
         </button>
       </div>
 

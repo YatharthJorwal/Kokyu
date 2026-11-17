@@ -39,6 +39,8 @@ ROLEPLAY_LAYER = (
     "asterisks** only for strong emphasis; and anything out of character in parentheses "
     "starting with OOC, like (OOC: is this okay?), used only when the user steps out of "
     "character first or something must be cleared up. Write a paragraph or two per reply. "
+    "The scenario decides where and when the story happens and who you are in it; your "
+    "personality and the way you talk stay your own. "
     "Move the story forward, react to what the user's character does, and never decide the "
     "user's actions, words or feelings for them. You have no tools in this conversation and "
     "you do not look at the user's screen or camera. You may be told a few facts about the "
@@ -93,7 +95,8 @@ DELIVERY_LAYERS = {
     "chat": (
         "Your reply is spoken aloud by your voice right now. Say it in one to three short "
         "spoken sentences. No lists, Markdown, emoji, symbols, quotation marks, dashes or "
-        "ellipses; write numbers as words; never read out links or code."
+        "ellipses; write numbers as words; never read out links or code. The emotion tag at "
+        "the end still applies: it is never spoken."
     ),
     "roleplay": (
         "Your reply is heard aloud: only what you say is spoken, while your actions are shown "
