@@ -13,7 +13,8 @@ crate-type = ["staticlib", "cdylib", "rlib"]
 tauri-build = { version = "2", features = [] }
 
 [dependencies]
-tauri = { version = "2", features = ["tray-icon", "image-png"] }
+# Kept on the same minor as @tauri-apps/api in package.json; tauri dev flags a mismatch.
+tauri = { version = "~2.12", features = ["tray-icon", "image-png"] }
 serde = { version = "1", features = ["derive"] }
 serde_json = "1"
 
