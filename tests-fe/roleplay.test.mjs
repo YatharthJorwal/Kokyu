@@ -14,6 +14,9 @@ test("roleplay parsing: actions, bold, asides (FR-MODE-7)", () => {
   const table = [
     ['*smiles* "Hi."', [{ t: "action", c: [text("smiles")] }, text(' "Hi."')]],
     ["**Stop.** *grabs your arm*", [{ t: "strong", c: [text("Stop.")] }, text(" "), { t: "action", c: [text("grabs your arm")] }]],
+    // bold inside an action belongs to it; the inner ** never closes the action
+    ["*she says **loudly** hi*", [{ t: "action", c: [text("she says "), { t: "strong", c: [text("loudly")] }, text(" hi")] }]],
+    ["*She leans in, **very** close.*", [{ t: "action", c: [text("She leans in, "), { t: "strong", c: [text("very")] }, text(" close.")] }]],
     // _…_ stays ordinary emphasis: only asterisks mark an action
     ["_softly_", [{ t: "em", c: [text("softly")] }]],
     ["(OOC: brb) ok", [{ t: "ooc", c: [text("(OOC: brb)")] }, text(" ok")]],

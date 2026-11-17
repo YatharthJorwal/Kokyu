@@ -388,6 +388,43 @@ test("a store failure ends a pending card save; other errors and idle saves are 
   assert.equal(reduce(run(online), unavailable).scenarioSave, null);
 });
 
+test("a dropped connection ends a pending card save as lost, never stuck on Saving (FR-MODE-6)", () => {
+  let s = reduce(reduce(run(online), { kind: "roleplay", open: true }), { kind: "scenario_saving" });
+  s = reduce(s, { kind: "status", status: "offline" });
+  assert.equal(s.scenarioSave, "lost");
+  assert.equal(s.roleplayOpen, true); // the dialog and its form stay
+  // an answered save is left as it was
+  const done = reduce(reduce(run(online), { kind: "scenario_saving" }), frame("scenarios", { cards: [], saved_id: "c1" }, null));
+  assert.deepEqual(reduce(done, { kind: "status", status: "offline" }).scenarioSave, { saved: "c1" });
+});
+
+test("Start roleplay closes the dialog only when the thread opens; a refusal keeps it (FR-MODE-6)", () => {
+  const opened = frame("thread_opened", { thread: thread("t2", { mode: "roleplay" }), messages: [] }, "t2");
+  let s = reduce(run(online), { kind: "roleplay", open: true });
+  s = reduce(s, { kind: "roleplay_starting" });
+  assert.equal(s.roleplayStart, "pending");
+  assert.equal(s.roleplayOpen, true);
+  // the kernel opened it: the dialog closes
+  const ok = reduce(s, opened);
+  assert.equal(ok.roleplayOpen, false);
+  assert.equal(ok.roleplayStart, null);
+  // refused (a turn started first, or the store failed): open, with the reason
+  for (const code of ["turn_running", "threads_unavailable"]) {
+    const refused = reduce(s, frame("error", { code, message: "Not now." }, null));
+    assert.equal(refused.roleplayOpen, true, code);
+    assert.deepEqual(refused.roleplayStart, { failed: "Not now." }, code);
+  }
+  // the connection dropped before the answer: open, not waiting
+  const dropped = reduce(s, { kind: "status", status: "offline" });
+  assert.equal(dropped.roleplayOpen, true);
+  assert.equal(typeof dropped.roleplayStart.failed, "string");
+  // with no start asked, an opened thread does not touch the dialog
+  const idle = reduce(run(online), { kind: "roleplay", open: true });
+  assert.equal(reduce(idle, opened).roleplayOpen, true);
+  // reopening starts clean
+  assert.equal(reduce(reduce(dropped, { kind: "roleplay", open: false }), { kind: "roleplay", open: true }).roleplayStart, null);
+});
+
 test("New roleplay opens only when a new thread could start, and always closes (FR-MODE-6)", () => {
   const open = { kind: "roleplay", open: true };
   const close = { kind: "roleplay", open: false };

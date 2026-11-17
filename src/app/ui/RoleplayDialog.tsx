@@ -12,16 +12,6 @@ import { actions, useChat } from "../store";
 
 export function RoleplayDialog() {
   const open = useChat((s) => s.roleplayOpen);
-
-  useEffect(() => {
-    if (!open) return;
-    const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") actions.closeRoleplay();
-    };
-    document.addEventListener("keydown", onKey);
-    return () => document.removeEventListener("keydown", onKey);
-  }, [open]);
-
   if (!open) return null;
   return (
     <div className="settings-backdrop" onMouseDown={(e) => e.target === e.currentTarget && actions.closeRoleplay()}>
@@ -34,7 +24,9 @@ export function RoleplayDialog() {
 function RoleplayBody() {
   const scenarios = useChat((s) => s.scenarios);
   const saveState = useChat((s) => s.scenarioSave);
-  const canStart = useChat(canStartThread);
+  const startState = useChat((s) => s.roleplayStart);
+  const starting = startState === "pending";
+  const canStart = useChat(canStartThread) && !starting;
   const companion = useChat((s) => s.companion?.name ?? null);
   const [form, setForm] = useState<ScenarioForm>(EMPTY_FORM);
   const [loadedId, setLoadedId] = useState<string | null>(null);
@@ -45,6 +37,20 @@ function RoleplayBody() {
   const saving = saveState === "pending";
   const [status, setStatus] = useState<string | null>(null);
   const firstField = useRef<HTMLInputElement>(null);
+  // Escape backs out of a delete confirm first; only with none open does it close
+  // the dialog (and the form with it).
+  const confirmingNow = useRef(confirming);
+  confirmingNow.current = confirming;
+
+  useEffect(() => {
+    const onKey = (e: globalThis.KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      if (confirmingNow.current !== null) setConfirming(null);
+      else actions.closeRoleplay();
+    };
+    document.addEventListener("keydown", onKey);
+    return () => document.removeEventListener("keydown", onKey);
+  }, []);
 
   const loaded = scenarios?.find((c) => c.id === loadedId) ?? null;
   const card = cardFromForm(form);
@@ -57,11 +63,18 @@ function RoleplayBody() {
   useEffect(() => {
     if (saveState === "failed") {
       setStatus("Could not save the card.");
+    } else if (saveState === "lost") {
+      setStatus("The connection dropped before the kernel answered, so the card may not be saved. Check the list once it is back.");
     } else if (saveState !== null && saveState !== "pending") {
       setLoadedId(saveState.saved);
       setStatus("Saved.");
     }
   }, [saveState]);
+
+  useEffect(() => {
+    if (startState === "pending") setStatus("Starting…");
+    else if (startState !== null) setStatus(`Could not start the roleplay. ${startState.failed}`);
+  }, [startState]);
 
   const edit = (key: keyof ScenarioForm, value: string) => {
     setForm({ ...form, [key]: value });

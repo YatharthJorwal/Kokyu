@@ -274,6 +274,10 @@ function findEmphasisEnd(text: string, from: number, ch: string): number {
   // A closing marker not followed by a word character (for "_") and not doubled.
   for (let j = from; j < text.length; j += 1) {
     if (text[j] === "\n") return -1;
+    if (text[j] === ch && text[j + 1] === ch) {
+      j += 1; // a doubled marker (bold inside, FR-MODE-7) is one unit, never a closer
+      continue;
+    }
     if (text[j] === ch && text[j + 1] !== ch && text[j - 1] !== " " && !(ch === "_" && /\w/.test(text[j + 1] ?? ""))) {
       return j > from ? j : -1;
     }

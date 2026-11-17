@@ -52,6 +52,8 @@ const socket = new KernelSocket({
   onStatus: (status) => {
     if (status !== "online") voice.stop();
     dispatch({ kind: "status", status });
+    // The New roleplay dialog stayed open across a reconnect: its card list may be stale.
+    if (status === "online" && useChat.getState().roleplayOpen) socket.send("scenario_list", {});
   },
   onProblem: (reason) => dispatch({ kind: "problem", reason }),
 });
@@ -108,11 +110,13 @@ export const actions = {
   // ── roleplay (K1c-08; FR-MODE-6) ────────────────────────────────────
 
   /** A roleplay thread from a card, or blank (null). The mode is fixed for the
-   * thread's life; the kernel opens it and answers with thread_opened. */
+   * thread's life; the kernel opens it and answers with thread_opened, which closes
+   * the dialog. A refusal leaves the dialog open with the card still filled in. */
   newRoleplay(scenario: Scenario | null): boolean {
-    if (!canStartThread(useChat.getState())) return false;
+    const state = useChat.getState();
+    if (!canStartThread(state) || state.roleplayStart === "pending") return false;
     if (!socket.send("thread_new", { mode: "roleplay", scenario })) return false;
-    dispatch({ kind: "roleplay", open: false });
+    dispatch({ kind: "roleplay_starting" });
     return true;
   },
 

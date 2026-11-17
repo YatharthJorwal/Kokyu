@@ -102,9 +102,16 @@ export interface ChatState {
   /** FR-MODE-6: the dialog's card save. "pending" until its own answer: the
    * `scenarios` frame naming the saved card, or a store error. null: none asked. */
   scenarioSave: ScenarioSave;
+  /** FR-MODE-6: the dialog's Start roleplay. "pending" until the kernel answers: the
+   * new thread's thread_opened closes the dialog, a refusal keeps it open (and the
+   * filled-in card with it) with the reason. null: none asked. */
+  roleplayStart: RoleplayStart;
 }
 
-export type ScenarioSave = null | "pending" | "failed" | { saved: string };
+/** "lost": the connection dropped before the answer, so the card may or may not be saved. */
+export type ScenarioSave = null | "pending" | "failed" | "lost" | { saved: string };
+
+export type RoleplayStart = null | "pending" | { failed: string };
 
 export type ChatEvent =
   | { kind: "frame"; frame: Frame }
@@ -118,7 +125,9 @@ export type ChatEvent =
   | { kind: "settings"; section: SettingsSection | null }
   | { kind: "roleplay"; open: boolean }
   /** A card save went out (FR-MODE-6). */
-  | { kind: "scenario_saving" };
+  | { kind: "scenario_saving" }
+  /** The dialog's thread_new went out (FR-MODE-6). */
+  | { kind: "roleplay_starting" };
 
 export const initialState: ChatState = {
   connection: "connecting",
@@ -147,6 +156,7 @@ export const initialState: ChatState = {
   scenarios: null,
   roleplayOpen: false,
   scenarioSave: null,
+  roleplayStart: null,
 };
 
 let localCounter = 0;
@@ -309,6 +319,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         beforeRegenerate: null,
         streamRaw: "",
         notice: null,
+        // The dialog's roleplay opened: only now does the dialog close (FR-MODE-6).
+        ...(state.roleplayStart !== null ? { roleplayOpen: false, roleplayStart: null } : {}),
       };
     }
     case "thread_list": {
@@ -419,13 +431,16 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       const keepsTurn = failedTurn || data.code === "turn_running" || data.code === "vision_unavailable";
       // A store failure answers a pending card save (the kernel sends no list then).
       const scenarioSave = state.scenarioSave === "pending" && data.code === "threads_unavailable" ? "failed" : state.scenarioSave;
+      // A refused Start roleplay (turn_running, threads_unavailable): the dialog stays open.
+      const roleplayStart = state.roleplayStart === "pending" ? { failed: data.message } : state.roleplayStart;
       if (!keepsTurn && state.beforeRegenerate) {
-        return { ...state, notice, scenarioSave, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle" };
+        return { ...state, notice, scenarioSave, roleplayStart, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle" };
       }
       return {
         ...state,
         notice,
         scenarioSave,
+        roleplayStart,
         messages: failedTurn ? markLastUser(state.messages, { failed: true, pending: false }) : state.messages,
         turn: keepsTurn ? state.turn : "idle",
       };
@@ -441,11 +456,13 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return reduceFrame(state, event.frame);
     case "status": {
       const next = { ...state, connection: event.status };
+      if (event.status === "online") return next;
       // A dropped connection ends whatever was streaming; the kernel restarts clean
-      // and re-sends its model status on reconnect.
-      return event.status === "online"
-        ? next
-        : { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, voice: null, pendingCompanion: null, beforeRegenerate: null };
+      // and re-sends its model status on reconnect. A save or start still waiting will
+      // get no answer: the dialog stops waiting (FR-MODE-6).
+      const scenarioSave = state.scenarioSave === "pending" ? "lost" : state.scenarioSave;
+      const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to the kernel dropped." } : state.roleplayStart;
+      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, voice: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };
@@ -478,8 +495,10 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, settings: event.section, pickerOpen: false };
     case "roleplay":
       // Opens only when a new thread could start; closing always works.
-      return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false, scenarioSave: null };
+      return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false, scenarioSave: null, roleplayStart: null };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
+    case "roleplay_starting":
+      return { ...state, roleplayStart: "pending" };
   }
 }
