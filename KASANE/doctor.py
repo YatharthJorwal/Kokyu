@@ -17,7 +17,7 @@ from typing import Any
 import httpx
 
 import vram
-from audio import stt, tts, voice_mode
+from audio import read_aloud, stt, tts
 from config import CONFIG, Config
 from router.decision import LOCAL_PROVIDER, model_for
 from router.providers.llamacpp import resolve_server
@@ -91,8 +91,8 @@ async def voice_row(cfg: Config) -> dict[str, Any]:
         return _row("tts", "Voice (TTS)", OFF, f"Engine: {cfg.tts.engine}")
     if await tts.health():
         return _row("tts", "Voice (TTS)", OK, f"GPT-SoVITS answering at {cfg.tts.gpt_sovits.api_url}")
-    if not voice_mode.VOICE.on:
-        return _row("tts", "Voice (TTS)", OFF, "Starts when you turn voice on")   # D-061
+    if not read_aloud.READ_ALOUD.on:
+        return _row("tts", "Voice (TTS)", OFF, "Starts when you turn on Read aloud")   # D-097
     return _row("tts", "Voice (TTS)", FAIL, f"GPT-SoVITS not answering at {cfg.tts.gpt_sovits.api_url}",
                 "Check tts.gpt_sovits.launch in config.yaml and logs/gpt_sovits.log.")
 
@@ -103,7 +103,7 @@ def stt_row(cfg: Config) -> dict[str, Any]:
                     "Install the kernel's requirements (pip install -r KASANE/requirements.txt).")
     loaded = getattr(stt, "_model", None) is not None
     where = f"{cfg.stt.model_size} on {cfg.stt.device}"
-    return _row("stt", "Speech to text", OK, f"{where}, {'loaded' if loaded else 'loads when voice turns on'}")
+    return _row("stt", "Speech to text", OK, f"{where}, {'loaded' if loaded else 'loads when you first dictate'}")
 
 
 async def gpu_row(cfg: Config, running: str | None = None) -> dict[str, Any]:

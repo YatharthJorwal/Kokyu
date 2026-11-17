@@ -1,7 +1,8 @@
 """Kernel start-up (D-060). The port opens at once; the chat model, its helpers
 and the memory catch-up pass wait for the first window, one at a time, so the
-window paints on an idle PC. Voice is not part of boot (D-061). Also the
-stale-kernel takeover that runs before the server binds its port.
+window paints on an idle PC. The voice starts after the chat model, and only
+if Read aloud was left on (D-097). Also the stale-kernel takeover that runs
+before the server binds its port.
 """
 
 import asyncio
@@ -25,6 +26,7 @@ import router
 import tools
 import vram
 import waifus
+from audio import read_aloud
 from config import CONFIG
 from memory import embeddings, writer
 from router import listing as model_listing
@@ -221,14 +223,14 @@ async def boot_sequence() -> None:
     """D-060: the kernel opens its port at once and loads nothing heavy until a
     window is up, so the window paints on an idle PC. Then the chat model, then the
     memory catch-up pass: loading everything together pegged every core and filled
-    RAM. Voice is not part of boot at all; it starts when the user turns voice mode
-    on (D-061). The router reads its cached catalog straight away (cheap). Never raises."""
+    RAM. The voice starts only if Read aloud was left on (D-097), after the chat
+    model. The router reads its cached catalog straight away (cheap). Never raises."""
     await asyncio.gather(check_router(), after_first_window(), return_exceptions=True)
 
 
 async def after_first_window() -> None:
     await first_window_event().wait()
-    for step in (check_chat_model, start_screen_companions, startup_memory_pass):
+    for step in (check_chat_model, start_read_aloud, start_screen_companions, startup_memory_pass):
         try:
             await step()
         except Exception as exc:  # noqa: BLE001 -- one failed step must not stop the rest
@@ -236,6 +238,12 @@ async def after_first_window() -> None:
         finally:
             if step is check_chat_model:
                 chat_model_settled_event().set()
+
+
+async def start_read_aloud() -> None:
+    """D-097: Read aloud left on last time wakes the voice now (about 47 s), after the
+    chat model, so the first reply can be spoken. Not awaited: the boot steps go on."""
+    read_aloud.READ_ALOUD.start()
 
 
 async def start_screen_companions() -> None:

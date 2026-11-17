@@ -6,11 +6,13 @@
 // FR-SC-2; Temp Chat; else a keyboard hint) and the model chip (K1-10, FR-M-1)
 // at the right. The companion chip moved to the top bar.
 
-import { useEffect, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
+import { useEffect, useMemo, useRef, useState, type ClipboardEvent, type DragEvent, type KeyboardEvent } from "react";
 
 import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
 import { canSend, currentMode } from "../chat-state";
+import { readAloudLine, voiceStarting } from "../read-aloud";
 import { actions, useChat, type Attachment } from "../store";
+import { Icon } from "./Icon";
 import { ModelChip } from "./ModelChip";
 
 async function readAttachment(file: File): Promise<Attachment | string> {
@@ -162,7 +164,7 @@ export function Composer() {
       </div>
       <div className="composer-under">
         <div className="composer-status">
-          <VoiceChip />
+          <ReadAloudChip />
           <ScreenChips />
           <StatusHint />
         </div>
@@ -174,7 +176,7 @@ export function Composer() {
 
 /** The status line's quiet state: Temp Chat, else how to send. Silent while a chip speaks. */
 function StatusHint() {
-  const busy = useChat((s) => (s.voice?.on ?? false) || (s.screen?.task_guide.on ?? false) || (s.screen?.ocr_watch.on ?? false));
+  const busy = useChat((s) => (s.readAloud?.on ?? false) || (s.screen?.task_guide.on ?? false) || (s.screen?.ocr_watch.on ?? false));
   const temp = useChat((s) => s.thread?.temp ?? false);
   const observer = useChat((s) => s.role === "observer");
   if (busy || observer) return null;
@@ -185,34 +187,38 @@ function StatusHint() {
   );
 }
 
-/** D-061: voice waking up, on, or failed with Try again; × turns it off. */
-function VoiceChip() {
-  const voice = useChat((s) => s.voice);
+/** D-097: Read aloud on: her voice starting (counting to about 47 s), reading, or
+ * failed with Try again; × turns it off. */
+function ReadAloudChip() {
+  const status = useChat((s) => s.readAloud);
   const name = useChat((s) => s.companion?.name ?? "Her");
   const canAct = useChat((s) => s.role === "driver" && s.connection === "online");
-  if (!voice?.on) return null;
-  const waking = voice.state === "loading" || voice.state === "idle";
-  const line =
-    voice.state === "failed"
-      ? `${name}'s voice couldn't start. ${voice.message ?? ""}`
-      : waking
-        ? `${name}'s voice is waking up…`
-        : `Voice on: ${name} speaks her replies`;
+  const starting = voiceStarting(status);
+  // When the start began, from the engine's count at this frame; the chip counts on.
+  const since = useMemo(() => Date.now() - (status?.elapsed_s ?? 0) * 1000, [status]);
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    if (!starting) return;
+    const t = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(t);
+  }, [starting]);
+  const line = readAloudLine(status, name, starting ? (now - since) / 1000 : 0);
+  if (line === null) return null;
   return (
-    <div className="screen-chips" role="status" aria-label="Voice">
-      <span className={waking ? "screen-chip voice-chip waking" : "screen-chip voice-chip"}>
-        <span aria-hidden="true">🔊</span> {line}
-        {voice.state === "failed" ? (
-          <button type="button" className="chip-retry" disabled={!canAct} onClick={() => actions.setVoice(true)}>
+    <div className="screen-chips" role="status" aria-label="Read aloud">
+      <span className={starting ? "screen-chip voice-chip starting" : "screen-chip voice-chip"}>
+        <Icon name="speaker" size={14} /> {line}
+        {status?.state === "failed" ? (
+          <button type="button" className="chip-retry" disabled={!canAct} onClick={() => actions.setReadAloud(true)}>
             Try again
           </button>
         ) : null}
         <button
           type="button"
-          aria-label="Turn voice off"
-          title="Turn voice off"
+          aria-label="Turn off Read aloud"
+          title="Turn off Read aloud"
           disabled={!canAct}
-          onClick={() => actions.setVoice(false)}
+          onClick={() => actions.setReadAloud(false)}
         >
           ×
         </button>
@@ -265,7 +271,7 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
   const [asking, setAsking] = useState(false);
   const [task, setTask] = useState("");
   const screen = useChat((s) => s.screen);
-  const voiceOn = useChat((s) => s.voice?.on ?? false);
+  const readAloudOn = useChat((s) => s.readAloud?.on ?? false);
   const wrapper = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const first = useRef<HTMLButtonElement>(null);
@@ -298,7 +304,7 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
         type="button"
         className="tray-toggle"
         aria-label="Attach"
-        title="Attach a file; voice; screen companions"
+        title="Attach a file; Read aloud; screen companions"
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
@@ -324,15 +330,17 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
           <button
             type="button"
             role="menuitemcheckbox"
-            aria-checked={voiceOn}
-            title="She speaks her replies. The first time, her voice takes about a minute to wake up"
+            className="menu-with-icon"
+            aria-checked={readAloudOn}
+            title="She reads each reply aloud once it is written. Her voice takes about 47 seconds to start"
             onClick={() => {
-              actions.setVoice(!voiceOn);
+              actions.setReadAloud(!readAloudOn);
               setOpen(false);
             }}
           >
-            Voice
-            <span className="menu-state">{voiceOn ? "on" : "off"}</span>
+            <Icon name="speaker" size={15} />
+            Read aloud
+            <span className="menu-state">{readAloudOn ? "on" : "off"}</span>
           </button>
           <div className="tray-section" role="presentation">
             Screen companions

@@ -7,8 +7,9 @@ The persona is the companion's own prompt: who she is, never format or length ru
 Everything after it is IDENTICAL for every companion and depends only on the thread
 (its mode and scenario card): that is what the invariance tests (FR-W-3) pin down.
 The message is stable for the life of a thread, so llama-server's cached prefix holds;
-what changes from turn to turn (recall, hints, the story summary, the delivery layer
-while voice is on) is spliced in by the turn runner as an ephemeral note instead.
+what changes from turn to turn (recall, hints, the story summary) is spliced in by
+the turn runner as an ephemeral note instead. Read aloud adds nothing here: it never
+changes what she writes (D-097, speech.speakable cuts the finished reply).
 """
 from __future__ import annotations
 
@@ -88,36 +89,12 @@ TOOL_GUIDANCE = (
 )
 
 
-# FR-MODE-2, 8: the delivery layer, one text per mode. Not part of the system message:
-# voice is kernel-wide and toggles, so the turn runner adds it to the turn's ephemeral
-# note only while voice is on (D-074), and the cached prefix never changes with it.
-DELIVERY_LAYERS = {
-    "chat": (
-        "Your reply is spoken aloud by your voice right now. Say it in one to three short "
-        "spoken sentences. No lists, Markdown, emoji, symbols, quotation marks, dashes or "
-        "ellipses; write numbers as words; never read out links or code. The emotion tag at "
-        "the end still applies: it is never spoken."
-    ),
-    "roleplay": (
-        "Your reply is heard aloud: only what you say is spoken, while your actions are shown "
-        "but not read. Keep the spoken lines short and natural, with no symbols, dashes or "
-        "ellipses inside them, and write numbers as words."
-    ),
-}
-
 # FR-MODE-4: how a roleplay turn is told about the real user (the profile card only).
 ROLEPLAY_PROFILE_FRAMING = "About the real person you are writing with (not their role in the story): {card}"
 
 # FR-MODE-5: a roleplay thread's story memory (story.py), per turn in the ephemeral note
 # and never in history[0]: it changes as the story goes on, the cached prefix must not.
 STORY_NOTE = "The story so far, summarized from earlier scenes: {summary}"
-
-
-def delivery_layer(mode: str) -> str:
-    """The delivery text for a thread's mode (FR-MODE-8). An unknown mode raises."""
-    if mode not in DELIVERY_LAYERS:
-        raise ValueError(f"unknown conversation mode: {mode!r}")
-    return DELIVERY_LAYERS[mode]
 
 
 def scenario_block(scenario: Mapping[str, Any] | None) -> str:

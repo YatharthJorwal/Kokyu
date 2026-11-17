@@ -234,14 +234,15 @@ voice:
 
 # ─────────────────────────────────────────────────────────────────────────────
 # TTS. GPT-SoVITS is installed separately (docs/TTS-BACKEND.md); the kernel starts it
-# when voice mode is turned on (D-061). One request per clause (D-009).
+# only while Read aloud is on (D-097). One request per clause of a finished reply.
 # ─────────────────────────────────────────────────────────────────────────────
 tts:
   engine: 'gpt_sovits'
-  stream: 'per_clause'
   fallback_engine: 'none'     # 'pyttsx3' opts in to the robotic placeholder voice
-  # Voice starts only when voice mode is turned on, never at launch (D-061). Turned
-  # off, the voice server stops after this many idle seconds.
+  # Read aloud (D-097): she speaks each reply once it has finished. The composer's
+  # menu turns it on (saved in settings.json); the voice server starts only while it
+  # is on. Turned off, the voice server stops after idle_stop_s seconds.
+  read_aloud: false
   idle_stop_s: 300
 
   gpt_sovits:

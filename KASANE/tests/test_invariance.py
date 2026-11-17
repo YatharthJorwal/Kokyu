@@ -12,7 +12,6 @@ import prompting
 import router
 import turns
 from audio import tts
-from audio import voice_mode
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
 
@@ -57,14 +56,15 @@ async def _run_turn_as(waifu, monkeypatch, user_text="Tell me about your day.", 
     ws = FakeWebSocket(waifu)
     history = [{"role": "system", "content": companions.system_message(waifu, mode=mode, scenario=scenario)}]
     # Temp Chat: no memory reads or writes. The mode is the thread's, the same for both companions.
-    await turns.run_turn(ws, history, user_text, True, [], mode=mode)
+    reply = await turns.run_turn(ws, history, user_text, True, [], mode=mode)
+    # Read aloud (D-097), as the session does it: in the voice of who wrote the reply.
+    await turns.speak_reply(ws, reply, mode, companions.voice_of(ws))
     return calls, voices, history
 
 
 @pytest.mark.parametrize(("mode", "scenario"), [("chat", None), ("roleplay", CARD), ("roleplay", None)])
 @pytest.mark.asyncio
-async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(registry, monkeypatch, mode, scenario):
-    monkeypatch.setattr(voice_mode.VOICE, "on", True)   # these exercise the spoken path (voice mode on, D-061)
+async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(registry, monkeypatch, mode, scenario, read_aloud_on):
     a_calls, a_voices, a_hist = await _run_turn_as(registry.get("alpha"), monkeypatch, mode=mode, scenario=scenario)
     b_calls, b_voices, b_hist = await _run_turn_as(registry.get("beta"), monkeypatch, mode=mode, scenario=scenario)
 
@@ -88,9 +88,9 @@ async def test_a_turn_differs_between_waifus_only_in_persona_text_and_voice(regi
         assert a_system.endswith(prompting.APP_ADDENDUM) and prompting.TOOL_GUIDANCE not in a_system
         assert (prompting.SCENARIO_HEADING in a_system) == bool(scenario)
         assert a["tools"] == [] and a["role"] == "chat"   # FR-MODE-4: no tools, same router role
-    # FR-MODE-8: voice is on here, so both get the same delivery note for the thread's mode
+    # Read aloud is on here and still adds no note: it never changes what she writes (D-097)
     a_notes = [m["content"] for m in a["messages"][1:] if m["role"] == "system"]
-    assert a_notes == [prompting.DELIVERY_LAYERS[mode]]
+    assert a_notes == []
     assert a["messages"][0]["content"].startswith("You are Alpha") and b["messages"][0]["content"].startswith("You are Beta")
 
     assert a_voices and b_voices
@@ -124,9 +124,10 @@ async def test_switching_mid_conversation_keeps_history_model_and_tools(registry
 
 
 def test_the_turn_runner_never_branches_on_a_waifu():
-    """Structural guard: persona and voice enter through _system_message/_synthesize_for only."""
-    source = inspect.getsource(turns.run_turn).lower()
-    assert "waifu" not in source
+    """Structural guard: persona and voice enter through _system_message/_synthesize_for only;
+    Read aloud gets the voice handed in (D-097)."""
+    for fn in (turns.run_turn, turns.speak_reply):
+        assert "waifu" not in inspect.getsource(fn).lower(), fn
 
 
 def test_the_router_has_no_waifu_input():

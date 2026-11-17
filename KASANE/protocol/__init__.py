@@ -106,8 +106,9 @@ class ScreenCompanion(_Data):
     task: str = Field(default="", max_length=TITLE_MAX)
 
 
-class VoiceModeData(_Data):
+class ReadAloudData(_Data):
     on: bool
+
 
 
 class TempChat(_Data):
@@ -251,7 +252,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "regenerate": Regenerate,         # K1-04: run the last exchange again (FR-C-9, Retry); edit it (FR-C-9, D-092)
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
-    "voice_mode": VoiceModeData,      # D-061: voice on or off; it starts only when turned on
+    "read_aloud": ReadAloudData,      # D-097: Read aloud on or off; its voice starts only while on
     "doctor": Empty,                  # K1-13 (FR-SET-3): run the Doctor's checks
     "memory_list": Empty,             # K1-13 (FR-MEM-4): the remembered facts
     "memory_edit": FactEdit,          # correct a fact (the old one is superseded, not deleted)
@@ -278,7 +279,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "model_list",     # K1-10 (FR-M-3, 4, 7)
     "model_status",   # K1-10 (FR-M-6): loading / ready / failed
     "screen_companions",  # K1-05b (FR-SC-2): what is watching the screen
-    "voice_status",   # D-061: voice on or off, and how its start is going
+    "read_aloud_status",  # D-097: Read aloud on or off, and how its voice's start is going
     "waifu_state",    # FR-S-1: the roster, the active companion, a pending switch
     "waifu_roster",   # D-091: the roster alone changed (a new picture), for every window
     "surface_status", # this window drives turns, or watches

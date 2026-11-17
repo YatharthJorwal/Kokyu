@@ -32,7 +32,7 @@ export const CLIENT_TYPES = [
   "regenerate",
   "screen_companion",
   "typing",
-  "voice_mode",
+  "read_aloud",
   "doctor",
   "memory_list",
   "memory_edit",
@@ -58,7 +58,7 @@ export const SERVER_TYPES = [
   "model_list",
   "model_status",
   "screen_companions",
-  "voice_status",
+  "read_aloud_status",
   "waifu_state",
   "waifu_roster",
   "surface_status",
@@ -85,8 +85,9 @@ export const ERROR_CODES = [
   "picture_unreadable",
 ] as const;
 
-/** D-061: voice mode (replies spoken; the mic in K2). It starts only when turned on. */
-export interface VoiceStatus {
+/** D-097: Read aloud (each finished reply spoken), kept by the engine in settings.json,
+ * and how her voice's start is going (it starts only while Read aloud is on). */
+export interface ReadAloudStatus {
   on: boolean;
   state: "idle" | "loading" | "ready" | "failed";
   message: string | null;
@@ -262,7 +263,7 @@ export interface ServerData {
   model_list: ModelListData;
   model_status: ModelStatus;
   screen_companions: ScreenCompanions;
-  voice_status: VoiceStatus;
+  read_aloud_status: ReadAloudStatus;
   waifu_state: { active: string | null; waifus: CompanionInfo[]; problems: string[]; pending: string | null };
   /** D-091: only the roster changed (a new picture); active and pending stay. */
   waifu_roster: { waifus: CompanionInfo[] };
@@ -354,7 +355,7 @@ export interface ClientData {
   regenerate: { text?: string };
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
-  voice_mode: { on: boolean };
+  read_aloud: { on: boolean };
   doctor: Record<string, never>;
   memory_list: Record<string, never>;
   memory_edit: { id: number; text: string };

@@ -19,7 +19,7 @@ import prompting
 import router
 import tools
 import turns
-from audio import tts, voice_mode
+from audio import tts
 from memory import embeddings, forget, recall, store
 from senses import look_intent, ocr_watch, task_guide
 from session import Session
@@ -82,7 +82,6 @@ def side_effects(monkeypatch):
     monkeypatch.setattr(recall, "build_recall_context", fake_recall)
     monkeypatch.setattr(turns, "log_transcript_turn", fake_log)
     monkeypatch.setattr(tts, "synthesize", silent)
-    monkeypatch.setattr(voice_mode.VOICE, "on", False)
     return seen
 
 
@@ -239,46 +238,30 @@ async def test_an_api_model_cannot_run_a_local_only_tool_it_was_not_offered(waif
     assert ran == [] and calls[1]["messages"][-1]["content"] == tools.NOT_OFFERED_RESULT
 
 
-# -- FR-MODE-8: the delivery layer, per turn, only while voice is on ---------------
+# -- D-097: Read aloud never changes what she writes --------------------------------
 
 
 @pytest.mark.parametrize("mode", ["chat", "roleplay"])
 @pytest.mark.asyncio
-async def test_the_delivery_note_is_added_only_while_voice_is_on(waifu, side_effects, monkeypatch, mode):
-    calls = _model(monkeypatch, [_text("Hi. [happy]")], [_text("Hi. [happy]")])
+async def test_read_aloud_adds_no_note_and_the_turn_returns_the_reply_to_speak(waifu, side_effects, monkeypatch, read_aloud_on, mode):
+    calls = _model(monkeypatch, [_text("Hi there. [happy]")])
     history = [{"role": "system", "content": "sys"}]
-    await turns.run_turn(Socket(waifu), history, "one", True, [], mode=mode)
-    monkeypatch.setattr(voice_mode.VOICE, "on", True)
-    await turns.run_turn(Socket(waifu), history, "two", True, [], mode=mode)
-    other = "roleplay" if mode == "chat" else "chat"
-    assert _notes(calls[0]) == ""                                       # voice off: nothing
-    assert _notes(calls[1]) == prompting.DELIVERY_LAYERS[mode]          # voice on: this mode's text
-    assert prompting.DELIVERY_LAYERS[other] not in _notes(calls[1])
-    assert calls[1]["messages"][0]["content"] == "sys"                  # never in history[0]
-    assert all(m["content"] != prompting.DELIVERY_LAYERS[mode] for m in history)
-
-
-def test_the_delivery_texts_are_the_agreed_copy():
-    assert prompting.delivery_layer("chat").startswith("Your reply is spoken aloud by your voice right now.")
-    assert prompting.delivery_layer("roleplay").startswith("Your reply is heard aloud: only what you say is spoken")
-    with pytest.raises(ValueError):
-        prompting.delivery_layer("poetry")
+    reply = await turns.run_turn(Socket(waifu), history, "one", True, [], mode=mode)
+    assert _notes(calls[0]) == ""                                       # the prompt is the same as with it off
+    assert reply == "Hi there." == history[-1]["content"]               # what the session reads aloud
 
 
 # -- FR-MODE-5 (K1c-04): the story summary joins a roleplay turn's ephemeral note ------
 
 
 @pytest.mark.asyncio
-async def test_a_roleplay_turn_gets_the_story_note_before_the_delivery_note(waifu, side_effects, monkeypatch):
+async def test_a_roleplay_turn_gets_the_story_note_after_the_profile(waifu, side_effects, monkeypatch, read_aloud_on):
     calls = _model(monkeypatch, [_text("*She nods.* [neutral]")])
     monkeypatch.setattr(recall, "build_profile_context", _profile("Sam."))
-    monkeypatch.setattr(voice_mode.VOICE, "on", True)
     history = [{"role": "system", "content": "sys"}]
     await turns.run_turn(Socket(waifu), history, "And then?", False, [], mode="roleplay", story="They met at dusk.")
     note = prompting.STORY_NOTE.format(summary="They met at dusk.")
-    assert _notes(calls[0]) == " ".join([
-        prompting.ROLEPLAY_PROFILE_FRAMING.format(card="Sam."), note, prompting.DELIVERY_LAYERS["roleplay"],
-    ])
+    assert _notes(calls[0]) == " ".join([prompting.ROLEPLAY_PROFILE_FRAMING.format(card="Sam."), note])
     assert calls[0]["messages"][0]["content"] == "sys"                 # never in history[0]
     assert all(note not in m["content"] for m in history)              # nor kept in history
 
@@ -350,15 +333,23 @@ async def test_a_simple_chat_reply_is_unchanged(waifu, side_effects, monkeypatch
     assert history[-1]["content"] == "It was fine. How about yours?" == ws.sent[-1]["data"]["text"]
 
 
-# -- FR-MODE-8 (K1c-05): in a roleplay only her dialogue is spoken -----------------
+# -- FR-MODE-8 (K1c-05, D-097): read aloud, a roleplay speaks only her dialogue ------
 
 
 def _speak_texts(ws) -> list[str]:
     return [f["data"]["text"] for f in ws.sent if f["type"] == "speak"]
 
 
+async def _turn_then_read_aloud(ws, history, user_text, mode="chat", **kwargs):
+    """A turn, then what the session does with Read aloud on: speak the finished reply."""
+    reply = await turns.run_turn(ws, history, user_text, True, [], mode=mode, **kwargs)
+    assert not _speak_texts(ws)   # nothing is spoken while the reply is written
+    await turns.speak_reply(ws, reply, mode, None)
+    return reply
+
+
 @pytest.mark.asyncio
-async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(waifu, side_effects, monkeypatch):
+async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(waifu, side_effects, monkeypatch, read_aloud_on):
     # The deltas split an action, a "**" and an "(OOC" mid-token on purpose.
     pieces = ["*She looks up from her book, then sets it down. She smi", "les.*\n\n",
               "\"Oh, it is you. I was **wait", "ing** for you all afternoon,\" she says.",
@@ -366,7 +357,7 @@ async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(wai
     calls = _model(monkeypatch, [_text(p) for p in pieces])
     spoken: list[str] = []
 
-    async def fake_synth(websocket, text):
+    async def fake_synth(websocket, text, voice=None):
         spoken.append(text)
         return b""
 
@@ -378,7 +369,7 @@ async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(wai
 
     ws = Socket(waifu)
     history = [{"role": "system", "content": "sys"}]
-    await turns.run_turn(ws, history, "Hi.", True, [], on_finished=on_finished, mode="roleplay")
+    await _turn_then_read_aloud(ws, history, "Hi.", "roleplay", on_finished=on_finished)
     captions = " ".join(_speak_texts(ws))
     assert captions == "Oh, it is you. I was waiting for you all afternoon, Come in, then."
     for gone in ("*", "smiles", "She", "says", "OOC", "sorry", "[happy]", "\""):
@@ -387,45 +378,44 @@ async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(wai
     # History, the saved reply and turn_done keep the full formatted text (D-074).
     full = "".join(pieces).removesuffix(" [happy]")
     assert history[-1] == {"role": "assistant", "content": full} and saved == [full]
-    done = ws.sent[-1]
-    assert done["type"] == "turn_done" and done["data"]["text"] == full and done["data"]["emotion"] == "happy"
+    done = next(f for f in ws.sent if f["type"] == "turn_done")
+    assert done["data"]["text"] == full and done["data"]["emotion"] == "happy"
     # The model still saw nothing different: the router role is chat (FR-MODE-3).
     assert calls[0]["role"] == "chat"
 
 
 @pytest.mark.asyncio
-async def test_an_action_only_roleplay_reply_speaks_nothing_and_is_still_kept(waifu, side_effects, monkeypatch):
+async def test_an_action_only_roleplay_reply_speaks_nothing_and_is_still_kept(waifu, side_effects, monkeypatch, read_aloud_on):
     _model(monkeypatch, [_text("*She just smiles and nods.* [teasing]")])
     ws = Socket(waifu)
     history = [{"role": "system", "content": "sys"}]
-    await turns.run_turn(ws, history, "Well?", True, [], mode="roleplay")
+    await _turn_then_read_aloud(ws, history, "Well?", "roleplay")
     assert _speak_texts(ws) == []
     assert not [f for f in ws.sent if f["type"] == "error"]
     assert ws.sent[-1]["data"]["text"] == "*She just smiles and nods.*" and ws.sent[-1]["data"]["emotion"] == "teasing"
 
 
 @pytest.mark.asyncio
-async def test_a_chat_turn_speaks_actions_words_as_before(waifu, side_effects, monkeypatch):
-    # The cut is roleplay-only: a chat reply's speech is unchanged (prepare drops the
-    # markers and keeps the words, as it always did).
+async def test_a_chat_turn_speaks_actions_words_as_before(waifu, side_effects, monkeypatch, read_aloud_on):
+    # The dialogue cut is roleplay-only: in a chat the markers go and the words stay.
     _model(monkeypatch, [_text("*grins* Sure, that works for me. \"Quoted\" too. [happy]")])
     ws = Socket(waifu)
-    await turns.run_turn(ws, [{"role": "system", "content": "sys"}], "Ok?", True, [])
+    await _turn_then_read_aloud(ws, [{"role": "system", "content": "sys"}], "Ok?")
     captions = " ".join(_speak_texts(ws))
     assert "grins" in captions and "Quoted" in captions and "[happy]" not in captions
 
 
 @pytest.mark.asyncio
 @pytest.mark.parametrize("mode", ["chat", "roleplay"])
-async def test_a_tag_after_a_short_last_sentence_is_never_spoken_and_sets_the_emotion(waifu, side_effects, monkeypatch, mode):
+async def test_a_tag_after_a_short_last_sentence_is_never_spoken_and_sets_the_emotion(waifu, side_effects, monkeypatch, read_aloud_on, mode):
     # The chunker used to emit "... now. [happy]." mid-stream as one ready chunk.
     _model(monkeypatch, [_text("Sure thing, I can definitely do it now."), _text(" [happy]"), _text(".")])
     ws = Socket(waifu)
     history = [{"role": "system", "content": "sys"}]
-    await turns.run_turn(ws, history, "Can you?", True, [], mode=mode)
+    await _turn_then_read_aloud(ws, history, "Can you?", mode)
     assert _speak_texts(ws) == ["Sure thing, I can definitely do it now."]
     assert history[-1]["content"] == "Sure thing, I can definitely do it now."
-    assert ws.sent[-1]["data"]["emotion"] == "happy"
+    assert next(f for f in ws.sent if f["type"] == "turn_done")["data"]["emotion"] == "happy"
 
 
 @pytest.mark.asyncio

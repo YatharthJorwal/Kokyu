@@ -343,13 +343,15 @@ class GPTSoVITSConfig:
 @dataclass(frozen=True)
 class TTSConfig:
     engine: str = "gpt_sovits"
-    stream: str = "per_clause"           # "per_clause" | "off"
     # "none" (default): if the voice backend is down, the reply stays text-only. "pyttsx3"
     # opts in to the robotic placeholder voice (it breaks voice identity, FR-V-7).
     fallback_engine: str = "none"
     gpt_sovits: GPTSoVITSConfig = field(default_factory=GPTSoVITSConfig)
-    # Voice mode turned off: the voice server we started stops after this many idle
-    # seconds, so a quick off/on does not reload it (D-061).
+    # Read aloud (D-097): she speaks each finished reply. The composer's menu turns it
+    # on and off and settings.json keeps it; the voice server starts only while it is on.
+    read_aloud: bool = False
+    # Read aloud turned off: the voice server we started stops after this many idle
+    # seconds, so a quick off/on does not reload it.
     idle_stop_s: float = 300.0
 
 
@@ -799,7 +801,7 @@ def _derive_tts(raw: Mapping[str, Any]) -> TTSConfig:
     defaults = TTSConfig()
     return TTSConfig(
         engine=tts_raw.get("engine", defaults.engine),
-        stream=tts_raw.get("stream", defaults.stream),
+        read_aloud=bool(tts_raw.get("read_aloud", defaults.read_aloud)),
         fallback_engine=tts_raw.get("fallback_engine", defaults.fallback_engine),
         idle_stop_s=float(tts_raw.get("idle_stop_s", defaults.idle_stop_s)),
         gpt_sovits=_build(GPTSoVITSConfig, {**dataclasses.asdict(defaults.gpt_sovits), **sovits}),

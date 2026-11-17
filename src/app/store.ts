@@ -301,9 +301,11 @@ export const actions = {
     socket.send("screen_companion", task ? { mode, on, task } : { mode, on });
   },
 
-  /** Voice mode on or off (D-061): the voice server starts the first time it is turned on. */
-  setVoice(on: boolean): void {
-    socket.send("voice_mode", { on });
+  /** Read aloud on or off (D-097): kept by the engine; her voice starts while it is on.
+   * Off silences her at once. */
+  setReadAloud(on: boolean): void {
+    if (!on) voice.stop();
+    socket.send("read_aloud", { on });
   },
 
   // ── the model chip (K1-10) ──────────────────────────────────────────

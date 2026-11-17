@@ -13,7 +13,6 @@ import prompting
 import turns
 import waifus
 from audio import tts
-from audio import voice_mode
 from waifu_fixtures import make_pack
 from waifus import WaifuRegistry
 
@@ -47,8 +46,7 @@ def _history(waifu):
 
 
 @pytest.mark.asyncio
-async def test_switch_replaces_only_the_system_prompt_and_the_voice(registry, monkeypatch):
-    voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
+async def test_switch_replaces_only_the_system_prompt_and_the_voice(registry, monkeypatch, read_aloud_on):
     prewarmed = []
 
     async def fake_prewarm(voice):
@@ -86,8 +84,7 @@ async def test_unknown_waifu_changes_nothing(registry):
 
 
 @pytest.mark.asyncio
-async def test_speech_uses_the_active_waifus_clip_and_transcript(registry, monkeypatch):
-    voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
+async def test_speech_uses_the_active_waifus_clip_and_transcript(registry, monkeypatch, read_aloud_on):
     heard = []
 
     async def fake_synth(text, voice=None):
@@ -109,8 +106,7 @@ async def test_speech_uses_the_active_waifus_clip_and_transcript(registry, monke
 
 
 @pytest.mark.asyncio
-async def test_no_waifu_means_the_config_voice_call(monkeypatch):
-    voice_mode.VOICE.on = True   # these exercise the spoken path (voice mode on, D-061)
+async def test_no_waifu_means_the_config_voice_call(monkeypatch, read_aloud_on):
     calls = []
 
     async def fake_synth(text):          # one-argument stub, as the older tests use

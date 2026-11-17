@@ -34,7 +34,7 @@ import settings_file
 import story
 import turns
 import waifus
-from audio import voice_mode
+from audio import read_aloud
 from config import CONFIG
 from memory import viewer as memory_viewer
 from memory import writer
@@ -78,6 +78,9 @@ class Session:
         self.story_summary = ""
         # The turn in flight runs as its own task, so the receive loop still reads Stop.
         self.turn: asyncio.Task | None = None
+        # Read aloud (D-097): the finished reply being spoken, its own task so the user
+        # can type and send meanwhile; a new turn, Stop or another thread cancels it.
+        self.speech: asyncio.Task | None = None
         # A companion switch asked for mid-reply; it applies when the reply ends (FR-S-2).
         self.pending_waifu: str | None = None
         # Task Guide and OCR watch never speak at once: they share the history and the socket.
@@ -104,7 +107,7 @@ class Session:
         await ws.send_json(protocol.frame("surface_status", {"role": role}))
         boot.first_window_event().set()   # D-060: the boot sequence may start loading now
         await ws.send_json(protocol.frame("screen_companions", hub.screen_status()))
-        await ws.send_json(protocol.frame("voice_status", voice_mode.VOICE.status()))
+        await ws.send_json(protocol.frame("read_aloud_status", read_aloud.READ_ALOUD.status()))
 
         # The active companion lives on the connection; it starts as the one the user
         # last used. With no packs installed it stays None and the fallback answers.
@@ -114,16 +117,17 @@ class Session:
         self.history = [{"role": "system", "content": self.system_prompt()}]   # no thread yet: chat
         await companions.send_waifu_state(ws, self.registry)
 
-        # Every window hears about model loads (K1-10, the waking-up card) and voice (D-061).
+        # Every window hears about model loads (K1-10, the waking-up card) and the voice
+        # waking up for Read aloud (D-097).
         async def push_model_status(status: dict[str, Any]) -> None:
             await ws.send_json(protocol.frame("model_status", status))
 
-        async def push_voice_status(status: dict[str, Any]) -> None:
-            await ws.send_json(protocol.frame("voice_status", status))
+        async def push_read_aloud(status: dict[str, Any]) -> None:
+            await ws.send_json(protocol.frame("read_aloud_status", status))
 
         self._unsubscribe = [
             model_loader.LOADER.subscribe(push_model_status),
-            voice_mode.VOICE.subscribe(push_voice_status),
+            read_aloud.READ_ALOUD.subscribe(push_read_aloud),
             story.KEEPER.subscribe(self.story_updated),
         ]
 
@@ -173,6 +177,7 @@ class Session:
             self.turn.cancel()
             with contextlib.suppress(asyncio.CancelledError, Exception):
                 await self.turn
+        await self.hush()
         # The screen loops never end on their own. Their state (task_guide, ocr_watch)
         # is kernel-wide and outlives the window, so a reconnect finds the task.
         for loop in self._loops:
@@ -211,6 +216,14 @@ class Session:
     def busy(self) -> bool:
         """A reply is in flight."""
         return self.turn is not None and not self.turn.done()
+
+    async def hush(self) -> None:
+        """Stop reading the last reply aloud (D-097), if she still is."""
+        speech, self.speech = self.speech, None
+        if speech is not None and not speech.done():
+            speech.cancel()
+            with contextlib.suppress(asyncio.CancelledError, Exception):
+                await speech
 
     @property
     def thread_id(self) -> str | None:
@@ -278,6 +291,7 @@ class Session:
         """Makes `thread` this window's thread: its companion comes back, its messages
         become the history, its Temp Chat flag applies (FR-MEM-5). `load` False leaves
         its model unloaded until the first message."""
+        await self.hush()   # the last thread's reply is not read over this one
         active = companions.waifu_of(self.ws)
         wanted = thread.active_waifu_id
         if wanted and self.registry.get(wanted) is not None and (active is None or active.id != wanted):
@@ -396,9 +410,12 @@ class Session:
 
         return replace
 
-    def start_turn(self, user_text: str, *, on_finished: Saver | None, attachment: Any = None) -> None:
+    async def start_turn(self, user_text: str, *, on_finished: Saver | None, attachment: Any = None) -> None:
         """Runs a turn as its own task. A companion switch asked for during it applies
-        the moment it ends, so the chip and the divider do not wait for the next message."""
+        the moment it ends, so the chip and the divider do not wait for the next message.
+        The last reply stops being read aloud first (D-097)."""
+        await self.hush()
+        mode = self.thread_mode()
         turn = turns.run_turn(
             self.ws,
             self.history,
@@ -410,14 +427,19 @@ class Session:
             unprompted=self.unprompted,
             **({"attachment": attachment} if attachment is not None else {}),
             **self.thread_model(),
-            mode=self.thread_mode(),
+            mode=mode,
             story=self.turn_story(),
         )
-        self.turn = asyncio.create_task(self._then_switch(turn))
+        self.turn = asyncio.create_task(self._then_switch(turn, mode))
 
-    async def _then_switch(self, turn: Coroutine[Any, Any, None]) -> None:
+    async def _then_switch(self, turn: Coroutine[Any, Any, str], mode: str) -> None:
         try:
-            await turn
+            reply = await turn
+            if reply and read_aloud.READ_ALOUD.on:
+                # D-097: read aloud once it has finished, in the voice of who wrote it
+                # (taken now, before a switch asked for mid-reply applies below).
+                voice = companions.voice_of(self.ws)
+                self.speech = asyncio.create_task(turns.speak_reply(self.ws, reply, mode, voice), name="read-aloud")
         finally:
             try:
                 await self.apply_pending_switch()
@@ -444,7 +466,7 @@ class Session:
     async def on_send(self, msg: Any) -> None:
         if self.busy:
             return   # the window disables input during a reply; two turns would share one history
-        self.start_turn(msg.data.text, on_finished=self.saver())
+        await self.start_turn(msg.data.text, on_finished=self.saver())
 
     async def on_send_file(self, msg: Any) -> None:
         """The tray's Upload file (src/app/file-upload.ts reads and resizes it), turned
@@ -469,7 +491,7 @@ class Session:
                 return
             shared = f'(shared an image, "{filename}") {description}'
         user_text = f"{shared}\n\n{data.caption}" if data.caption else shared
-        self.start_turn(user_text, on_finished=self.saver(), attachment=data.kind)
+        await self.start_turn(user_text, on_finished=self.saver(), attachment=data.kind)
 
     async def on_regenerate(self, msg: Any) -> None:
         """K1-04 (FR-C-9): Regenerate the last reply, or Retry a failed turn. The new
@@ -496,13 +518,15 @@ class Session:
         # after it cannot leave it in the model's context.
         self.history[:] = await self.manager.history(self.thread, self.system_prompt(), exclude=old_ids)
         self.reset_history_flags()
-        self.start_turn(
+        await self.start_turn(
             again,
             on_finished=self.replacing(old_ids, old_log_id if isinstance(old_log_id, int) else None),
             attachment=old_meta.get("attachment"),
         )
 
     async def on_stop(self, msg: Any) -> None:
+        # Stop silences her too (FR-C-2): the reply being read aloud ends here.
+        await self.hush()
         # Nothing running (a late click): nothing to do and nothing to say.
         if self.busy:
             self.turn.cancel()
@@ -809,10 +833,18 @@ class Session:
 
     # Kernel-wide switches: only the driver changes them, every window sees them.
 
-    async def on_voice_mode(self, msg: Any) -> None:
-        # D-061: voice starts here, never at launch.
-        if hub.drives(self.ws):
-            await voice_mode.VOICE.set(msg.data.on)
+    async def on_read_aloud(self, msg: Any) -> None:
+        """D-097: the composer's Read aloud, kept in settings.json. Turning it on
+        starts the voice; every window sees it wake up."""
+        if not hub.drives(self.ws):
+            return
+        if not msg.data.on:
+            await self.hush()
+        try:
+            await read_aloud.READ_ALOUD.set(msg.data.on)
+        except Exception as exc:  # noqa: BLE001 -- the switch stays as it was, and says why
+            log.warning(f"read aloud: not saved: {exc}")
+            await self.refuse("bad_message", f"Read aloud could not be saved: {exc}")
 
     async def on_screen_companion(self, msg: Any) -> None:
         """K1-05b (FR-SC-1..4, D-048): the + tray's Task Guide and OCR watch."""

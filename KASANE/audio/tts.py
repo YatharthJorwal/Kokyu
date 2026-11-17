@@ -172,9 +172,9 @@ async def synthesize(text: str, voice: VoiceParams | None = None) -> bytes:
 
 
 # ─── server lifecycle ────────────────────────────────────────────────────────
-# The kernel owns the GPT-SoVITS server (D-060). It starts only when voice mode
-# is turned on (D-061), never at boot; the Tauri shell's Job Object still ends it
-# with the app. Port-first: a server already answering is used, never a second.
+# The kernel owns the GPT-SoVITS server (D-060). It starts only while Read aloud
+# is on (D-097): when it is turned on, or after the chat model at start if it was
+# left on; the Tauri shell's Job Object still ends it with the app. Port-first: a server already answering is used, never a second.
 
 _PER_LINE_WAIT_S = 8.0   # a line spoken while our server is still loading waits this long
 _CREATE_NO_WINDOW = 0x08000000

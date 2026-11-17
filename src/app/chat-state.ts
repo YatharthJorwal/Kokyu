@@ -18,7 +18,7 @@ import {
   type ScreenCompanions,
   type ServerData,
   type SettingsData,
-  type VoiceStatus,
+  type ReadAloudStatus,
   type ThreadInfo,
   type ThreadMessage,
   type ThreadMode,
@@ -131,8 +131,8 @@ export interface ChatState {
   pickerOpen: boolean;
   /** Task Guide / OCR watch (K1-05b); null until the kernel says. */
   screen: ScreenCompanions | null;
-  /** Voice mode (D-061); null until the kernel says. */
-  voice: VoiceStatus | null;
+  /** Read aloud (D-097); null until the kernel says. */
+  readAloud: ReadAloudStatus | null;
   /** K1-13: the open Settings section; null when Settings is closed. */
   settings: SettingsSection | null;
   /** The Doctor's last report (FR-SET-3); null until asked. */
@@ -208,7 +208,7 @@ export const initialState: ChatState = {
   modelStatus: null,
   pickerOpen: false,
   screen: null,
-  voice: null,
+  readAloud: null,
   settings: null,
   doctor: null,
   memory: null,
@@ -490,8 +490,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       return { ...state, modelStatus: frame.data as ModelStatus };
     case "screen_companions":
       return { ...state, screen: frame.data as ScreenCompanions };
-    case "voice_status":
-      return { ...state, voice: frame.data as VoiceStatus };
+    case "read_aloud_status":
+      return { ...state, readAloud: frame.data as ReadAloudStatus };
     case "waifu_state": {
       const data = frame.data as ServerData["waifu_state"];
       const roster = (data.waifus ?? []).map(toCompanion);
@@ -567,7 +567,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // get no answer: the dialog stops waiting (FR-MODE-6).
       const scenarioSave = state.scenarioSave === "pending" ? "lost" : state.scenarioSave;
       const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to Kōkyū's engine dropped." } : state.roleplayStart;
-      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, voice: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
+      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };

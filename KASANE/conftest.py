@@ -63,9 +63,38 @@ def _no_app_keys():
 
 
 @pytest.fixture(autouse=True)
-def _voice_off():
-    """Voice mode is kernel-wide (D-061): every test starts with it off and idle."""
-    from audio import voice_mode
+def _read_aloud_off():
+    """Read aloud is kernel-wide (D-097): every test starts with it off and its voice
+    idle, and ends with the running config it started with (turning Read aloud on
+    saves settings.json and installs a new config)."""
+    import dataclasses
 
-    voice_mode.VOICE = voice_mode.VoiceMode()
+    import config
+    from audio import read_aloud
+
+    original = config.CONFIG
+    if original.tts.read_aloud:
+        config.install(dataclasses.replace(original, tts=dataclasses.replace(original.tts, read_aloud=False)))
+    read_aloud.READ_ALOUD = read_aloud.ReadAloud()
     yield
+    if config.CONFIG is not original:
+        config.install(original)
+
+
+@pytest.fixture
+def read_aloud_on(monkeypatch):
+    """Read aloud on and its voice up, for one test: no settings.json, no voice server.
+    _read_aloud_off puts the config back afterwards."""
+    import dataclasses
+
+    import config
+    from audio import read_aloud
+
+    cfg = config.CONFIG
+    config.install(dataclasses.replace(cfg, tts=dataclasses.replace(cfg.tts, read_aloud=True)))
+
+    async def ready() -> bool:
+        return True
+
+    monkeypatch.setattr(read_aloud.READ_ALOUD, "ready", ready)
+    return read_aloud.READ_ALOUD

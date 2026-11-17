@@ -1,8 +1,9 @@
-"""One model turn: the user's line in, the reply streamed token by token (FR-C-2)
-and, with voice mode on (D-061), spoken clause by clause. Tools run here, the
-exchange is logged for the memory writer, and a failure becomes an error frame
-with Retry and Switch model (FR-R-5). Also the pieces every spoken path shares
-(send_speak) and the limits on what the model is sent (fit_for_llm, trim_history).
+"""One model turn: the user's line in, the reply streamed token by token (FR-C-2).
+Tools run here, the exchange is logged for the memory writer, and a failure
+becomes an error frame with Retry and Switch model (FR-R-5). With Read aloud on
+(D-097), speak_reply says the finished reply afterwards. Also the pieces every
+spoken path shares (send_speak) and the limits on what the model is sent
+(fit_for_llm, trim_history).
 """
 
 import asyncio
@@ -27,8 +28,7 @@ import protocol
 import router
 import story as story_memory
 import tools
-from audio import arbiter, latency, speech, speech_stream, tts, voice_mode
-from audio.chunking import extract_ready_chunks, flush
+from audio import arbiter, latency, read_aloud, speech, speech_stream, tts
 from config import CONFIG
 from memory import forget, recall, store, writer
 from memory.db import MemoryUnavailableError
@@ -44,13 +44,14 @@ log = logging.getLogger(__name__)
 LATENCY = latency.LatencyRecorder()
 
 
-async def synthesize_for(websocket: Any, spoken: str) -> bytes:
-    """Speak in the active waifu's voice. With voice mode off (D-061) or a dead TTS
-    backend this yields empty audio: the caption still shows and the reply stays
+async def synthesize_for(websocket: Any, spoken: str, *, voice: Any = ...) -> bytes:
+    """Speak in the active waifu's voice, or in `voice` when given (a reply read
+    aloud keeps the voice of the companion who wrote it). With Read aloud off
+    (D-097) or a dead TTS backend this yields empty audio: the reply stays
     text-only (FR-V-7)."""
-    if not voice_mode.VOICE.speaking():
+    if not read_aloud.READ_ALOUD.on:
         return b""
-    voice_params = companions.voice_of(websocket)
+    voice_params = companions.voice_of(websocket) if voice is ... else voice
     try:
         if voice_params is None:
             return await tts.synthesize(spoken)
@@ -135,6 +136,38 @@ async def send_speak(websocket: WebSocket, text: str) -> None:
     if not prepared.spoken:
         return
     await send_audio(websocket, prepared.display, await synthesize_for(websocket, prepared.spoken))
+
+
+async def speak_reply(websocket: WebSocket, text: str, mode: str, voice: "tts.VoiceParams | None") -> None:
+    """Read aloud (D-097): say one finished reply, in Chat and Roleplay. What is said
+    is speech.speakable's cut (no code, tables, links or tags; her dialogue only in a
+    roleplay), clause by clause, synthesizing one clause ahead, in `voice`: the
+    voice of whoever wrote it, taken when the reply ended. Waits while the voice
+    wakes up; the session cancels it when the user sends, stops or leaves the thread.
+    Never raises: a reply that cannot be spoken stays text (FR-V-7)."""
+    spoken = speech.speakable(text, mode)
+    if not spoken or not await read_aloud.READ_ALOUD.ready():
+        return
+    clauses = speech.split_segments(
+        apply_persona_pass(spoken), CONFIG.speech.max_segment_chars, CONFIG.speech.min_segment_chars
+    )
+    stream = speech_stream.SpeechStream(
+        send=lambda display, audio: send_audio(websocket, display, audio),
+        synth=lambda clause: synthesize_for(websocket, clause, voice=voice),
+        # already speakable: each clause goes out as it is
+        prepare=lambda clause: speech.PreparedSpeech(display=clause, spoken=clause, segments=(clause,)),
+        on_first_audio=arbiter.ARBITER.on_first_audio,
+    )
+    arbiter.ARBITER.on_turn_started()   # one mouth: ambient remarks and the memory writer wait
+    try:
+        for clause in clauses:
+            await stream.push(clause)
+        await stream.close()
+    except Exception:  # noqa: BLE001 -- speech must never take the window down
+        log.exception("read aloud failed; the reply stays text")
+    finally:
+        stream.abort()
+        arbiter.ARBITER.on_turn_finished()
 
 
 async def log_transcript_turn(user_text: str, assistant_text: str, temp: bool = False, speaker: str | None = None) -> int | None:
@@ -266,18 +299,17 @@ async def run_turn(
     *,
     mode: str = "chat",
     story: str | None = None,
-) -> None:
+) -> str:
     """The actual agent turn: append user_text to history, stream the LLM
-    reply, speak each sentence chunk as it's ready, commit (or roll back)
-    history. Shared by both `user_text` (typed) and `user_audio`
-    (transcribed) messages -- by the time this runs, there's no difference
-    between the two.
+    reply, commit (or roll back) history. Returns the reply to read aloud
+    (D-097): the finished reply, or "" when it failed, was stopped (Stop raises
+    CancelledError instead) or said nothing. Typed and dictated lines are
+    the same by the time this runs (dictation only fills the input box).
 
     Also writes one row to Phase 9's persistent transcript_log table
     (memory/store.py) per call, regardless of how the turn ends (normal
-    completion, LLM-unreachable fallback, or stopped mid-sentence) -- see
-    spoken_parts below for what that does and doesn't include, and why
-    it's tracked separately from reply_parts/history.
+    completion, LLM-unreachable fallback, or stopped mid-sentence): the
+    reply as it was kept, with the voice's spelling rules applied.
 
     temp_mode/temp_turn_flags (quick-action menu's Temp Chat toggle):
     temp_turn_flags is a list kept in lockstep with history[1:] (one
@@ -291,9 +323,9 @@ async def run_turn(
     mode: the thread's conversation mode (FR-MODE-1, D-074), from the THREAD only.
     A roleplay turn reads only the profile card, runs no forget, Task Guide or look
     intent, offers no tools and is not written to transcript_log, so nothing from a
-    story reaches app memory (FR-MODE-4). Its voice and captions get only her
-    dialogue (speech.DialogueFilter, FR-MODE-8); history keeps the whole reply.
-    The router role is "chat" in both modes.
+    story reaches app memory (FR-MODE-4). Read aloud says only her dialogue
+    (speech.speakable, FR-MODE-8); history keeps the whole reply. The router role
+    is "chat" in both modes.
 
     story: the thread's story summary (FR-MODE-5), passed by the session for a
     roleplay thread; it joins the turn's ephemeral note, never history[0]. Dropped
@@ -304,8 +336,7 @@ async def run_turn(
     history.append({"role": "user", "content": user_text})
     if temp_turn_flags is not None:
         temp_turn_flags.append(temp_mode)
-    # K1-00b: the chat view streams the reply token by token (FR-C-2); the
-    # spoken clauses below are unchanged.
+    # K1-00b: the chat view streams the reply token by token (FR-C-2).
     local_model = is_local_ref(model_ref)
     # FR-R-7: an attached file or image may go to the chosen API model, with a badge saying so.
     # shortcut: badged before the router decides, so a blocked call is badged too (over-warns); fine until routing reports back.
@@ -381,12 +412,11 @@ async def run_turn(
     # turn, not a read from or write to persistent memory. Never in a roleplay:
     # "look at me" in a story must not capture the camera (FR-MODE-4).
     look_hint = None if roleplay else await look_intent.maybe_look(user_text, websocket)
-    # FR-MODE-8: while voice is on, how to shape a reply that is heard. Per turn and
-    # not in history[0]: voice is kernel-wide and toggles, the cached prefix must not.
-    delivery = prompting.delivery_layer(mode) if voice_mode.VOICE.speaking() else None
+    # Read aloud never changes what she writes (D-097): speech.speakable cuts the
+    # finished reply instead, so there is no spoken-delivery layer in the prompt.
     # FR-MODE-5: the story so far, for a roleplay only and never in Temp Chat (D-074).
     story_note = prompting.STORY_NOTE.format(summary=story) if story and roleplay and not temp_mode else None
-    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block, story_note, delivery) if part]
+    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block, story_note) if part]
 
     if memory_parts:
         combined = " ".join(memory_parts)
@@ -394,38 +424,11 @@ async def run_turn(
     else:
         messages_for_llm = history
 
-    buffer = ""
-    reply_parts: list[str] = []
-    # FR-MODE-8: in a roleplay only her dialogue is spoken. The raw stream goes
-    # through this cut first, and `buffer` (the speech side) holds what is left;
-    # raw_text below keeps everything she wrote. None in chat: buffer is the stream.
-    dialogue = speech.DialogueFilter() if roleplay else None
     # Everything the model wrote, untouched (D-074): history, the saved message and
     # turn_done use it, so Markdown and paragraph breaks survive the stream.
-    # reply_parts and spoken_parts are the speech side, clause by clause.
     raw_text = ""
-    # Pipelined voice: clauses go in as the model writes them, audio comes out
-    # in order, synthesizing one clause ahead of playback. The old path awaited
-    # TTS inside this loop, so the model's next sentence waited on the voice.
-    def _first_audio() -> None:
-        timings.mark("first_audio")
-        arbiter.ARBITER.on_first_audio()
-
-    stream = speech_stream.SpeechStream(
-        send=lambda display, audio: send_audio(websocket, display, audio),
-        synth=lambda spoken: synthesize_for(websocket, spoken),
-        on_first_audio=_first_audio,
-    )
-    # Everything actually sent to send_speak this turn, in order --
-    # tracked separately from reply_parts because the two lists serve
-    # different purposes and can legitimately diverge: reply_parts is what
-    # goes back into `history` for the LLM's own context (and deliberately
-    # excludes the LLM-unreachable fallback line, see below), while
-    # spoken_parts is Phase 9's transcript-log panel's record of what the
-    # user actually heard/saw this turn, unconditionally -- including that
-    # same fallback line, since it genuinely was spoken to them even though
-    # it shouldn't be fed back into the LLM as if she'd said it.
-    spoken_parts: list[str] = []
+    # The reply Read aloud may say, set only when the reply ended normally (D-097).
+    to_speak = ""
     detected_emotion: str | None = None
     tool_messages: list[dict[str, Any]] = []
     usage: dict[str, Any] = {}   # the reply round's token counts, where the backend reports them (FR-C-10)
@@ -487,37 +490,19 @@ async def run_turn(
                     notice = {"code": "price_unknown", "message": event["text"], "reply_to": None}
                     await websocket.send_json(protocol.frame("error", notice, thread=thread_id))
                     continue
-                buffer += dialogue.feed(event["text"]) if dialogue is not None else event["text"]
                 raw_text += event["text"]
                 if event["text"]:
                     await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
                 timings.mark("first_token")
-                chunks, buffer = extract_ready_chunks(buffer)
-                for chunk in chunks:
-                    reply_parts.append(chunk)
-                    styled = apply_persona_pass(chunk)
-                    spoken_parts.append(styled)
-                    timings.mark("first_clause")
-                    await stream.push(styled)
             if not saw_tool_call:
                 # A normal reply, not another tool call -- stream's fully
                 # done now, not mid-flight, so this is the only safe point
                 # to check for a trailing [emotion] tag (see
                 # extract_emotion_tag()'s own docstring on why mid-stream
-                # would risk a false match). The emotion is read from the raw
-                # text: in a roleplay the dialogue cut has already dropped the tag.
-                if dialogue is not None:
-                    buffer += dialogue.finish()
-                buffer = extract_emotion_tag(buffer)[0]
+                # would risk a false match).
                 detected_emotion = extract_emotion_tag(raw_text)[1]
-                for chunk in flush(buffer):
-                    reply_parts.append(chunk)
-                    styled = apply_persona_pass(chunk)
-                    spoken_parts.append(styled)
-                    timings.mark("first_clause")
-                    await stream.push(styled)
-                await stream.close()
-                if not reply_text(raw_text):
+                to_speak = reply_text(raw_text)
+                if not to_speak:
                     # The model ended without a word (often a thinking model out of
                     # room): say so, never a silent turn (FR-R-5, D-064).
                     with contextlib.suppress(Exception):
@@ -531,7 +516,6 @@ async def run_turn(
             # one that keeps failing) shouldn't hang the turn forever.
             # Distinct from LLMUnreachableError below: the server itself
             # is fine, she just never got to a real answer.
-            await stream.close()
             with contextlib.suppress(Exception):
                 failure = {"code": "model_failed", "reason": "TOOL_LOOP", "message": TOOL_STUCK_LINE,
                            "model_ref": None, "actions": ["retry"], "reply_to": None}
@@ -546,9 +530,7 @@ async def run_turn(
         # quietly answer from another model.
         with contextlib.suppress(Exception):
             await websocket.send_json(failure_frame(exc, thread_id))
-        # Flush whatever was already generated before the failure: half a reply
-        # is still what she said.
-        await stream.close()
+        # Half a reply is still what she said: it is kept (below), but not read aloud.
     except Exception:  # noqa: BLE001 -- deliberate catch-all, see below
         # Anything else (a TTS failure, a socket error, a plain bug) used to
         # kill this task silently: the finally block below still recorded
@@ -560,9 +542,7 @@ async def run_turn(
         # turn_done. CancelledError (the stop button) is a BaseException and
         # deliberately NOT caught here -- stop must still cancel the turn.
         log.exception("turn failed with an unexpected error (reply cut off)")
-        # Something in the voice path may have died; make sure a worker task
-        # is not left behind holding clauses nobody will hear.
-        stream.abort()
+        to_speak = ""
     finally:
         # In `finally`, not just after the try block, so a stop-button
         # cancellation (asyncio.CancelledError, raised into whichever
@@ -571,29 +551,23 @@ async def run_turn(
         # said up to that point -- matching reality (she got cut off
         # mid-sentence) instead of silently dropping the whole turn.
         # CancelledError propagates on through after this, same as any
-        # other exception would through a finally block. The
-        # LLM-unreachable fallback line above is deliberately NOT added to
-        # reply_parts -- it was never really said by her, so it shouldn't
-        # end up looking like a real reply in history either.
+        # other exception would through a finally block. The failure card's
+        # words are never added: she never said them.
         final_text = reply_text(raw_text, stopped=isinstance(sys.exc_info()[1], asyncio.CancelledError))
         if final_text:
             history.append({"role": "assistant", "content": final_text})
             if temp_turn_flags is not None:
                 temp_turn_flags.append(temp_mode)
         else:
-            # Nothing usable came back (LLM unreachable and no fallback
-            # line ended up in reply_parts either, or stopped before a
-            # single chunk arrived) -- drop the dangling user turn rather
+            # Nothing usable came back (LLM unreachable, or stopped before a
+            # single token arrived) -- drop the dangling user turn rather
             # than leave a one-sided exchange in context for next time.
             history.pop()
             if temp_turn_flags is not None:
                 temp_turn_flags.pop()
         trim_history(history, temp_turn_flags)
-        # Stop-button cancellation and unexpected failures land here too; abort
-        # is idempotent and a no-op after a normal close().
-        stream.abort()
         arbiter.ARBITER.on_turn_finished()
-        LATENCY.finish(timings, clauses=len(reply_parts), spoken=len(spoken_parts))
+        LATENCY.finish(timings)
         # Awaiting here, inside `finally`, after a possible cancellation
         # above is safe: the cancellation that got us here already fired
         # once (at whichever `await` this task was sitting on), and
@@ -606,7 +580,7 @@ async def run_turn(
         # FR-MODE-4: a roleplay exchange never reaches transcript_log, so the memory
         # writer never distils a story into facts about the real user.
         log_id = None if roleplay else await log_transcript_turn(
-            user_text, " ".join(spoken_parts), temp_mode, speaker=companions.speaker_of(websocket)
+            user_text, apply_persona_pass(final_text) if final_text else "", temp_mode, speaker=companions.speaker_of(websocket)
         )
         # K1-00: the thread store records the exchange (user line, reply text, and
         # whether Stop cut it off, FR-C-2). Same "never fail the turn" rule as the
@@ -635,3 +609,4 @@ async def run_turn(
                     thread=thread_id,
                 )
             )
+    return to_speak

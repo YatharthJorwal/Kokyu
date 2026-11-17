@@ -1579,6 +1579,21 @@ button:disabled {
   opacity: 0.8;
 }
 
+/* An item with a small icon before its words (Read aloud, D-097) */
+.tray-menu .menu-with-icon {
+  justify-content: flex-start;
+  gap: 8px;
+}
+
+.menu-with-icon .icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.menu-with-icon .menu-state {
+  margin-left: auto;
+}
+
 .tray-section {
   margin: 6px 10px 2px;
   padding-top: 6px;
@@ -1642,19 +1657,25 @@ button:disabled {
 
 .screen-chip .chip-retry {
   color: var(--accent);
+  white-space: nowrap;
 }
 
-/* D-061: the voice server waking up (about a minute the first time) */
-.voice-chip.waking {
-  animation: voice-waking 1.6s ease-in-out infinite;
+/* D-097: her voice starting for Read aloud (about 47 s) */
+.voice-chip .icon {
+  flex: none;
 }
 
-@keyframes voice-waking {
+/* "starting", not "waking": .waking is the model loading strip's own class (D-096) */
+.voice-chip.starting {
+  animation: voice-starting 1.6s ease-in-out infinite;
+}
+
+@keyframes voice-starting {
   50% { opacity: 0.55; }
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .voice-chip.waking { animation: none; }
+  .voice-chip.starting { animation: none; }
 }
 
 /* ── the status heart (K1-05, FR-C-5) ──── */

@@ -3,7 +3,7 @@
 This module is the server only: the routes, the lifespan and the entry point (D-062).
 
 - session.py     one Session per window, a handler per protocol v1 message type
-- turns.py       one model turn, streamed and, with voice mode on, spoken
+- turns.py       one model turn, streamed; with Read aloud on, spoken once finished
 - ambient.py     the screen companions (Task Guide, OCR watch)
 - companions.py  a window's active companion: persona and voice, nothing more
 - boot.py        model warm-up once a window is up (D-060), stale-kernel takeover
@@ -35,7 +35,7 @@ import session
 import settings_file
 import shell_keys
 import waifus
-from audio import arbiter, tts, voice_mode
+from audio import arbiter, read_aloud, tts
 from config import CONFIG
 from memory import writer
 from router import listing as model_listing
@@ -73,7 +73,7 @@ async def _lifespan(_app: FastAPI) -> AsyncIterator[None]:
     yield
     boot_task.cancel()
     await writer.WRITER.stop(final_pass=True)
-    await voice_mode.VOICE.shutdown()
+    await read_aloud.READ_ALOUD.shutdown()
     tts.stop_server()
     # K1-01: a llama-server the router started must not outlive the kernel. A load
     # in progress is cancelled first, or it could start one after this.
@@ -170,7 +170,7 @@ async def shutdown_endpoint() -> dict:
     with contextlib.suppress(Exception):
         await asyncio.wait_for(router.get_router().shutdown(), timeout=8)
     with contextlib.suppress(Exception):
-        await voice_mode.VOICE.shutdown()
+        await read_aloud.READ_ALOUD.shutdown()
         tts.stop_server()
 
     sys.stdout.flush()

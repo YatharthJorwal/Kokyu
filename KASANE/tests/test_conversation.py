@@ -15,7 +15,7 @@ import prompting
 import router
 import turns
 import waifus
-from audio import tts, voice_mode
+from audio import tts
 from conversation import ConversationManager, Speaker, history_from
 from memory import recall, writer
 from senses import look_intent
@@ -680,7 +680,6 @@ def test_a_roleplay_thread_keeps_its_story_out_of_the_transcript_and_regenerates
     monkeypatch.setattr(turns, "drop_transcript_turn", recording_drop)
     monkeypatch.setattr(recall, "build_profile_context", card)
     monkeypatch.setattr(router, "stream_with_tools", recording)
-    monkeypatch.setattr(voice_mode.VOICE, "on", False)   # no delivery note in this test
     with kernel.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         thread = _new_roleplay(ws)

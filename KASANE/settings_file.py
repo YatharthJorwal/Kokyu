@@ -177,6 +177,10 @@ def change(saved: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
         for mode, on in (request["screen"] or {}).items():
             if mode in SCREEN and on is not None:
                 out.setdefault(mode, {})["on_at_start"] = bool(on)
+
+    if "read_aloud" in request:
+        # D-097: the composer's Read aloud, kept between restarts.
+        out.setdefault("tts", {})["read_aloud"] = bool(request["read_aloud"])
     return out
 
 

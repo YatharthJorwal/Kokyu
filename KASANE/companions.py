@@ -15,7 +15,7 @@ import paths
 import prompting
 import protocol
 import waifus
-from audio import tts, voice_mode
+from audio import read_aloud, tts
 from persona import FALLBACK_PERSONA
 
 log = logging.getLogger(__name__)
@@ -117,7 +117,7 @@ async def apply_switch(
     save_active_id(target.id)
     await send_waifu_state(websocket, registry)
     voice_params = voice_of(websocket)
-    if voice_params is not None and voice_mode.VOICE.speaking():
+    if voice_params is not None and read_aloud.READ_ALOUD.on:
         task = asyncio.create_task(tts.prewarm(voice_params))  # FR-S-3; never raises
         _background_tasks.add(task)
         task.add_done_callback(_background_tasks.discard)
