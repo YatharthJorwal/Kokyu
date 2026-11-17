@@ -65,7 +65,7 @@ async def synthesize_for(websocket: Any, spoken: str) -> bytes:
 LLM_UNREACHABLE_LINE = "Could not reach the model server. Is Ollama running?"
 
 
-LLM_SERVER_ERROR_LINE = "The model server answered with an error. The details are in logs/kernel.log."
+LLM_SERVER_ERROR_LINE = "The model server answered with an error. The details are in logs/kasane.log."
 
 
 LLM_TIMEOUT_LINE = "The model took too long to answer; it may still be loading. Try again in a moment."

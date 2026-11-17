@@ -6,7 +6,7 @@
 //
 // If a backend is already listening on 8780 it is reused, not duplicated. Ctrl+C asks the backend
 // to shut down gracefully (it finishes the session-end memory pass), then force-kills it if it
-// takes more than a few seconds. Backend output is also written to logs/kernel.log.
+// takes more than a few seconds. Backend output is also written to logs/kasane.log.
 import { spawn, spawnSync } from "node:child_process";
 import { createWriteStream, existsSync, mkdirSync } from "node:fs";
 import { dirname, join } from "node:path";
@@ -30,7 +30,7 @@ if (plan === "reuse") {
   say(`no Python at ${python}: starting the page only. Create the venv (see README) or run \`npm run doctor\`.`);
 } else {
   mkdirSync(join(root, "logs"), { recursive: true });
-  const logFile = createWriteStream(join(root, "logs", "kernel.log"), { flags: "w" });
+  const logFile = createWriteStream(join(root, "logs", "kasane.log"), { flags: "w" });
   const started = Date.now();
   backend = spawn(python, ["app.py"], {
     cwd: join(root, "KASANE"),
@@ -48,7 +48,7 @@ if (plan === "reuse") {
   }
   backend.on("error", (err) => say(`could not start the backend: ${err.message}`));
   backend.on("exit", (code) => {
-    if (!stopping) say(`the backend exited (code ${code}). See logs/kernel.log. The page keeps running; restart with \`npm run dev\`.`);
+    if (!stopping) say(`the backend exited (code ${code}). See logs/kasane.log. The page keeps running; restart with \`npm run dev\`.`);
   });
   // Tell the user when the page can actually talk to something.
   (async () => {

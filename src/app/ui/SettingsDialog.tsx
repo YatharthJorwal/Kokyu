@@ -14,6 +14,7 @@ import { modelLabel, type SettingsSection } from "../chat-state";
 import { formatSize, formatUsd } from "../models";
 import { actions, useChat } from "../store";
 import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
+import { version } from "../../../package.json";
 
 const SECTIONS: { id: SettingsSection; label: string }[] = [
   { id: "models", label: "Models" },
@@ -525,7 +526,11 @@ function AboutSection() {
   return (
     <>
       <h3>About</h3>
-      <p>Kōkyū: AI companions on your PC.</p>
+      <p>Kōkyū {version}: AI companions on your PC.</p>
+      <p className="muted">
+        Engine: KASANE. Kasane (重ね) are the layered robes of the Heian court; the engine layers each companion's
+        persona, the conversation's mode and her voice.
+      </p>
       <p className="muted">
         Your chats, memory and settings stay on this PC. Camera frames, microphone audio and screen captures never leave it;
         a message goes to an API model only when you pick one.

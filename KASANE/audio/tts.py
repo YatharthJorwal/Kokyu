@@ -8,7 +8,7 @@ tts.engine, same pattern as the LLM's config-driven backend choice.
   sounds robotic. Also used as an automatic fallback if the configured
   engine is "gpt_sovits" but its API server can't be reached, so a
   turn never goes silent just because that server isn't running -- the
-  real error goes to logs/kernel.log when this happens,
+  real error goes to logs/kasane.log when this happens,
   so "wrong voice came out" is diagnosable instead of a silent mystery --
   see synthesize() below.
 - "gpt_sovits": real cloned voice, via GPT-SoVITS's own API server

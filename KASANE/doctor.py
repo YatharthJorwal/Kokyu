@@ -143,12 +143,12 @@ def api_row(rt: Any) -> dict[str, Any]:
 async def report(rt: Any, cfg: Config | None = None) -> list[dict[str, Any]]:
     """Every check, in the panel's order. Never raises."""
     cfg = cfg or CONFIG
-    rows: list[dict[str, Any]] = [_row("kernel", "Engine", OK, f"Running (Python {platform.python_version()})")]
+    rows: list[dict[str, Any]] = [_row("kernel", "Engine (KASANE)", OK, f"Running (Python {platform.python_version()})")]
     try:
         running = rt.llamacpp_preset() if hasattr(rt, "llamacpp_preset") else None
         local, voice, gpu = await asyncio.gather(ollama_rows(cfg), voice_row(cfg), gpu_row(cfg, running))
         rows += [*local, llamacpp_row(cfg, running), voice, stt_row(cfg), gpu, api_row(rt)]
     except Exception as exc:  # noqa: BLE001 -- the panel must still say something
         log.warning(f"doctor: a check failed: {type(exc).__name__}: {exc}")
-        rows.append(_row("doctor", "Doctor", FAIL, f"A check could not run: {exc}", "See logs/kernel.log."))
+        rows.append(_row("doctor", "Doctor", FAIL, f"A check could not run: {exc}", "See logs/kasane.log."))
     return rows

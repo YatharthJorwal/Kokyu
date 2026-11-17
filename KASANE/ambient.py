@@ -160,7 +160,7 @@ async def run_task_guide_check(
         log.warning("task guide: check result didn't parse, skipping this check")
         return
     # Logged unconditionally (not just on drift) so the loop's actual
-    # cadence is visible in kernel.log without needing to wait for
+    # cadence is visible in kasane.log without needing to wait for
     # a real chide -- useful for confirming it's alive at all during
     # testing, or for tuning capture_interval_seconds against how often
     # checks are really landing.

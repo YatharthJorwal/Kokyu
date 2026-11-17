@@ -207,7 +207,7 @@ pub fn run() {
         .expect("error while running Kōkyū");
 }
 
-/// Starts the kernel as a hidden child, logging to logs/kernel.log (D-060). On its
+/// Starts the kernel as a hidden child, logging to logs/kasane.log (D-060, D-089). On its
 /// own thread, so the window never waits for the stale-port sweep or the spawn.
 /// The kernel starts everything else itself, when it is needed.
 ///
@@ -258,10 +258,10 @@ fn spawn_kernel_now(kernel: &Arc<Mutex<Option<Child>>>, pipe: &KernelPipe) {
         }
         cmd.env("KOKYU_KEY_PIPE", "1").stdin(Stdio::piped());
 
-        let log = match std::fs::File::create(logs_dir.join("kernel.log")) {
+        let log = match std::fs::File::create(logs_dir.join("kasane.log")) {
             Ok(file) => file,
             Err(e) => {
-                eprintln!("[kokyu] could not open logs/kernel.log: {e}");
+                eprintln!("[kokyu] could not open logs/kasane.log: {e}");
                 return;
             }
         };

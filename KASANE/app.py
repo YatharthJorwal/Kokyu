@@ -168,7 +168,7 @@ async def shutdown_endpoint() -> dict:
 if __name__ == "__main__":
     import uvicorn
 
-    # One line per event on stderr; the shell writes it to logs/kernel.log (R-13).
+    # One line per event on stderr; the shell writes it to logs/kasane.log (R-13).
     logging.basicConfig(level=logging.INFO, format="%(asctime)s %(levelname)s %(name)s: %(message)s", stream=sys.stderr)
 
     from memory import db as memory_db

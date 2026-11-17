@@ -284,7 +284,7 @@ async def stream_reply_with_tools(
     # not per chunk, so cheap enough to leave in rather than strip out
     # once this is confirmed working. Directly answers the question "did
     # Ollama even attempt this" the next time she doesn't use a tool she
-    # should have -- the log lines go to logs/kernel.log, not
+    # should have -- the log lines go to logs/kasane.log, not
     # anywhere the user would see them mid-conversation.
     tool_names = [
         t["function"]["name"]
