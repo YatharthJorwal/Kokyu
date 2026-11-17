@@ -18,24 +18,24 @@ The user tested UI-1 on their PC (2026-11-18): everything passed. They asked for
 3. `1562135` `speech.speakable(text, mode)`: fixed rules over the whole finished reply before TTS (blocks, lines, inline, the roleplay dialogue cut, the shared rules, a punctuation tidy). Pytest on the user's own example.
 4. `c29500e` **Read aloud** replaces voice mode: the `＋` menu item with a speaker icon, kept in settings.json, her voice (GPT-SoVITS) only while on, a chip counting to about 47 s. The turn streams text only; the session speaks the finished reply as its own task, in the voice of who wrote it. The spoken-delivery prompt layer is gone. Also fixed: the voice chip shared the bare class `waking` with D-096's loading strip.
 5. `6a254cf` **Dictation**: a mic button beside Send and F9 (changeable in Settings → Voice) record; faster-whisper on the CPU writes it down; the words go in at the caret, never sent. `requirements.txt` caps PyAV below 19 (PyAV 19 breaks faster-whisper 1.2.1; found when this machine's fresh install picked 19.0.2).
-
-A sibling session relayed a **task 10** from the user: a per-model context-length ("memory") slider; see §4 and `TODO.md` for whether it was finished.
+6. `b6e97c8`, `f9648b0` **Chat memory** (UI1-13, D-098): the user's task 10, relayed by a sibling session ("a memory configurator … a slider for tokens 8k till however far it goes … a brief warning when exceeding hardware limit"). A context-length slider per model under Effort; `context_fit.context_for(ref)` is the one value every Ollama request for the model, the history budget and llama.cpp's `-c` use; the fit point comes from Ollama's `model_info` (or the GGUF header) and the room on the GPU; past it a one-line warning, never a block (Ollama loads anyway, llama.cpp's refusal stands).
 
 ## 3. Where we stopped
 
-Tasks 1 to 9 are committed with their docs (D-097, SPEC, TODO, STATE, this file). **The branch did not push from the cloud session**: GitHub answered that Claude has no access to `YatharthJorwal/Kokyu` for the organization (HTTP 403). Nothing is half-done in the code. Untracked and staying so: `assets/premade/`, `.claude/`.
+Tasks 1 to 10 are committed with their docs (D-097, D-098, SPEC, TODO, STATE, this file). **The branch did not push from the cloud session**: GitHub answered that Claude has no access to `YatharthJorwal/Kokyu` for the organization (HTTP 403). As a fallback the session handed the user a git bundle of the branch (`kokyu-ui1-12.bundle`; it needs `ac987e1`, which `main` has): `git fetch <bundle> claude/trusting-galileo-6hmr3x:claude/trusting-galileo-6hmr3x`. Nothing is half-done in the code. Untracked and staying so: `assets/premade/`, `.claude/`.
 
 ## 4. Next session: start here
 
-1. Get the branch: if it reached GitHub, `git fetch origin claude/trusting-galileo-6hmr3x`; if not, the user fixes GitHub access for Claude (reconnect GitHub at claude.ai, or install the Claude GitHub App on the repo) and the cloud session pushes it.
+1. Get the branch: if it reached GitHub, `git fetch origin claude/trusting-galileo-6hmr3x`; else from the bundle (§3); else the user fixes GitHub access for Claude (reconnect GitHub at claude.ai, or install the Claude GitHub App on the repo) and the cloud session pushes it.
 2. `git status`, `git log -8 --oneline`, then `.\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt` (the PyAV cap) and `npm run check`.
-3. With the user, in the desktop app (`STATE.md` §5): Read aloud with Luna and Yuri, in a chat and a roleplay (the 47 s start, code and tables never spoken, only dialogue in a roleplay, Stop silences her, still on after a restart); F9 dictation (Windows may ask for the microphone); the tags' style; the letter animation; the slider's ends; the ⋯ hover.
-4. Ask the user to confirm or reverse D-097's assumed parts and D-092..D-095 (open question 10).
+3. With the user, in the desktop app (`STATE.md` §5): Read aloud with Luna and Yuri, in a chat and a roleplay (the 47 s start, code and tables never spoken, only dialogue in a roleplay, Stop silences her, still on after a restart); F9 dictation (Windows may ask for the microphone); Chat memory on the 9B (drag it, the reload, the warning past the mark, a reply at a large value); the tags' style; the letter animation; the slider's ends; the ⋯ hover.
+4. Ask the user to confirm or reverse the assumed parts of D-097 and D-098 and D-092..D-095 (open question 10).
 5. Ask whether the branch merges into `main` (never without their word), then Checkpoint UI-1, then UI-2 or K1b (D-085).
 
 ## 5. Traps
 
-- **Bare class names collide:** `.waking` is the model loading strip's (D-096); a modifier named the same on another element takes its width and margins. Prefix modifiers or check `grep -n '^\.name'` first.
+- **Bare class names collide:** `.waking` is the model loading strip's (D-096) and `.warn` the model chip's round badge; a modifier named the same on another element takes their size and colour (it happened twice this session). Check `grep -n '^\.name' src/app/*.css` first (CLAUDE.md §7).
+- Chat memory: every Ollama request must build its options with its model (`llm._ollama_options(model)`); a test fails on a bare `_ollama_options()`. A model's measured VRAM is forgotten when its context changes.
 - `test_vram`'s Windows-path test fails on Linux (backlog); `npm run check -- --skip-cargo` is red there for that alone.
 - In a cloud session the venv is not `.venv\Scripts`: set `KOKYU_PYTHON` to the interpreter, and keep it in the same shell command (environment variables do not carry between tool calls).
 - `ReadAloud.on` reads `CONFIG` at call time and `set()` rebuilds the config from the files: a test that installs a config by hand loses it at the next `set()`; put overrides in settings.json (`settings_file.write` + `apply_saved`). The conftest's `read_aloud_on` fixture turns it on for one test.

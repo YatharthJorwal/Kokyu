@@ -45,7 +45,8 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [x] UI1-09 Shell (D-094, FR-C-6) `cb24949`: one slim header (portrait chip, thread title, Temp toggle, window buttons), a split New button (Chat / Roleplay…), a sidebar context menu and pinning (`thread_pin`, schema 6), an empty state with her face and starter chips, toasts, in-app confirms instead of `window.confirm`
 - [x] UI1-10 Keyboard (D-095) `77af8c0`: Ctrl+N, Ctrl+K palette, Ctrl+comma, Esc stops a reply
 - [x] UI1-11 The user's notes of 2026-11-18 (D-096): Tauri crate and npm on 2.12 `514e5c6`; the effort slider dragged smoothly `3565673`; thinking beside her face with animated words, replies typed out, a compact loading strip `7203bb0`
-- [x] UI1-12 The user's notes of 2026-11-18, part two (D-097): "Waifu-mode-engaging" back, one slow letter lift, no slider end dots, a soft ⋯ hover `88ae626`; emotion tags shown like actions (FR-C-8) `510d629`; `speakable(text, mode)`, fixed rules before TTS (FR-V-2) `1562135`; Read aloud replaces voice mode, kept in settings.json, her voice only while on, the starting chip (FR-V-9) `c29500e`; dictation, the mic button and F9 into the input box, Settings → Voice, PyAV capped below 19 (FR-V-6) `6a254cf`
+- [x] UI1-12 The user's notes of 2026-11-18, part two (D-097): "Waifu-mode-engaging" back, one slow letter lift, no slider end dots, a soft ⋯ hover `88ae626`; emotion tags shown like actions (FR-C-8) `510d629`; `speakable(text, mode)`, fixed rules before TTS (FR-V-2) `1562135`; Read aloud replaces voice mode, kept in settings.json, her voice only while on, the starting chip (FR-V-9) `c29500e`; dictation, the mic button and F9 into the input box, Settings → Voice, PyAV capped below 19 (FR-V-6) `6a254cf`; docs `c7fd2e4`
+- [x] UI1-13 Chat memory (D-098, FR-M-13; the user's task 10, relayed): a context-length slider per model under Effort, 8K doubling to the model's maximum, kept in settings.json; every Ollama request, the history budget and llama.cpp's `-c` follow it; the fit point from Ollama's `model_info` or the GGUF header, a warning past it that never blocks `b6e97c8`, `f9648b0`
 - **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
 
 ## Phase UI-2: Design standard (D-086)
@@ -167,6 +168,11 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
   - a fold may start before `load_thread`'s model request;
   - Temp Chat lines in a roleplay can be folded into its summary;
   - `thread_list` sends full cards on every refresh.
+- D-098 follow-ups, none blocking:
+  - the picker's "fits" badge still uses the flat `vram.kv_mb_per_1k_ctx`; the fit point uses the model's real shape: use the shape for both;
+  - llm.py's length-stop diagnostics still name `llm.num_ctx`, not the model's Chat memory;
+  - a KV cache quantized with `OLLAMA_KV_CACHE_TYPE` is not read: the estimate assumes f16 (it leans high);
+  - check the fit point against a real load on the 9B, and whether a reply still works at a large value.
 - D-097 follow-ups, none blocking:
   - a system-wide dictation key (the Tauri global-shortcut plugin, with a THIRD-PARTY row);
   - PyAV bundles FFmpeg (LGPL): review before release (THIRD-PARTY.md);

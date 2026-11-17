@@ -23,7 +23,7 @@ The compact decision reference: what holds now, what is open, what was replaced.
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
 | 8 | D-057's per-launch WebSocket token. | K7 |
 | 9 | Delete `KASANE/vrm/` (C-1b, the user's action). | Nothing |
-| 10 | Assumed in autonomous mode, to confirm or reverse: D-092..D-095 (UI1-07..10), and D-097's assumed parts (the in-app dictation key, kept by the page; no delivery layer with Read aloud; a reply finished while her voice starts waits for it; Settings → Voice). | UI-1 checkpoint |
+| 10 | Assumed in autonomous mode, to confirm or reverse: D-092..D-095 (UI1-07..10), and D-097's assumed parts (the in-app dictation key, kept by the page; no delivery layer with Read aloud; a reply finished while her voice starts waits for it; Settings → Voice), and D-098's (the name Chat memory, its place under Effort, per model for every thread, Ollama loading past the fit point). | UI-1 checkpoint |
 
 ## In force
 
@@ -106,7 +106,7 @@ One loader owns the loaded chat model; a newer request cancels an older one. A f
 **D-064 Effort is data** · Accepted · User · 2026-11-15
 "whichever out of config/model is appropriate." Local levels in `config/models.yaml`, API levels from catalog tags; remembered per model per thread. An empty reply is an error.
 
-**D-065 VRAM manager v1** · Accepted · Claude · 2026-11-15
+**D-065 VRAM manager v1** · Accepted; amended by D-098 (an Ollama model past its Chat memory fit point loads anyway) · Claude · 2026-11-15
 GPU read from the driver, no Python package. Measured sizes beat estimates. The picker shows fits / won't fit; a load that will not fit is refused before anything unloads, naming what holds the memory. Amended by D-071, D-072.
 
 **D-071 *Unload X* on the graphics-memory card** · Accepted · User · 2026-11-15
@@ -295,6 +295,9 @@ UI1-10. Ctrl+N a new chat, Ctrl+K a palette, Ctrl+, Settings, Esc stops a reply.
 
 **D-097 Read aloud and dictation replace voice mode; tags shown; UI notes** · Accepted · User, with Assumed parts · 2026-11-18
 The user's notes. Voice mode goes. **Read aloud** (speaker icon, `＋` menu) speaks each finished reply in Chat and Roleplay, kept in settings.json; GPT-SoVITS starts only while it is on, and the window shows it starting (about 47 s). What is said passes one deterministic `speakable(text, mode)`, **no second model**, as agreed with the user: one would add delay, compete for graphics memory (D-072) and could change her words. **Dictation:** a mic button and F9 (changeable in Settings) fill the input box, never send; STT stays on the CPU. Her `[emotion]` tags stay in the text for the Luna and Yuri shells and show like actions. "Waifu-mode-engaging" returns, the one approved D-082 exception. Assumed: the key works in-app only and the page keeps it (D-073 style); no spoken-delivery prompt layer; a reply waits while her voice starts; a Voice section in Settings. Live speech-to-speech comes later. Supersedes D-061; amends D-082, D-096.
+
+**D-098 Chat memory: a context length per model** · Accepted · User, with Assumed parts · 2026-11-18
+"add a memory configurator … a slider for tokens 8k till however far it goes for its respective model. show a brief warning when exceeding hardware limit" (relayed by a sibling session). It is the context length. Assumed: in the picker under Effort, named **Chat memory** (Settings → Memory keeps her saved facts); detents 8K doubling to the model's maximum, plus the maximum; per model for every thread, in settings.json; untouched, `llm.num_ctx`. One value per model reaches every request, the history budget and llama.cpp's `-c`. Local models: the fit point is estimated from Ollama's `model_info` or the GGUF header (weights, KV cache, margin) against the room the model would have; past it, one line warns, never blocks: Ollama loads anyway and spills to RAM (amends D-065), llama.cpp's refusal stands. API models: a cost note, no hardware warning. Amends FR-M rows; adds FR-M-13.
 
 ## Superseded
 

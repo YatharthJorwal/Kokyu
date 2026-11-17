@@ -61,7 +61,7 @@ The `KASANE/` folder is on `sys.path` and modules import each other by top-level
 | `settings_file.py` | `settings.json` over `config.yaml`, applied live (D-070). |
 | `config.py`, `check.py` | The config loader (code defaults, YAML, the settings overlay, API key lookup); `check.py` checks config, key, catalog and spend from the command line. |
 | `paths.py` | Every filesystem location (dev `./data`, packaged `%APPDATA%\Kokyu`, `KOKYU_DATA_DIR` for tests). |
-| `llm.py`, `context_budget.py` | The Ollama client (native and OpenAI-compatible wire formats, capability reports, load and unload); keeping every call inside the model's context window. |
+| `llm.py`, `context_budget.py`, `context_fit.py` | The Ollama client (native and OpenAI-compatible wire formats, capability reports, `model_info`, load and unload); keeping every call inside the model's context window; Chat memory (D-098): `context_for(ref)`, the one context a model runs with, the KV-cache estimate, the fit point, a GGUF header reader. |
 | `provider_presets.py`, `shell_keys.py` | The named API endpoints: AI Router, OpenRouter, DeepSeek (D-037); API keys handed over by the shell (D-059). |
 | `bus.py` | An in-process typed event bus with a `trust` field. No kernel module uses it yet; only its tests. |
 | `router/` | The only way to a model: `decision.py` (pure rules), providers (`ollama_native`, `llamacpp`, `airouter`), `capabilities.py` (effort), `discovery.py` (API catalog), `listing.py` (picker rows, load check), `budget.py`, `audit.py`, `redact.py`, `model_ref.py`. |
@@ -152,6 +152,7 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `thread_updated` | K→C | The open thread's row after a change of model, effort or Temp Chat |
 | `thread_message` | K→C | One stored line added outside a turn: a companion-change divider (FR-S-2), a screen remark |
 | `set_model`, `set_effort`, `set_temp` | C→K | The thread's model ref and effort (FR-M-5, FR-M-8); Temp Chat on or off (FR-MEM-5) |
+| `set_context` | C→K | A model's Chat memory (`ref`, `tokens`, null for the default), for every thread, kept in `settings.json`; the model in memory reloads with it; every window gets a new `model_list` (D-098, FR-M-13) |
 | `model_list` | both | The picker's rows, local and API, with the spend footer; `refresh` re-fetches the catalog (FR-M-3, 4, 7) |
 | `model_load`, `model_unload` | C→K | Try again after a failed load; *Unload X* on the graphics-memory card, then try again (D-071) |
 | `model_status` | K→C | The chat model's load state: idle, loading, ready, failed (FR-M-6, D-054) |
@@ -224,6 +225,7 @@ A role is a capability slot in `config.yaml` `roles`. A `local_only` role whose 
 
 - **One chat model in memory** (D-072). Picking an Ollama model stops `llama-server` and unloads every other Ollama model except the embedding model. Picking a llama.cpp model unloads Ollama's models except the embedding model. Picking an API model frees both. With an Ollama model picked, `classifier`, `memory_writer` and `vision` run on it (`router/decision.py` `FOLLOW_PICKED`); otherwise they load for their call.
 - **VRAM check before a load** (D-065). `vram.py` reads the GPU through NVML (the driver's `nvml.dll`), else `nvidia-smi`, else "unknown". It remembers what each model really took. `router/listing.py` `load_check` refuses a local model that would not fit beside the embedding model once the other chat model is gone, and names what holds the memory. An unknown answer never refuses.
+- **Chat memory** (D-098, FR-M-13). `context_fit.context_for(ref)` is the context a model runs with: its `llm.context_by_model` entry (settings.json, the picker's slider), else `llm.num_ctx` (a llama.cpp preset: its `ctx`). Every Ollama request for that model (`llm._ollama_options(model)`, helpers on the picked model included), the history budget (`turns.fit_for_llm`) and llama-server's `-c` use it. A model row's `context` carries the maximum (Ollama `/api/show` `model_info`, asked once per digest; a preset's GGUF header; the API catalog), the value and the fit point: the longest context whose weights, KV cache (layers holding attention x KV heads x (key + value length) x 2 bytes at f16) and a margin fit the room the model would have. Past the fit point the picker warns; `load_check` lets an Ollama model load anyway when the usual `num_ctx` would fit (Ollama keeps the rest in RAM), and llama.cpp's refusal stands. A change forgets the model's measured size.
 - **Measured on the dev PC:** Qwen3.6-35B-A3B Q4 on llama.cpp with every expert in RAM takes about 3 GB VRAM and 19.5 GB RAM (`docs/STATE.md`). GPT-SoVITS and the renderer are not measured yet.
 
 ### 7.4 Model names (D-084, FR-M-12)

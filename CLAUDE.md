@@ -74,7 +74,7 @@ KASANE/               Python kernel. Flat modules; the folder is on sys.path (`i
   model_loader.py  vram.py   loading the chat model; GPU memory and the check before a load (D-065, D-072)
   doctor.py           Settings → Doctor checks (D-067)
   settings_file.py    settings.json over config.yaml, applied live (D-070)
-  llm.py  config.py  paths.py  persona.py  bus.py  context_budget.py  provider_presets.py  shell_keys.py  check.py
+  llm.py  config.py  paths.py  persona.py  bus.py  context_budget.py  context_fit.py  provider_presets.py  shell_keys.py  check.py
   router/             decide(), roles, providers, catalog, budget, audit, redaction, listing for the picker
   memory/             shared facts, recall, writer, consolidation, the viewer's backend
   audio/              speech (speakable, DialogueFilter), read_aloud, tts, stt (dictation), arbiter, vad
@@ -136,6 +136,7 @@ npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest 
 - **Where things live:** a message handler is `Session.on_<type>`; adding a message type means a `protocol/` model, a `CLIENT_TYPES` entry, `src/net/protocol.ts` and one `on_<type>` (a test checks the handler exists). `turns.run_turn` must never mention a waifu (a test enforces it).
 - **Edits:** single-match replacements in a Python script (`assert s.count(old) == 1`, normalize CRLF). **Never bulk-replace** (it once replaced every "a" with "w" in five files). The Bash tool refuses some heredocs with `${…}` or triple quotes: write the script to a file, then run it.
 - **Vite can keep a stale transform** of a briefly empty file: restart the preview.
+- **Bare CSS class names collide:** `.waking` is the loading strip and `.warn` the model chip's round badge, so a modifier with either name on another element inherits their size and colour. Check `grep -n '^\.name' src/app/*.css` before naming one.
 - **The model popover's lists are CSS grids with subgrid rows** (check, name, meta, fit, badges); a new row element must keep the five cells.
 - **`build_premade.py --force` rebuilds a pack from its sources**; it carries over only the hand-written `about` and `persona.md` (with its pointer). Anything else edited by hand in `waifu.yaml` is lost.
 - `WinError 10048` on startup: a leftover `python.exe` holds the port.
