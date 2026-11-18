@@ -2,39 +2,37 @@
 
 **Read this at the start of every session; rewrite it at the end.** Short by design (D-076): status is in `STATE.md`, the plan in `TODO.md`, decisions in `DECISIONS.md`. If the date is old, trust `git log` and ask the user.
 
-- **Last updated:** 2026-11-18, session 6
-- **Written by:** Claude (a cloud session, autonomous mode, the user asleep)
+- **Last updated:** 2026-11-18, session 7
+- **Written by:** Claude (desktop app, with the user)
 
 ## 1. How the user works
 
-A solo developer who wants direct commands, no manual file shuffling, phases with checkpoints, and honesty about what was verified. They want a clean, fast, flexible codebase and an uncluttered tree. They watch the browser pane, send short UI notes mid-task, and often say "continue while I'm away" (that is autonomous mode: CLAUDE.md §2). They run other Claude sessions in parallel and test builds on their own PC. They push, or tell Claude to push. Kōkyū is primarily a **roleplay character app** to them (D-079).
+A solo developer who wants direct commands, no manual file shuffling, phases with checkpoints, and honesty about what was verified. They want a clean, fast, flexible codebase and an uncluttered tree. They watch the browser pane, send short UI notes mid-task (often with c.ai screenshots: c.ai is their model for roleplay UX, minus like/dislike/report), and often say "continue while I'm away" (that is autonomous mode: CLAUDE.md §2). They run other Claude sessions in parallel and test builds on their own PC. They push, or tell Claude to push. Kōkyū is primarily a **roleplay character app** to them (D-079).
 
-## 2. What happened in session 6
+## 2. What happened in session 7
 
-The user tested UI-1 on their PC (2026-11-18): everything passed. They asked for polish items and a voice rework; the earlier session agreed the shape with them (D-097). This session built it on the branch `claude/trusting-galileo-6hmr3x` (cut from `main` at `ac987e1`, since merged into `main`), one commit per item (TODO UI1-12):
+Session 6's work (UI1-12..14) was already on `main` at `40f3fa9`; HANDOFF was brought up to date (`c7d0359`). Then two rounds of the user's notes:
 
-1. `88ae626` "Waifu-mode-engaging" back (the one approved exception to D-082); the thinking word's letters now share one slow ease-in-out lift (their two animations fought over `transform`, and the word's 2.4 s remount cut late letters mid-lift); the effort slider's end dots gone (6 px `.effort-stop` circles in near-black ink, half outside the track's caps); the ⋯ hover in the conversation list no longer a hard square (the row lit on `.thread-item:hover`, which ends on the sibling button).
-2. `510d629` Her `[emotion]` tags shown muted and italic like `*actions*`, in Chat and Roleplay; never links, `[1]`, `[x]`, `items[index]` or code.
-3. `1562135` `speech.speakable(text, mode)`: fixed rules over the whole finished reply before TTS (blocks, lines, inline, the roleplay dialogue cut, the shared rules, a punctuation tidy). Pytest on the user's own example.
-4. `c29500e` **Read aloud** replaces voice mode: the `＋` menu item with a speaker icon, kept in settings.json, her voice (GPT-SoVITS) only while on, a chip counting to about 47 s. The turn streams text only; the session speaks the finished reply as its own task, in the voice of who wrote it. The spoken-delivery prompt layer is gone. Also fixed: the voice chip shared the bare class `waking` with D-096's loading strip.
-5. `6a254cf` **Dictation**: a mic button beside Send and F9 (changeable in Settings → Voice) record; faster-whisper on the CPU writes it down; the words go in at the caret, never sent. `requirements.txt` caps PyAV below 19 (PyAV 19 breaks faster-whisper 1.2.1; found when this machine's fresh install picked 19.0.2).
-6. `b6e97c8`, `f9648b0` **Chat memory** (UI1-13, D-098): the user's task 10, relayed by a sibling session ("a memory configurator … a slider for tokens 8k till however far it goes … a brief warning when exceeding hardware limit"). A context-length slider per model under Effort; `context_fit.context_for(ref)` is the one value every Ollama request for the model, the history budget and llama.cpp's `-c` use; the fit point comes from Ollama's `model_info` (or the GGUF header) and the room on the GPU; past it a one-line warning, never a block (Ollama loads anyway, llama.cpp's refusal stands).
-7. `d65feec` **A message read aloud on request** (UI1-14, D-099, FR-V-10), on `main`: "add a speaker icon next to each of her message bubble so selected message can be read aloud even when automatic mode is off". A speaker after Copy in her messages' hover bar reads that message through `speakable` (the thread's mode), in the voice of who wrote it; clicked again it stops. With Read aloud off her voice starts just for it (`ReadAloud.ready(once)`, the tooltip says about 47 s) and idles afterwards. Protocol: `speak_message`, `speak_stop` (never stops a reply being written), `spoken`. One reading at a time.
+1. `cd872b5` **A message's ⋯ card** (UI1-15, D-100): ⋯ beside every bubble (left of the user's, right of hers) opens a card with the time and model, Copy, Edit (last line), Rewind to here (not on the latest), Pin (roleplay only) and New chat from here (both modes, same mode). Regenerate sits under her latest reply with c.ai-style swipes (‹ n/m ›). The speaker moved next to her name. Pins (max `story.max_pins`, 10) go in her per-turn note and never reach `memory.db`. The sidebar got a hide button and an All / Chats / Roleplays filter. The engine now sends `exchange_saved` before `turn_done`, so a live message carries its stored id.
+2. `9597652` **A roleplay keeps its character; the story tray** (UI1-16, D-101): in a roleplay her chip opens her profile and the engine refuses a switch ("start a new chat"). The paperclip becomes a book: History (a page of every roleplay with her), New chat (the story again from its card), Memory (a box she keeps in mind every turn, up to 1000 characters, a `threads.note` column, schema 7, with the story's pins listed and Unpin), then Upload file and Read aloud; no screen companions. Settings → Voice's switch now says Off or On. Also the D-100 review fixes: a pin carried by Regenerate quotes the new text at once; rewinding to a user line drops its transcript row; a chat swipe re-logs the shown reply for the memory writer; no pin during a turn.
 
 ## 3. Where we stopped
 
-UI1-12, UI1-13 and UI1-14 are committed with their docs (D-097, D-098, D-099, SPEC, TODO, STATE). The branch is merged and **everything is pushed: `main` = `origin/main` at `40f3fa9`**. The bundle and the 403 workaround of the cloud session are no longer needed. UI-1 is code-complete; nothing is half-done in the code. Last check (`d65feec`): `npm run check -- --skip-cargo` green except the Windows-only `test_vram` test on Linux; audio and the desktop app not run. Untracked and staying so: `assets/premade/`, `.claude/`.
+UI1-15 and UI1-16 are committed with their docs (D-100, D-101, SPEC, TODO, STATE) and **pushed: `main` = `origin/main`**. Last check: `npm run check` green on this PC (see the commit body for what ran). Verified in the browser pane with injected state (no kernel): the card on both sides, swipes, the pin mark, the filter, hide and show, the story tray, History, Memory with a pin, the locked chip. **Not run in the desktop app with a real model.** Untracked and staying so: `assets/premade/`, `.claude/`.
 
 ## 4. Next session: start here
 
-1. `git pull` if needed (`main` at `40f3fa9` or later).
-2. `git status`, `git log -8 --oneline`, then `.\.venv\Scripts\python.exe -m pip install -r KASANE\requirements-dev.txt` (the PyAV cap) and `npm run check`.
-3. With the user, in the desktop app (`STATE.md` §5): Read aloud with Luna and Yuri, in a chat and a roleplay (the 47 s start, code and tables never spoken, only dialogue in a roleplay, Stop silences her, still on after a restart); the speaker on one of her messages with Read aloud off (her voice starts first, her own voice, a second click stops it); F9 dictation (Windows may ask for the microphone); Chat memory on the 9B (drag it, the reload, the warning past the mark, a reply at a large value); the tags' style; the letter animation; the slider's ends; the ⋯ hover.
-4. Ask the user to confirm or reverse the assumed parts of D-097, D-098 and D-092..D-095 (open question 10).
-5. Checkpoint UI-1 (the user signs off), then UI-2 or K1b (D-085); a new phase only on their word.
+1. `git status`, `git log -8 --oneline`, `npm run check`.
+2. With the user, in the desktop app (`STATE.md` §5): the ⋯ card on both sides, Regenerate and swiping back, Rewind, New chat from here in a chat and a roleplay, pins reaching her (ask her about a pinned fact), the roleplay chip, the book tray's History / New chat / Memory (save a note, then see her follow it), the sidebar hide and filter, the Read aloud switch; plus session 6's list still unchecked there.
+3. Ask the user to confirm or reverse the assumed parts of D-097, D-098, D-092..D-095 and Claude's parts of D-100 (10 pins) and D-101 (Memory per story, 1000 characters, Upload file and Read aloud kept in the tray).
+4. Checkpoint UI-1 (the user signs off), then UI-2 or K1b (D-085); a new phase only on their word.
 
 ## 5. Traps
 
+- **A socket test waiting on a frame that never comes hangs the whole suite** (there is no pytest timeout): when a handler starts refusing something (D-101's roleplay switch), find every test that sends it (`grep -rn switch_waifu KASANE/tests`). Run a suspect suite as `timeout 900 npm run check`.
+- **A zustand selector must not build a new array or object** (`useChat((s) => s.messages.filter(...))`): it re-renders forever and blanks the page. Select the slice, then filter outside (StoryDialog's Memory page).
+- **Stored message ids reach the window in `exchange_saved`**, sent before `turn_done`; a live message without it has only a local key, and the ⋯ card's actions need the id (D-100).
+- A fake thread in a test (`SimpleNamespace(...)`) needs every field `start_turn` reads, now including `note`.
 - **Bare class names collide:** `.waking` is the model loading strip's (D-096) and `.warn` the model chip's round badge; a modifier named the same on another element takes their size and colour (it happened twice this session). Check `grep -n '^\.name' src/app/*.css` first (CLAUDE.md §7).
 - Chat memory: every Ollama request must build its options with its model (`llm._ollama_options(model)`); a test fails on a bare `_ollama_options()`. A model's measured VRAM is forgotten when its context changes.
 - `test_vram`'s Windows-path test fails on Linux (backlog); `npm run check -- --skip-cargo` is red there for that alone.

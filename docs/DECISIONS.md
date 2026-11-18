@@ -302,6 +302,12 @@ The user's notes. Voice mode goes. **Read aloud** (speaker icon, `＋` menu) spe
 **D-099 Read one message aloud on request** · Accepted · User · 2026-11-18
 "add a speaker icon next to each of her message bubble so selected message can be read aloud even when automatic mode is off". A speaker in her messages' hover bar reads that message now, through `speakable` (the thread's mode), in the voice of the companion who wrote it, Read aloud on or off; clicked again it stops. With Read aloud off her voice starts for it (the button says so) and idles afterwards as usual. One reading at a time; a new line, Stop or another thread ends it; stopping a reading never stops a reply being written.
 
+**D-100 A message's ⋯ card, swipes, roleplay pins; sidebar hide and filter** · Accepted · User, with Claude's parts · 2026-11-18
+The user's notes, with c.ai screenshots. The hover bar goes: a ⋯ beside each bubble (left of the user's) opens a card: Copy, Edit (last line), Rewind to here (not on the newest; asks; deletes what follows, a chat's transcript rows and a story summary past it), Pin (roleplay only, "roleplays never affect normal chat"; always in her per-turn note, never memory.db), New chat from here (both modes; a copy up to that message). Her speaker sits by her name. Under her latest reply: Regenerate and ‹ n/m › swipes; Regenerate keeps the old replies, an edited line starts over. No like, dislike or report: "we arent selling our own ai model". The sidebar gets a hide button and All / Chats / Roleplays. Claude's: 10 pins per story (`story.max_pins`), the card's order and icons, the copy's title, the hidden flag kept by the page.
+
+**D-101 A roleplay keeps its character; the story tray** · Accepted · User, with Claude's parts · 2026-11-18
+The user's notes, with a c.ai screenshot. "in a roleplay, the character cannot be changed. start a new chat if user wants to": the chip opens her profile and the engine refuses a switch. In a roleplay the paperclip becomes a book opening the story tray: History (a page listing every roleplay with her), New chat (the story again from its card), Memory (a box the user writes, in her note every turn, with the story's pinned messages listed); "no ocr watch and task guide". Claude's: Memory is per story (c.ai's is per chat) and up to 1000 characters; Upload file and Read aloud stay in the tray; History lists the roleplays the window knows (the newest 200). Settings → Voice's switch now says Off or On.
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)
