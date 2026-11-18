@@ -382,6 +382,7 @@ class StoryConfig:
     summarize_every: int = 12   # fold once this many older messages are waiting
     keep_recent: int = 4        # the newest messages are never folded (at least 2: Regenerate's exchange)
     max_chars: int = 2400       # the summary's cap, cut at a sentence end
+    max_pins: int = 10          # pinned messages per roleplay thread, always in her prompt (D-100)
 
 
 @dataclass(frozen=True)

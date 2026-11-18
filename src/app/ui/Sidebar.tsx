@@ -6,6 +6,8 @@
 // (K1c-08; FR-MODE-6, 7). UI1-09: New is a split button (Chat, or Roleplay… from
 // its arrow), and each conversation has a menu (right-click, or its ⋯ button):
 // Pin, Rename, Delete (asked in the window first). Pinned ones list first (D-094).
+// D-100: a button at the top hides the sidebar (the top bar brings it back), and a
+// filter under the search shows all conversations, only chats or only roleplays.
 
 import { useEffect, useRef, useState, type KeyboardEvent, type MouseEvent } from "react";
 
@@ -59,13 +61,22 @@ function NewButton({ disabled }: { disabled: boolean }) {
 
 const SEARCH_DELAY_MS = 250;
 
-export function Sidebar() {
+type Filter = "all" | "chat" | "roleplay";
+const FILTERS: { value: Filter; label: string; none: string }[] = [
+  { value: "all", label: "All", none: "No conversations yet." },
+  { value: "chat", label: "Chats", none: "No chats yet." },
+  { value: "roleplay", label: "Roleplays", none: "No roleplays yet." },
+];
+
+export function Sidebar({ onHide }: { onHide: () => void }) {
   const threads = useChat((s) => s.threads);
   const search = useChat((s) => s.search);
   const roster = useChat((s) => s.roster);
   const busy = useChat((s) => s.turn !== "idle");
   const connection = useChat((s) => s.connection);
   const [query, setQuery] = useState("");
+  const [filter, setFilter] = useState<Filter>("all");
+  const shown = (list: ThreadInfo[]) => (filter === "all" ? list : list.filter((t) => t.mode === filter));
 
   // Search as the user types, a moment after they stop.
   useEffect(() => {
@@ -75,13 +86,18 @@ export function Sidebar() {
   }, [query]);
 
   const searching = query.trim() !== "";
-  const results = searching && search?.query === query.trim() ? search.threads : null;
+  const found = searching && search?.query === query.trim() ? search.threads : null;
+  const results = found && shown(found);
+  const listed = shown(threads);
 
   return (
     <aside className="sidebar" aria-label="Conversations">
       <div className="brand">
         <img className="brand-mark" src="/favicon.png" alt="" />
         <span className="brand-name">Kōkyū</span>
+        <button type="button" className="sidebar-toggle" aria-label="Hide the sidebar" title="Hide the sidebar" onClick={onHide}>
+          <Icon name="sidebar" size={18} />
+        </button>
       </div>
 
       <NewButton disabled={busy || connection !== "online"} />
@@ -107,6 +123,21 @@ export function Sidebar() {
         />
       </label>
 
+      <div className="thread-filter" role="radiogroup" aria-label="Show">
+        {FILTERS.map((f) => (
+          <button
+            key={f.value}
+            type="button"
+            role="radio"
+            aria-checked={filter === f.value}
+            className={filter === f.value ? "on" : undefined}
+            onClick={() => setFilter(f.value)}
+          >
+            {f.label}
+          </button>
+        ))}
+      </div>
+
       <nav className="history" aria-label="History">
         {searching ? (
           results === null ? (
@@ -116,10 +147,10 @@ export function Sidebar() {
           ) : (
             <ThreadList threads={results} roster={roster} busy={busy} />
           )
-        ) : threads.length === 0 ? (
-          <p className="muted small">No conversations yet.</p>
+        ) : listed.length === 0 ? (
+          <p className="muted small">{FILTERS.find((f) => f.value === filter)?.none}</p>
         ) : (
-          groupThreads(threads, Date.now()).map((g) => (
+          groupThreads(listed, Date.now()).map((g) => (
             <section key={g.name} aria-label={g.name}>
               <h3 className="group-head">{g.name}</h3>
               <ThreadList threads={g.threads} roster={roster} busy={busy} />

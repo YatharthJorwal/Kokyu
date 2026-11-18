@@ -9,12 +9,19 @@ import { getCurrentWindow } from "@tauri-apps/api/window";
 
 import { actions, useChat } from "../store";
 import { CompanionChip } from "./CompanionChip";
+import { Icon } from "./Icon";
 
-export function TopBar() {
+/** `onShowSidebar`: the sidebar is hidden (D-100); this button brings it back. */
+export function TopBar({ onShowSidebar }: { onShowSidebar?: () => void }) {
   const desktop = isTauri();
   const title = useChat((s) => (s.thread ? s.thread.title || (s.thread.mode === "roleplay" ? "New story" : "New chat") : ""));
   return (
     <header className={desktop ? "top-bar framed" : "top-bar"} data-tauri-drag-region>
+      {onShowSidebar ? (
+        <button type="button" className="sidebar-toggle" aria-label="Show the sidebar" title="Show the sidebar" onClick={onShowSidebar}>
+          <Icon name="sidebar" size={18} />
+        </button>
+      ) : null}
       <CompanionChip />
       <span className="top-bar-title" data-tauri-drag-region title={title || undefined}>
         {title}

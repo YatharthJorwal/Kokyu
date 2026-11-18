@@ -50,12 +50,13 @@ log = logging.getLogger(__name__)
 Saver = Callable[[str, str, bool, dict[str, Any]], Awaitable[None]]
 
 # Only the driving window may start a turn; another one is told why (D-062).
-DRIVER_ONLY = frozenset({"send", "send_file", "regenerate"})
+DRIVER_ONLY = frozenset({"send", "send_file", "regenerate", "message_rewind", "message_swipe", "message_pin"})
 
 BUSY = "Wait for the reply to finish, or press Stop."
 NO_THREADS = "Conversation history is unavailable right now."
 NO_SCENARIOS = "Saved scenarios are unavailable right now."
 GONE = "That conversation no longer exists."
+NO_MESSAGE = "That message is no longer in this conversation."
 
 
 class Session:
@@ -78,6 +79,8 @@ class Session:
         # The open roleplay thread's story summary (FR-MODE-5), kept here so a turn
         # starts without a database read; story.KEEPER tells us when it changes.
         self.story_summary = ""
+        # The open roleplay thread's pinned messages as prompt lines (D-100).
+        self.pins: list[str] = []
         # The turn in flight runs as its own task, so the receive loop still reads Stop.
         self.turn: asyncio.Task | None = None
         # Read aloud (D-097): the finished reply being spoken, its own task so the user
@@ -319,12 +322,8 @@ class Session:
             except Exception as exc:  # noqa: BLE001 -- the story still plays without its summary
                 log.warning(f"could not read the story summary: {exc}")
             self.keep_story(thread)
-        messages = await self.manager.messages(thread.id)
-        await self.ws.send_json(
-            protocol.frame(
-                "thread_opened", {"thread": thread.to_dict(), "messages": [m.to_dict() for m in messages]}, thread=thread.id
-            )
-        )
+        await self.load_pins()
+        await self.send_thread_messages()
         await self.send_thread_list()
         # K1-10: the thread's model loads after a short pause, so clicking through
         # threads does not start a load per click. Only the driver loads: an observer
@@ -333,6 +332,26 @@ class Session:
         if load and hub.drives(self.ws) and boot.loads_without_asking(wanted_ref):
             model_loader.LOADER.request(wanted_ref, delay_s=CONFIG.chat.load_delay_s)
         await self.ws.send_json(protocol.frame("model_status", model_loader.LOADER.status()))
+
+    async def send_thread_messages(self) -> None:
+        """The open thread with all its messages, as the window shows it."""
+        messages = await self.manager.messages(self.thread.id)
+        await self.ws.send_json(
+            protocol.frame(
+                "thread_opened",
+                {"thread": self.thread.to_dict(), "messages": [m.to_dict() for m in messages]},
+                thread=self.thread.id,
+            )
+        )
+
+    async def load_pins(self) -> None:
+        """D-100: pins exist only in a roleplay; a chat thread has none."""
+        self.pins = []
+        if self.in_roleplay():
+            try:
+                self.pins = conversation.pin_lines(await self.manager.pins(self.thread.id))
+            except Exception as exc:  # noqa: BLE001 -- the story still plays without its pins
+                log.warning(f"could not read the pinned messages: {exc}")
 
     async def switch_companion(self, target_id: str) -> None:
         """A companion switch plus the thread's divider line (FR-S-2)."""
@@ -367,15 +386,17 @@ class Session:
 
     # ── turns ───────────────────────────────────────────────────────────────
 
-    def saver(self) -> Saver | None:
-        """Stores the exchange in the thread the turn started in."""
+    def saver(self, reply_meta: dict[str, Any] | None = None, line_meta: dict[str, Any] | None = None) -> Saver | None:
+        """Stores the exchange in the thread the turn started in, and tells the window
+        the stored messages before turn_done, so every message it shows has its id
+        (D-100). `reply_meta` and `line_meta` carry a swipe's candidates and pins."""
         thread = self.thread
         if thread is None:
             return None
 
         async def save(user_text: str, reply: str, stopped: bool, meta: dict[str, Any]) -> None:
-            meta = dict(meta)
-            await self.manager.record_exchange(
+            meta = {**dict(meta), **(line_meta or {})}
+            user, saved = await self.manager.record_exchange(
                 thread.id,
                 user_text,
                 reply,
@@ -386,7 +407,16 @@ class Session:
                 tokens_in=meta.pop("tokens_in", None),
                 tokens_out=meta.pop("tokens_out", None),
                 meta=meta,
+                reply_meta=reply_meta,
             )
+            with contextlib.suppress(Exception):
+                await self.ws.send_json(
+                    protocol.frame(
+                        "exchange_saved",
+                        {"user": user.to_dict(), "reply": saved.to_dict() if saved is not None else None},
+                        thread=thread.id,
+                    )
+                )
             await self.send_thread_list()
             # FR-MODE-5: fold older scenes once the model is free. The store's row
             # decides (story.KEEPER re-reads mode and Temp Chat), not this snapshot.
@@ -395,10 +425,16 @@ class Session:
 
         return save
 
-    def replacing(self, old_ids: list[int], old_log_id: int | None) -> Saver | None:
+    def replacing(
+        self,
+        old_ids: list[int],
+        old_log_id: int | None,
+        reply_meta: dict[str, Any] | None = None,
+        line_meta: dict[str, Any] | None = None,
+    ) -> Saver | None:
         """Regenerate's saver: the old exchange gives way only once a new reply exists,
         so a failure or a Stop before the first word loses nothing (K1-04)."""
-        save = self.saver()
+        save = self.saver(reply_meta, line_meta)
         thread = self.thread
         if save is None or thread is None:
             return None
@@ -435,6 +471,7 @@ class Session:
             **self.thread_model(),
             mode=mode,
             story=self.turn_story(),
+            pins=self.pins if mode == "roleplay" else None,
         )
         self.turn = asyncio.create_task(self._then_switch(turn, mode))
 
@@ -521,15 +558,113 @@ class Session:
                 return
             again = msg.data.text
         old_log_id = old_meta.get("log_id")
+        # D-100: Regenerate is a swipe: the old reply stays as a candidate to swipe back
+        # to. An edited line starts over. A pin stays on its line and on the reply.
+        reply_meta: dict[str, Any] = {}
+        old_reply = await self.manager.message(self.thread.id, old_ids[1]) if len(old_ids) == 2 else None
+        if old_reply is not None and msg.data.text is None:
+            reply_meta = conversation.next_swipe(old_reply)
+        if old_reply is not None and old_reply.meta.get("pinned"):
+            reply_meta["pinned"] = True
+        line_meta = {"pinned": True} if old_meta.get("pinned") else None
         # Rebuilt from the thread without the old exchange, so a remark or a divider
         # after it cannot leave it in the model's context.
         self.history[:] = await self.manager.history(self.thread, self.system_prompt(), exclude=old_ids)
         self.reset_history_flags()
         await self.start_turn(
             again,
-            on_finished=self.replacing(old_ids, old_log_id if isinstance(old_log_id, int) else None),
+            on_finished=self.replacing(
+                old_ids, old_log_id if isinstance(old_log_id, int) else None, reply_meta or None, line_meta
+            ),
             attachment=old_meta.get("attachment"),
         )
+
+    # ── message actions (D-100): rewind, swipe, pin, a new chat from here ──
+
+    async def message_here(self, message_id: int) -> Any:
+        """The open thread's message, or None after telling the window why."""
+        found = await self.manager.message(self.thread.id, message_id) if self.thread is not None else None
+        if found is None:
+            await self.refuse("unknown_message", NO_MESSAGE)
+        return found
+
+    async def send_message_updated(self, message: Any) -> None:
+        await self.ws.send_json(protocol.frame("message_updated", {"message": message.to_dict()}, thread=message.thread_id))
+
+    async def on_message_rewind(self, msg: Any) -> None:
+        """Rewind to here: every later message of the open thread is deleted. A chat
+        exchange's transcript row goes too, so the memory writer never learns from it."""
+        if self.busy:
+            await self.refuse("turn_running", BUSY)
+            return
+        if await self.message_here(msg.data.id) is None:
+            return
+        await self.hush()
+        story.KEEPER.preempt()   # a summary being written could reach past this point
+        try:
+            gone = await self.manager.rewind(self.thread.id, msg.data.id)
+            for m in gone:
+                log_id = m.meta.get("log_id")
+                if isinstance(log_id, int):
+                    await turns.drop_transcript_turn(log_id)
+            await self.load_thread(self.thread, load=False)
+        except Exception as exc:  # noqa: BLE001 -- report, keep the connection
+            log.warning(f"rewind failed: {exc}")
+            await self.refuse("threads_unavailable", NO_THREADS)
+
+    async def on_message_swipe(self, msg: Any) -> None:
+        """Shows another candidate of her latest reply; the model's history follows."""
+        if self.busy:
+            await self.refuse("turn_running", BUSY)
+            return
+        message = await self.message_here(msg.data.id)
+        if message is None:
+            return
+        found = await self.manager.last_exchange(self.thread.id)
+        if found is None or len(found[1]) != 2 or found[1][1] != message.id:
+            await self.refuse("bad_message", "Only her latest reply can be swiped.")
+            return
+        try:
+            shown = await self.manager.swipe_to(message, msg.data.to)
+        except ValueError:
+            await self.refuse("bad_message", "That reply is no longer there.")
+            return
+        await self.hush()
+        self.history[:] = await self.manager.history(self.thread, self.system_prompt())
+        self.reset_history_flags()
+        await self.load_pins()
+        await self.send_message_updated(shown)
+
+    async def on_message_pin(self, msg: Any) -> None:
+        """Pins exist only in a roleplay (D-100): a story's own memory, never the app's."""
+        if not self.in_roleplay():
+            await self.refuse("bad_message", "Pins are for roleplay stories.")
+            return
+        message = await self.message_here(msg.data.id)
+        if message is None:
+            return
+        if message.role not in ("user", "assistant") or not message.content:
+            await self.refuse("bad_message", "That line can't be pinned.")
+            return
+        if msg.data.on and not message.meta.get("pinned"):
+            limit = CONFIG.story.max_pins
+            if len(await self.manager.pins(self.thread.id)) >= limit:
+                await self.refuse("pin_limit", f"A story can have {limit} pinned messages. Unpin one first.")
+                return
+        updated = await self.manager.set_pin(message, msg.data.on)
+        await self.load_pins()
+        await self.send_message_updated(updated)
+
+    async def on_message_branch(self, msg: Any) -> None:
+        """Start a new chat from here: a copy of the thread up to this message, in the
+        same mode (a roleplay keeps its scenario card), opened in this window."""
+        if await self.message_here(msg.data.id) is None:
+            return
+
+        async def branch() -> None:
+            await self.load_thread(await self.manager.branch(self.thread.id, msg.data.id))
+
+        await self._change_thread("message_branch", branch)
 
     async def on_stop(self, msg: Any) -> None:
         # Stop silences her too (FR-C-2): the reply being read aloud ends here.

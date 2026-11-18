@@ -55,6 +55,26 @@ class ThreadPin(_Data):
     on: bool
 
 
+class MessageRef(_Data):
+    """D-100: a stored message of the open thread (Rewind to here, New chat from here)."""
+
+    id: int = Field(ge=1)
+
+
+class MessagePin(_Data):
+    """D-100: pin a roleplay message so she always keeps it in mind, or unpin it."""
+
+    id: int = Field(ge=1)
+    on: bool
+
+
+class MessageSwipe(_Data):
+    """D-100: show another of her latest reply's candidates (its index)."""
+
+    id: int = Field(ge=1)
+    to: int = Field(ge=0, le=999)
+
+
 class ThreadSearch(_Data):
     query: str = Field(default="", max_length=QUERY_MAX)
 
@@ -280,6 +300,10 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "model_load": Empty,              # K1-10: Try again after a failed load
     "model_unload": ModelUnload,      # K1-09b: Unload X on that card, then try again
     "regenerate": Regenerate,         # K1-04: run the last exchange again (FR-C-9, Retry); edit it (FR-C-9, D-092)
+    "message_rewind": MessageRef,     # D-100: delete every message after this one
+    "message_branch": MessageRef,     # D-100: a new thread of the same mode, up to this message
+    "message_pin": MessagePin,        # D-100: roleplay only; pinned messages stay in her prompt
+    "message_swipe": MessageSwipe,    # D-100: another candidate of her latest reply
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
     "read_aloud": ReadAloudData,      # D-097: Read aloud on or off; its voice starts only while on
@@ -325,6 +349,8 @@ SERVER_TYPES: tuple[str, ...] = (
     "memory_facts",   # K1-13 (FR-MEM-4): live facts, then forgotten ones
     "settings",       # K1-13b (FR-SET-2): the editable settings in effect
     "scenarios",      # FR-MODE-6: the saved scenario cards, newest first
+    "exchange_saved", # D-100: the stored line and reply of a turn, sent before turn_done
+    "message_updated",  # D-100: one stored message changed (a pin, a swipe)
 )
 
 ERROR_CODES: tuple[str, ...] = (
@@ -340,6 +366,8 @@ ERROR_CODES: tuple[str, ...] = (
     "observer",             # another window drives the conversation
     "price_unknown",        # D-083: said once; the turn goes on
     "picture_unreadable",   # D-091: a chosen picture that is not an image
+    "unknown_message",      # D-100: a message action on a message that is gone
+    "pin_limit",            # D-100: a story already has its most pins
 )
 
 

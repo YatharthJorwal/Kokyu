@@ -620,3 +620,39 @@ test("opening the palette closes the model picker", () => {
   const s = reduce({ ...initialState, pickerOpen: true }, { kind: "palette", open: true });
   assert.deepEqual([s.palette, s.pickerOpen], [true, false]);
 });
+
+// D-100: every message on screen carries its stored id, so its ⋯ card can act on it.
+test("a finished turn takes the stored ids, pins and swipes the engine reports", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "sent", text: "hello" });
+  s = reduce(s, frame("turn_start", { user_text: "hello" }));
+  s = reduce(s, frame("token", { text: "Hi there. [happy]" }));
+  const reply = stored(8, "assistant", "Hi there.", { swipes: [{ content: "Old" }, null], swipe: 1 });
+  s = reduce(s, frame("exchange_saved", { user: stored(7, "user", "hello", { pinned: true }), reply }));
+  assert.equal(s.messages.length, 1); // nothing shown before turn_done
+  s = reduce(s, frame("turn_done", { text: "Hi there.", stopped: false }));
+  assert.deepEqual(
+    s.messages.map((m) => [m.key, m.id, m.text, m.pinned ?? false, m.swipes ?? 1, m.swipe ?? 0]),
+    [["m7", 7, "hello", true, 1, 0], ["m8", 8, "Hi there.", false, 2, 1]],
+  );
+  assert.equal(s.saved, null);
+});
+
+test("a changed message (a pin, a swipe) replaces its row in place", () => {
+  let s = run(
+    online,
+    frame("thread_opened", { thread: thread("t1"), messages: [stored(1, "user", "hi"), stored(2, "assistant", "two", { swipes: [{}, null], swipe: 1 })] }),
+  );
+  s = reduce(s, frame("message_updated", { message: stored(2, "assistant", "one", { swipes: [null, {}], swipe: 0, pinned: true }) }));
+  assert.deepEqual(
+    s.messages.map((m) => [m.key, m.text, m.swipe ?? null, m.pinned ?? false]),
+    [["m1", "hi", null, false], ["m2", "one", 0, true]],
+  );
+});
+
+test("a refused pin leaves a running turn alone", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "sent", text: "hello" });
+  s = reduce(s, frame("error", { code: "pin_limit", message: "A story can have 10 pinned messages." }));
+  assert.equal(s.turn, "thinking");
+});

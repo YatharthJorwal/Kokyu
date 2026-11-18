@@ -393,6 +393,82 @@ class ThreadStore:
         with self._connect() as db:
             db.executemany("DELETE FROM messages WHERE id = ?", [(i,) for i in ids])
 
+    def get_message(self, message_id: int) -> Message | None:
+        with self._connect() as db:
+            row = db.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+        return _message(row) if row is not None else None
+
+    def update_message(self, message_id: int, **fields: Any) -> Message:
+        """Sets any of: content, speaker_waifu_id, speaker_name, model_ref, effort,
+        tokens_in, tokens_out, meta (a pin, a swipe: D-100). The thread's order is kept."""
+        allowed = {"content", "speaker_waifu_id", "speaker_name", "model_ref", "effort", "tokens_in", "tokens_out", "meta"}
+        unknown = set(fields) - allowed
+        if unknown:
+            raise ValueError(f"unknown message fields: {sorted(unknown)}")
+        values: dict[str, Any] = dict(fields)
+        if "meta" in values:
+            values["meta"] = json.dumps(values["meta"]) if values["meta"] else None
+        with self._connect() as db:
+            if values:
+                assignments = ", ".join(f"{name} = ?" for name in values)
+                db.execute(f"UPDATE messages SET {assignments} WHERE id = ?", (*values.values(), message_id))
+            row = db.execute("SELECT * FROM messages WHERE id = ?", (message_id,)).fetchone()
+        if row is None:
+            raise KeyError(message_id)
+        return _message(row)
+
+    def rewind(self, thread_id: str, message_id: int) -> list[Message]:
+        """Rewind to here (D-100): every message after `message_id` in the thread goes,
+        in one transaction, and a story summary that reached past it goes too (it is
+        rebuilt from what is left). Returns what was deleted."""
+        with self._connect() as db:
+            rows = db.execute(
+                "SELECT * FROM messages WHERE thread_id = ? AND id > ? ORDER BY id", (thread_id, message_id)
+            ).fetchall()
+            db.execute("DELETE FROM messages WHERE thread_id = ? AND id > ?", (thread_id, message_id))
+            db.execute("DELETE FROM story_memory WHERE thread_id = ? AND through_message_id > ?", (thread_id, message_id))
+        return [_message(r) for r in rows]
+
+    def branch(self, thread_id: str, through_id: int) -> Thread:
+        """Start a new chat from here (D-100): a new thread of the same mode, scenario,
+        companion, model and effort with copies of the messages up to `through_id`. A
+        story summary that ends at or before that point comes along. The copies keep
+        their pins and swipes but not the transcript row (log_id) of the original, so
+        a Regenerate in the copy never takes a turn out of the original's log."""
+        src = self.get_thread(thread_id)
+        now = self._now()
+        new_id = uuid.uuid4().hex
+        with self._connect() as db:
+            db.execute(
+                "INSERT INTO threads (id, title, created_at, updated_at, active_waifu_id, model_ref, effort, temp,"
+                " efforts, mode, scenario) SELECT ?, title, ?, ?, active_waifu_id, model_ref, effort, temp,"
+                " efforts, mode, scenario FROM threads WHERE id = ?",
+                (new_id, now, now, src.id),
+            )
+            new_ids: dict[int, int] = {}
+            rows = db.execute(
+                "SELECT * FROM messages WHERE thread_id = ? AND id <= ? ORDER BY id", (src.id, through_id)
+            ).fetchall()
+            for r in rows:
+                meta = _json_dict(r["meta"])
+                meta.pop("log_id", None)
+                cur = db.execute(
+                    "INSERT INTO messages (thread_id, ts, role, speaker_waifu_id, speaker_name, content,"
+                    " model_ref, effort, tokens_in, tokens_out, meta) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                    (
+                        new_id, r["ts"], r["role"], r["speaker_waifu_id"], r["speaker_name"], r["content"],
+                        r["model_ref"], r["effort"], r["tokens_in"], r["tokens_out"], json.dumps(meta) if meta else None,
+                    ),
+                )
+                new_ids[r["id"]] = int(cur.lastrowid)
+            story = db.execute("SELECT * FROM story_memory WHERE thread_id = ?", (src.id,)).fetchone()
+            if story is not None and int(story["through_message_id"]) in new_ids:
+                db.execute(
+                    "INSERT INTO story_memory (thread_id, summary, through_message_id, updated_at) VALUES (?, ?, ?, ?)",
+                    (new_id, story["summary"], new_ids[int(story["through_message_id"])], now),
+                )
+        return self.get_thread(new_id)
+
     def search(self, query: str, *, limit: int = SEARCH_LIMIT) -> list[Thread]:
         """Threads whose title or any message contains `query` (case-insensitive), newest first."""
         needle = query.strip()

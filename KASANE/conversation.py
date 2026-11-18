@@ -195,13 +195,15 @@ class ConversationManager:
         tokens_in: int | None = None,
         tokens_out: int | None = None,
         meta: dict[str, Any] | None = None,
+        reply_meta: dict[str, Any] | None = None,
     ) -> tuple[Message, Message | None]:
         """Stores one user line and the reply to it. A reply cut off by Stop is kept
         (FR-C-2) and flagged; a turn with no reply at all stores only the user line.
         The reply carries its token counts where the backend reported them (FR-C-10).
         `meta` rides on the user line: the turn's transcript_log row (log_id, so
         Regenerate can take it back out), an attachment's kind and the API model it
-        went to (sent_to, FR-R-7)."""
+        went to (sent_to, FR-R-7). `reply_meta` rides on the reply: a swipe's
+        candidates (D-100)."""
         user = await self._run(self.store.add_message, thread_id, "user", user_text, meta=meta or None)
         reply = None
         if assistant_text:
@@ -216,7 +218,7 @@ class ConversationManager:
                 effort=effort,
                 tokens_in=tokens_in,
                 tokens_out=tokens_out,
-                meta={"stopped": True} if stopped else None,
+                meta={**(reply_meta or {}), **({"stopped": True} if stopped else {})} or None,
             )
         return user, reply
 
@@ -268,6 +270,48 @@ class ConversationManager:
     async def delete_messages(self, ids: list[int]) -> None:
         await self._run(self.store.delete_messages, ids)
 
+    # -- message actions (D-100) -----------------------------------------------
+
+    async def message(self, thread_id: str, message_id: int) -> Message | None:
+        """A message of this thread, or None (gone, or in another thread)."""
+        found = await self._run(self.store.get_message, message_id)
+        return found if found is not None and found.thread_id == thread_id else None
+
+    async def rewind(self, thread_id: str, message_id: int) -> list[Message]:
+        return await self._run(self.store.rewind, thread_id, message_id)
+
+    async def branch(self, thread_id: str, message_id: int) -> Thread:
+        thread = await self._run(self.store.branch, thread_id, message_id)
+        await self._run(self.store.set_kv, LAST_THREAD_KEY, thread.id)
+        return thread
+
+    async def set_pin(self, message: Message, on: bool) -> Message:
+        meta = {k: v for k, v in message.meta.items() if k != "pinned"}
+        if on:
+            meta["pinned"] = True
+        return await self._run(self.store.update_message, message.id, meta=meta)
+
+    async def pins(self, thread_id: str) -> list[Message]:
+        """A roleplay thread's pinned messages, oldest first (D-100)."""
+        return [m for m in await self._run(self.store.messages, thread_id) if m.meta.get("pinned")]
+
+    async def swipe_to(self, message: Message, index: int) -> Message:
+        """Shows another of the reply's candidates (D-100): the shown one goes back
+        into the list, the chosen one into the message's columns."""
+        candidates = list(message.meta.get("swipes") or [])
+        current = int(message.meta.get("swipe", 0))
+        if not 0 <= index < len(candidates) or index == current or not isinstance(candidates[index], dict):
+            raise ValueError("no such reply")
+        chosen = candidates[index]
+        candidates[current] = candidate_of(message)
+        candidates[index] = None
+        meta = {k: v for k, v in message.meta.items() if k not in ("stopped",)}
+        meta.update(swipes=candidates, swipe=index)
+        if chosen.get("stopped"):
+            meta["stopped"] = True
+        fields = {k: chosen.get(k) for k in CANDIDATE_FIELDS}
+        return await self._run(self.store.update_message, message.id, **fields, meta=meta)
+
     # -- saved scenario cards (FR-MODE-6, D-074) -------------------------------
 
     async def scenarios(self) -> list[ScenarioCard]:
@@ -300,6 +344,31 @@ class ConversationManager:
             speaker_waifu_id=speaker.waifu_id,
             speaker_name=speaker.name,
         )
+
+
+# A reply candidate (D-100): what a swipe puts back into the message's columns.
+CANDIDATE_FIELDS = ("content", "speaker_waifu_id", "speaker_name", "model_ref", "effort", "tokens_in", "tokens_out")
+
+
+def candidate_of(message: Message) -> dict[str, Any]:
+    out: dict[str, Any] = {k: getattr(message, k) for k in CANDIDATE_FIELDS}
+    if message.meta.get("stopped"):
+        out["stopped"] = True
+    return out
+
+
+def next_swipe(old_reply: Message) -> dict[str, Any]:
+    """The reply meta of a new candidate for `old_reply` (D-100): every earlier one
+    is kept, the new one goes last and is shown. `None` marks the shown candidate,
+    whose text lives in the message's own columns."""
+    candidates = list(old_reply.meta.get("swipes") or [None])
+    candidates[int(old_reply.meta.get("swipe", 0))] = candidate_of(old_reply)
+    return {"swipes": [*candidates, None], "swipe": len(candidates)}
+
+
+def pin_lines(pins: list[Message]) -> list[str]:
+    """Pinned messages as lines for her prompt (D-100): who said it, then what."""
+    return [f"{'The user' if m.role == 'user' else (m.speaker_name or 'You')}: {m.content}" for m in pins if m.content]
 
 
 def thread_summary(thread: Thread) -> dict[str, Any]:

@@ -392,6 +392,7 @@ story:
   summarize_every: 12       # fold once this many older messages are waiting (0 = off)
   keep_recent: 4            # the newest messages are never folded (at least 2)
   max_chars: 2400           # the summary's cap, cut at a sentence end
+  max_pins: 10              # pinned messages per roleplay thread, always in her prompt (D-100)
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Conversation model (K1, D-051). Threads with no model chosen use this.

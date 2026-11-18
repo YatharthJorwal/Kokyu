@@ -1,8 +1,10 @@
 // The open thread (K1-02, K1-04, UI1-07): saved messages, companion dividers, the
 // reply being streamed. Replies render as Markdown (FR-C-8). A run of messages from
-// one voice shows her face and name once. Hovering a message shows its time (and a
-// reply's model) with icon actions: Copy, Regenerate on the last reply (FR-C-9), Edit
-// on the last line (D-092). The user's own lines stay plain text in a chat; in a
+// one voice shows her face and name once, with a speaker that reads the message aloud
+// (D-099). Each message has a ⋯ beside it (D-100): a card with its time (and a reply's
+// model), Copy, Edit on the last line (D-092), Rewind to here, Pin (roleplay) and New
+// chat from here. Under her latest reply: Regenerate, and arrows through the replies
+// it has written (swipes, D-100). The user's own lines stay plain text in a chat; in a
 // roleplay thread both sides render the story's way (FR-MODE-7). Reading older
 // messages is never interrupted: new text only scrolls the view when it is already
 // at the bottom, and a pill jumps back down. While she thinks, her face, the heart
@@ -12,6 +14,7 @@
 import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 
 import {
+  canActOnMessages,
   canPickModel,
   canRegenerate,
   canSend,
@@ -28,10 +31,10 @@ import { messageTime } from "../history";
 import { THINKING_STEP_S, thinkingOrder } from "../models";
 import { actions, useChat } from "../store";
 import { revealTo } from "../typewriter";
-import { CopyButton } from "./CopyButton";
 import { Heart } from "./Heart";
 import { Icon } from "./Icon";
 import { Markdown } from "./Markdown";
+import { Menu, type MenuItem } from "./Menu";
 import { Portrait } from "./Portrait";
 
 /** Her face in a circle, shown when Appearance → Messages is "Bubbles" (D-073, D-091). */
@@ -50,26 +53,99 @@ function Avatar({ id, name }: { id: string | null | undefined; name: string | nu
   );
 }
 
-/** The bar that appears over a message on hover or focus (UI1-07). */
-function ActionBar({ m, lastReply, editable, onEdit }: { m: ChatMessage; lastReply: boolean; editable: boolean; onEdit: () => void }) {
-  const regenerable = useChat((s) => lastReply && canRegenerate(s));
+/** D-100: the ⋯ beside a message and its card. Only what works now is listed. */
+function MessageMenu({
+  m,
+  last,
+  head,
+  editable,
+  roleplay,
+  onEdit,
+}: {
+  m: ChatMessage;
+  /** The thread's newest message: nothing after it to rewind. */
+  last: boolean;
+  /** Her name (and its speaker) shows above this message. */
+  head: boolean;
+  editable: boolean;
+  roleplay: boolean;
+  onEdit: () => void;
+}) {
+  const [at, setAt] = useState<{ x: number; y: number } | null>(null);
   const model = useChat((s) => (m.role === "assistant" && m.model ? modelLabel(s, m.model) : null));
+  const acting = useChat(canActOnMessages);
+  const reading = useChat((s) => s.reading === m.key);
+  const online = useChat((s) => s.connection === "online");
+  const her = m.role === "assistant";
   const when = m.ts ? messageTime(m.ts, Date.now()) : null;
-  const facts = [when, model].filter(Boolean).join(" · ");
+  const id = m.id;
+  const items: MenuItem[] = [{ label: "Copy", icon: "copy", onSelect: () => actions.copyMessage(m.text) }];
+  // Her name carries the speaker; a message under it without a name gets it here.
+  if (her && !head && online && m.text.trim())
+    items.push({ label: reading ? "Stop reading" : "Read aloud", icon: "speaker", onSelect: () => actions.readMessage(m.key, m.text, m.speakerId ?? null) });
+  if (editable) items.push({ label: "Edit message", icon: "edit", onSelect: onEdit });
+  if (id !== undefined && acting) {
+    if (!last) items.push({ label: "Rewind to here", icon: "rewind", onSelect: () => void actions.rewind(id) });
+    if (roleplay && m.text.trim())
+      items.push({ label: m.pinned ? "Unpin message" : "Pin message", icon: "pin", onSelect: () => actions.pinMessage(id, !m.pinned) });
+    items.push({ label: "New chat from here", icon: "branch", onSelect: () => actions.branchFrom(id) });
+  }
   return (
-    <div className="msg-actions">
-      {facts ? <span className="msg-when">{facts}</span> : null}
-      <CopyButton icon text={m.text} label={m.role === "assistant" ? "Copy reply" : "Copy message"} />
-      {m.role === "assistant" && m.text.trim() ? <ReadButton m={m} /> : null}
-      {regenerable ? (
-        <button type="button" className="msg-action icon-action" aria-label="Regenerate" title="Ask for another reply" onClick={() => actions.regenerate()}>
-          <Icon name="regenerate" />
-        </button>
-      ) : null}
-      {editable ? (
-        <button type="button" className="msg-action icon-action" aria-label="Edit" title="Edit and send again" onClick={onEdit}>
-          <Icon name="edit" />
-        </button>
+    <>
+      <button
+        type="button"
+        className={at ? "msg-more open" : "msg-more"}
+        aria-label="Message options"
+        title="More"
+        aria-haspopup="menu"
+        aria-expanded={at !== null}
+        onClick={(e) => {
+          const r = e.currentTarget.getBoundingClientRect();
+          // Her card opens leftwards from the ⋯, the user's rightwards, like the bubble.
+          setAt(at ? null : { x: her ? r.right - 220 : r.left, y: r.bottom + 4 });
+        }}
+      >
+        <Icon name="more" />
+      </button>
+      {at ? <Menu label="Message" heading={[when, model].filter(Boolean).join(" · ") || undefined} at={at} items={items} onClose={() => setAt(null)} /> : null}
+    </>
+  );
+}
+
+/** D-100: under her latest reply: Regenerate (a new reply, the old ones kept), and
+ * arrows through the replies written so far. */
+function SwipeBar({ m }: { m: ChatMessage }) {
+  const ready = useChat(canRegenerate);
+  const acting = useChat(canActOnMessages);
+  if (!ready) return null;
+  const count = m.swipes ?? 1;
+  const at = m.swipe ?? 0;
+  const id = m.id;
+  return (
+    <div className="swipe-bar">
+      <button type="button" className="msg-action icon-action" aria-label="Regenerate" title="Write another reply" onClick={() => actions.regenerate()}>
+        <Icon name="regenerate" />
+      </button>
+      {count > 1 && id !== undefined && acting ? (
+        <span className="swipes" role="group" aria-label="Her replies">
+          {at > 0 ? (
+            <button type="button" className="msg-action icon-action" aria-label="Previous reply" title="Previous reply" onClick={() => actions.swipe(id, at - 1, count)}>
+              <Icon name="left" />
+            </button>
+          ) : (
+            <span className="swipe-gap" />
+          )}
+          <span className="swipe-count">
+            {at + 1}/{count}
+          </span>
+          {at < count - 1 ? (
+            <button type="button" className="msg-action icon-action" aria-label="Next reply" title="Next reply" onClick={() => actions.swipe(id, at + 1, count)}>
+              <Icon name="right" />
+            </button>
+          ) : (
+            <span className="swipe-gap" />
+          )}
+        </span>
       ) : null}
     </div>
   );
@@ -144,6 +220,7 @@ function EditBox({ text, onDone }: { text: string; onDone: () => void }) {
 function Message({
   m,
   first,
+  last,
   lastReply,
   editable,
   roleplay,
@@ -151,6 +228,8 @@ function Message({
 }: {
   m: ChatMessage;
   first: boolean;
+  /** The thread's newest message (D-100: nothing after it to rewind). */
+  last: boolean;
   lastReply: boolean;
   editable: boolean;
   roleplay: boolean;
@@ -176,14 +255,26 @@ function Message({
       {her && m.speaker ? (
         <div className="msg-head">
           <span className="speaker">{m.speaker}</span>
+          {m.text.trim() && !typing ? <ReadButton m={m} /> : null}
         </div>
       ) : null}
       {editing ? (
         <EditBox text={m.text} onDone={() => setEditing(false)} />
       ) : (
         <>
-          <div className="bubble">{m.role === "assistant" || roleplay ? <Markdown text={m.text} roleplay={roleplay} /> : m.text}</div>
-          {m.pending || typing ? null : <ActionBar m={m} lastReply={lastReply} editable={editable} onEdit={() => setEditing(true)} />}
+          <div className="bubble-row">
+            <div className="bubble">{m.role === "assistant" || roleplay ? <Markdown text={m.text} roleplay={roleplay} /> : m.text}</div>
+            {m.pending || typing ? null : (
+              <MessageMenu m={m} last={last} head={her && !!m.speaker} editable={editable} roleplay={roleplay} onEdit={() => setEditing(true)} />
+            )}
+            {m.pinned && roleplay ? (
+              <span className="msg-pin" title="Pinned: she always keeps it in mind">
+                <Icon name="pin" size={13} />
+                <span className="sr-only">Pinned</span>
+              </span>
+            ) : null}
+          </div>
+          {lastReply && !typing && !m.pending ? <SwipeBar m={m} /> : null}
         </>
       )}
       {m.stopped ? <div className="meta">Stopped</div> : null}
@@ -444,6 +535,7 @@ export function ThreadView() {
             m={m.key === typingKey && typed !== null ? { ...m, text: typed } : m}
             typing={m.key === typingKey}
             first={startsGroup(messages, i)}
+            last={i === messages.length - 1}
             lastReply={m.key === lastReplyKey}
             editable={m.key === editable}
             roleplay={roleplay}

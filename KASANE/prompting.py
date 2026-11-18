@@ -96,6 +96,9 @@ ROLEPLAY_PROFILE_FRAMING = "About the real person you are writing with (not thei
 # and never in history[0]: it changes as the story goes on, the cached prefix must not.
 STORY_NOTE = "The story so far, summarized from earlier scenes: {summary}"
 
+# D-100: a roleplay thread's pinned messages, in the same per-turn note: always remembered.
+PINS_NOTE = "Moments of this story the user pinned, so always keep them in mind:\n{lines}"
+
 
 def scenario_block(scenario: Mapping[str, Any] | None) -> str:
     """The scenario card as text, or "" when it has nothing filled in (FR-MODE-6)."""

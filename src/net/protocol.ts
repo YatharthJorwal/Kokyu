@@ -31,6 +31,10 @@ export const CLIENT_TYPES = [
   "model_load",
   "model_unload",
   "regenerate",
+  "message_rewind",
+  "message_branch",
+  "message_pin",
+  "message_swipe",
   "screen_companion",
   "typing",
   "read_aloud",
@@ -75,6 +79,8 @@ export const SERVER_TYPES = [
   "memory_facts",
   "settings",
   "scenarios",
+  "exchange_saved",
+  "message_updated",
 ] as const;
 
 export const ERROR_CODES = [
@@ -90,6 +96,8 @@ export const ERROR_CODES = [
   "observer",
   "price_unknown",
   "picture_unreadable",
+  "unknown_message",
+  "pin_limit",
 ] as const;
 
 /** D-097: Read aloud (each finished reply spoken), kept by the engine in settings.json,
@@ -299,6 +307,10 @@ export interface ServerData {
   /** FR-MODE-6: every saved card, the most recently saved first. The answer to a
    * scenario_save also names the card it saved. */
   scenarios: { cards: SavedScenario[]; saved_id?: string };
+  /** D-100: the turn's stored line and reply, just before turn_done. */
+  exchange_saved: { user: ThreadMessage; reply: ThreadMessage | null };
+  /** D-100: one stored message changed (a pin, a swipe). */
+  message_updated: { message: ThreadMessage };
 }
 
 /** K1-13b (FR-SET-2, D-070): the editable settings in effect. `saved` names the ones
@@ -368,6 +380,14 @@ export interface ClientData {
   thread_rename: { id: string; title: string };
   /** UI1-09 (D-094): pinned threads stay at the top of the history list. */
   thread_pin: { id: string; on: boolean };
+  /** D-100: delete every message after this one. */
+  message_rewind: { id: number };
+  /** D-100: a new thread of the same mode with the messages up to this one. */
+  message_branch: { id: number };
+  /** D-100: roleplay only; a pinned message stays in her prompt. */
+  message_pin: { id: number; on: boolean };
+  /** D-100: show another candidate (its index) of her latest reply. */
+  message_swipe: { id: number; to: number };
   set_model: { model_ref: string | null };
   set_effort: { effort: Effort | null };
   /** D-098: a model's Chat memory (context length) for every thread; null: the default. */

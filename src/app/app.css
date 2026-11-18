@@ -60,6 +60,63 @@ button:disabled {
   height: 100%;
 }
 
+/* D-100: the sidebar hidden; the top bar's button brings it back */
+.app.sidebar-hidden {
+  grid-template-columns: 1fr;
+}
+
+.sidebar-toggle {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  margin-left: auto;
+  padding: 0;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+}
+
+.top-bar .sidebar-toggle {
+  margin-left: 0;
+}
+
+.sidebar-toggle:hover,
+.sidebar-toggle:focus-visible {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+/* D-100: All / Chats / Roleplays */
+.thread-filter {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.thread-filter button {
+  flex: 1;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 7px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.thread-filter button:hover {
+  color: var(--text);
+}
+
+.thread-filter button.on {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
 /* ── sidebar ─────────────────────────────────────────────── */
 
 .sidebar {
@@ -1004,38 +1061,121 @@ button:disabled {
   list-style-type: square;
 }
 
-/* UI1-07: the bar over a message's top edge, on hover or keyboard focus; transparent
-   (not hidden) so Tab reaches it. Time and model first, then the icons. */
-.msg-actions {
-  position: absolute;
-  z-index: 2;
-  top: -14px;
-  right: 0;
+/* D-100: the bubble with its ⋯ beside it: on her right, on the user's left (the row
+   runs backwards for the user). The ⋯ is transparent, not hidden, so Tab reaches it. */
+.bubble-row {
   display: flex;
-  align-items: center;
-  gap: 2px;
-  padding: 2px 4px;
-  border: 1px solid var(--line);
+  align-items: flex-start;
+  gap: 4px;
+  max-width: 100%;
+  min-width: 0;
+}
+
+.msg.assistant .bubble-row > .bubble {
+  flex: 1 1 auto;
+  min-width: 0;
+}
+
+.msg.user .bubble-row {
+  flex-direction: row-reverse;
+  max-width: 80%;
+}
+
+.msg.user .bubble-row > .bubble {
+  max-width: 100%;
+  min-width: 0;
+}
+
+[data-messages="bubbles"] .msg.assistant .bubble-row {
+  justify-self: start;
+  max-width: 85%;
+}
+
+[data-messages="bubbles"] .msg.assistant .bubble-row > .bubble {
+  flex: 0 1 auto;
+  max-width: 100%;
+}
+
+.msg-more {
+  display: grid;
+  flex: none;
+  place-items: center;
+  width: 28px;
+  height: 28px;
+  margin-top: 2px;
+  padding: 0;
+  border: 0;
   border-radius: 8px;
-  background: var(--panel);
-  box-shadow: 0 2px 8px rgb(0 0 0 / 18%);
+  background: transparent;
+  color: var(--muted);
   opacity: 0;
-  pointer-events: none;
   transition: opacity 120ms ease;
 }
 
-.msg:hover .msg-actions,
-.msg:focus-within .msg-actions,
-.msg:has(.read-message.reading) .msg-actions {
+.msg:hover .msg-more,
+.msg-more:focus-visible,
+.msg-more.open {
   opacity: 1;
-  pointer-events: auto;
 }
 
-.msg-when {
-  padding: 0 6px;
+.msg-more:hover,
+.msg-more.open {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+.msg-pin {
+  display: grid;
+  flex: none;
+  place-items: center;
+  height: 28px;
+  margin-top: 2px;
+  color: var(--accent);
+}
+
+/* her name, then the speaker that reads this message aloud (D-099, D-100) */
+.msg-head .read-message {
+  width: 22px;
+  height: 22px;
+  color: var(--muted);
+}
+
+/* D-100: Regenerate and the arrows through her replies, under her latest one */
+.swipe-bar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.swipes {
+  display: flex;
+  align-items: center;
+  gap: 2px;
+}
+
+.swipe-count {
+  min-width: 30px;
   color: var(--muted);
   font-size: 12px;
-  white-space: nowrap;
+  text-align: center;
+  font-variant-numeric: tabular-nums;
+}
+
+.swipe-gap {
+  width: 26px;
+}
+
+/* a message's card: its time and model above the items (D-100) */
+.menu-heading {
+  padding: 6px 10px 4px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.menu button .icon {
+  flex: none;
+  color: var(--muted);
 }
 
 .msg-action {

@@ -52,6 +52,13 @@ export interface ChatMessage {
   model?: string | null;
   /** The line came from a file: the engine words it, so it cannot be edited. */
   file?: boolean;
+  /** Its id in the thread store (D-100): what Rewind, Pin, Swipe and New chat from here name. */
+  id?: number;
+  /** D-100: pinned in a roleplay, so she always keeps it in mind. */
+  pinned?: boolean;
+  /** D-100: her reply's candidates (Regenerate adds one) and which is shown. */
+  swipes?: number;
+  swipe?: number;
 }
 
 export interface Notice {
@@ -116,6 +123,8 @@ export interface ChatState {
   /** The thread as it was before a Regenerate; it comes back if no new reply does
    * (the kernel keeps the old exchange then). */
   beforeRegenerate: ChatMessage[] | null;
+  /** D-100: the turn's stored line and reply (`exchange_saved`), until turn_done uses them. */
+  saved: ServerData["exchange_saved"] | null;
   /** A switch asked for mid-reply; she takes over from the next turn (FR-S-2). */
   pendingCompanion: Companion | null;
   /** Every installed companion, for the sidebar (K1-03, FR-C-6). */
@@ -205,6 +214,7 @@ export const initialState: ChatState = {
   companion: null,
   pendingCompanion: null,
   beforeRegenerate: null,
+  saved: null,
   roster: [],
   search: null,
   defaults: null,
@@ -236,8 +246,13 @@ function localKey(): string {
 }
 
 export function fromStored(m: ThreadMessage): ChatMessage {
+  const swipes = Array.isArray(m.meta?.swipes) ? m.meta.swipes.length : 0;
   return {
     key: `m${m.id}`,
+    id: m.id,
+    pinned: m.meta?.pinned === true ? true : undefined,
+    swipes: swipes > 1 ? swipes : undefined,
+    swipe: swipes > 1 && typeof m.meta?.swipe === "number" ? m.meta.swipe : undefined,
     role: m.role,
     text: m.content,
     speaker: m.speaker_name,
@@ -294,6 +309,11 @@ export function barNotice(state: ChatState): Notice | null {
 /** Regenerate and Retry need a saved thread with a line in it (the kernel replaces its last exchange). */
 export function canRegenerate(state: ChatState): boolean {
   return canSend(state) && state.thread !== null && state.messages.some((m) => m.role === "user");
+}
+
+/** D-100: Rewind, Pin, Swipe and New chat from here act on stored messages, between turns. */
+export function canActOnMessages(state: ChatState): boolean {
+  return canSend(state) && state.thread !== null;
 }
 
 /** A new thread (chat or roleplay) waits for the reply and needs the kernel. */
@@ -411,6 +431,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         threads: upsertThread(state.threads, data.thread),
         messages: data.messages.map(fromStored),
         beforeRegenerate: null,
+        saved: null,
         streamRaw: "",
         notice: null,
         // The dialog's roleplay opened: only now does the dialog close (FR-MODE-6).
@@ -463,18 +484,36 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       const { text } = frame.data as { text: string };
       return { ...state, turn: "replying", streamRaw: state.streamRaw + text };
     }
+    case "exchange_saved": {
+      if (!forCurrentThread(state, frame)) return state;
+      return { ...state, saved: frame.data as ServerData["exchange_saved"] };
+    }
+    case "message_updated": {
+      if (!forCurrentThread(state, frame)) return state;
+      const fresh = fromStored((frame.data as ServerData["message_updated"]).message);
+      return { ...state, messages: state.messages.map((m) => (m.key === fresh.key ? fresh : m)) };
+    }
     case "turn_done": {
       if (!forCurrentThread(state, frame)) return state;
       const { text, stopped } = frame.data as { text: string; stopped: boolean };
       const reply = text || visibleStream(state);
       // A Regenerate that brought nothing back: the kernel kept the old exchange, so does the view.
       if (!reply && state.beforeRegenerate) {
-        return { ...state, messages: state.beforeRegenerate, beforeRegenerate: null, turn: "idle", streamRaw: "" };
+        return { ...state, messages: state.beforeRegenerate, beforeRegenerate: null, saved: null, turn: "idle", streamRaw: "" };
       }
+      // D-100: the stored line and reply, so every message on screen has its id.
+      const saved = state.saved;
+      const lineAt = saved ? state.messages.map((m) => m.role).lastIndexOf("user") : -1;
+      const withLine =
+        saved && lineAt >= 0
+          ? state.messages.map((m, i) =>
+              i === lineAt ? { ...m, key: `m${saved.user.id}`, id: saved.user.id, pinned: saved.user.meta?.pinned === true || undefined } : m,
+            )
+          : state.messages;
       const messages = reply
         ? [
-            ...state.messages,
-            {
+            ...withLine,
+            saved?.reply ? { ...fromStored(saved.reply), text: reply } : {
               key: localKey(),
               role: "assistant" as const,
               text: reply,
@@ -486,8 +525,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
               model: currentModelRef(state),
             },
           ]
-        : state.messages;
-      return { ...state, messages, beforeRegenerate: null, turn: "idle", streamRaw: "" };
+        : withLine;
+      return { ...state, messages, beforeRegenerate: null, saved: null, turn: "idle", streamRaw: "" };
     }
     case "model_list":
       return { ...state, models: frame.data as ModelListData };
@@ -538,7 +577,9 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         data.code === "turn_running" ||
         data.code === "vision_unavailable" ||
         data.code === "price_unknown" ||
-        data.code === "picture_unreadable";
+        data.code === "picture_unreadable" ||
+        data.code === "pin_limit" ||
+        data.code === "unknown_message";
       // A store failure answers a pending card save (the kernel sends no list then).
       const scenarioSave = state.scenarioSave === "pending" && data.code === "threads_unavailable" ? "failed" : state.scenarioSave;
       // A refused Start roleplay (turn_running, threads_unavailable): the dialog stays open.
@@ -572,7 +613,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // get no answer: the dialog stops waiting (FR-MODE-6).
       const scenarioSave = state.scenarioSave === "pending" ? "lost" : state.scenarioSave;
       const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to Kōkyū's engine dropped." } : state.roleplayStart;
-      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, reading: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
+      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, reading: null, pendingCompanion: null, beforeRegenerate: null, saved: null, scenarioSave, roleplayStart };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };

@@ -4,6 +4,8 @@
 
 import { useEffect, useLayoutEffect, useRef, useState, type KeyboardEvent } from "react";
 
+import { Icon, type IconName } from "./Icon";
+
 export interface MenuItem {
   label: string;
   onSelect: () => void;
@@ -11,9 +13,24 @@ export interface MenuItem {
   disabled?: boolean;
   /** A shortcut shown muted at the right. */
   hint?: string;
+  /** A small icon at the right (a message's card, D-100). */
+  icon?: IconName;
 }
 
-export function Menu({ items, at, label, onClose }: { items: MenuItem[]; at: { x: number; y: number }; label: string; onClose: () => void }) {
+export function Menu({
+  items,
+  at,
+  label,
+  heading,
+  onClose,
+}: {
+  items: MenuItem[];
+  at: { x: number; y: number };
+  label: string;
+  /** A muted line above the items (a message's time and model, D-100). */
+  heading?: string;
+  onClose: () => void;
+}) {
   const box = useRef<HTMLDivElement>(null);
   const [pos, setPos] = useState(at);
   // The latest onClose, so a parent's re-render never re-runs the open/close effect.
@@ -68,6 +85,7 @@ export function Menu({ items, at, label, onClose }: { items: MenuItem[]; at: { x
 
   return (
     <div ref={box} className="menu" role="menu" aria-label={label} style={{ left: pos.x, top: pos.y }} onKeyDown={onKey}>
+      {heading ? <div className="menu-heading">{heading}</div> : null}
       {items.map((it) => (
         <button
           key={it.label}
@@ -82,6 +100,7 @@ export function Menu({ items, at, label, onClose }: { items: MenuItem[]; at: { x
         >
           <span>{it.label}</span>
           {it.hint ? <span className="menu-hint">{it.hint}</span> : null}
+          {it.icon ? <Icon name={it.icon} /> : null}
         </button>
       ))}
     </div>

@@ -10,6 +10,7 @@ import { KernelSocket } from "../net/kernel";
 import type { Effort, Scenario, ServerData, SettingsChange } from "../net/protocol";
 import {
   canPickModel,
+  canActOnMessages,
   canRegenerate,
   canSend,
   canStartThread,
@@ -154,6 +155,42 @@ export const actions = {
     voice.stop();
     dispatch({ kind: "regenerating", text: line });
     return true;
+  },
+
+  // ── a message's ⋯ card and swipes (D-100) ─────────────────────────────
+
+  copyMessage(text: string): void {
+    navigator.clipboard.writeText(text).then(
+      () => dispatch({ kind: "toast", text: "Copied" }),
+      () => dispatch({ kind: "toast", text: "Couldn't copy" }),
+    );
+  },
+
+  /** Rewind to here: every later message goes, after the user says yes. */
+  async rewind(id: number): Promise<void> {
+    const yes = await actions.confirm({
+      title: "Rewind to here?",
+      body: "Every message after this one is deleted from this PC. This cannot be undone.",
+      action: "Rewind",
+      danger: true,
+    });
+    if (yes && canActOnMessages(useChat.getState())) socket.send("message_rewind", { id });
+  },
+
+  /** A new conversation of the same kind with the messages up to this one. */
+  branchFrom(id: number): void {
+    if (canActOnMessages(useChat.getState())) socket.send("message_branch", { id });
+  },
+
+  /** Roleplay only: a pinned message stays in her prompt for the whole story. */
+  pinMessage(id: number, on: boolean): void {
+    if (canActOnMessages(useChat.getState())) socket.send("message_pin", { id, on });
+  },
+
+  /** Another of her latest reply's candidates; past the last one, a new one. */
+  swipe(id: number, to: number, count: number): void {
+    if (to >= count) actions.regenerate();
+    else if (to >= 0 && canActOnMessages(useChat.getState())) socket.send("message_swipe", { id, to });
   },
 
   dismissNotice(): void {

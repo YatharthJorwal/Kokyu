@@ -14,6 +14,11 @@ const PATHS = {
   search: "M11 18a7 7 0 1 0 0-14 7 7 0 0 0 0 14zM20 20l-4-4",
   mic: "M12 3.5a3 3 0 0 0-3 3v5a3 3 0 0 0 6 0v-5a3 3 0 0 0-3-3zM5.5 11a6.5 6.5 0 0 0 13 0M12 17.5V21M9 21h6",
   speaker: "M4 9.5h3.5L12 5.5v13l-4.5-4H4zM15.5 9.2a4 4 0 0 1 0 5.6M18.2 6.6a7.6 7.6 0 0 1 0 10.8",
+  left: "M15 6l-6 6 6 6",
+  right: "M9 6l6 6-6 6",
+  rewind: "M4.5 12a7.5 7.5 0 1 0 2.2-5.3M4.5 4.5v4h4",
+  branch: "M6 4v16M6 9a6 6 0 0 0 6 6h6M15 12l3 3-3 3",
+  sidebar: "M4 5h16v14H4zM9.5 5v14",
 } as const;
 
 export type IconName = keyof typeof PATHS;

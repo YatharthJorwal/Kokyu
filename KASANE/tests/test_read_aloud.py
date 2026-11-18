@@ -310,6 +310,7 @@ def _session(mode="chat"):
     session.pending_waifu = None
     session.history, session.temp, session.temp_flags, session.unprompted = [], False, [], []
     session.story_summary = ""
+    session.pins = []
     return session
 
 
