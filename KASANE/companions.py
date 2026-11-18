@@ -32,7 +32,11 @@ def waifu_of(websocket: Any) -> "waifus.Waifu | None":
 
 
 def voice_of(websocket: Any) -> "tts.VoiceParams | None":
-    waifu = waifu_of(websocket)
+    return voice_for(waifu_of(websocket))
+
+
+def voice_for(waifu: Any) -> "tts.VoiceParams | None":
+    """A companion's voice parameters (her clip, its transcript, her language)."""
     if waifu is None:
         return None
     # The waifu speaks the language of her own reference clip.

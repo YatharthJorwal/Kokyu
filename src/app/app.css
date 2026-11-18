@@ -1025,7 +1025,8 @@ button:disabled {
 }
 
 .msg:hover .msg-actions,
-.msg:focus-within .msg-actions {
+.msg:focus-within .msg-actions,
+.msg:has(.read-message.reading) .msg-actions {
   opacity: 1;
   pointer-events: auto;
 }
@@ -3040,4 +3041,22 @@ button:disabled {
   margin: 0;
   padding: 16px;
   color: var(--muted);
+}
+
+/* D-099: the message being read aloud on request: its speaker stays lit until it ends */
+.read-message.reading {
+  color: var(--accent);
+  animation: read-message 1.4s ease-in-out infinite;
+}
+
+@keyframes read-message {
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .read-message.reading {
+    animation: none;
+  }
 }

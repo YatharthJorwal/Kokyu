@@ -445,6 +445,7 @@ class Session:
                 # D-097: read aloud once it has finished, in the voice of who wrote it
                 # (taken now, before a switch asked for mid-reply applies below).
                 voice = companions.voice_of(self.ws)
+                await self.hush()   # a message read on request meanwhile gives way
                 self.speech = asyncio.create_task(turns.speak_reply(self.ws, reply, mode, voice), name="read-aloud")
         finally:
             try:
@@ -875,6 +876,24 @@ class Session:
         except Exception as exc:  # noqa: BLE001 -- the switch stays as it was, and says why
             log.warning(f"read aloud: not saved: {exc}")
             await self.refuse("bad_message", f"Read aloud could not be saved: {exc}")
+
+    # ── A message read on request (D-099): her speaker button ─────────────────
+
+    async def on_speak_message(self, msg: Any) -> None:
+        """Read one of her messages aloud now, Read aloud on or off, in the voice of the
+        companion who said it (or the active one when she is not installed any more),
+        cut by the thread's mode. Replaces whatever was being read."""
+        await self.hush()
+        data = msg.data
+        speaker = self.registry.get(data.speaker_id) if data.speaker_id else None
+        voice = companions.voice_for(speaker) if speaker is not None else companions.voice_of(self.ws)
+        self.speech = asyncio.create_task(
+            turns.speak_reply(self.ws, data.text, self.thread_mode(), voice, ref=data.ref), name="read-message"
+        )
+
+    async def on_speak_stop(self, msg: Any) -> None:
+        """Stop reading aloud. A reply being written goes on (that is Stop's job)."""
+        await self.hush()
 
     # ── Dictation (D-097): the mic button and its key fill the input box ────────
 

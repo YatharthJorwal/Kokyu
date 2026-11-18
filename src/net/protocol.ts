@@ -34,6 +34,8 @@ export const CLIENT_TYPES = [
   "screen_companion",
   "typing",
   "read_aloud",
+  "speak_message",
+  "speak_stop",
   "dictate_start",
   "dictate",
   "doctor",
@@ -62,6 +64,7 @@ export const SERVER_TYPES = [
   "model_status",
   "screen_companions",
   "read_aloud_status",
+  "spoken",
   "dictation",
   "waifu_state",
   "waifu_roster",
@@ -279,6 +282,8 @@ export interface ServerData {
   model_status: ModelStatus;
   screen_companions: ScreenCompanions;
   read_aloud_status: ReadAloudStatus;
+  /** D-099: a message read on request has all been sent. */
+  spoken: { ref: string };
   /** D-097: a recording's words for this window's input box, or why there are none. */
   dictation: { text: string; error: string | null };
   waifu_state: { active: string | null; waifus: CompanionInfo[]; problems: string[]; pending: string | null };
@@ -375,6 +380,10 @@ export interface ClientData {
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
   read_aloud: { on: boolean };
+  /** D-099: read one of her messages aloud now; `ref` comes back in `spoken`. */
+  speak_message: { ref: string; text: string; speaker_id: string | null };
+  /** D-099: stop reading aloud (a reply being written goes on). */
+  speak_stop: Record<string, never>;
   /** D-097: recording began; the engine loads speech-to-text meanwhile. */
   dictate_start: Record<string, never>;
   /** D-097: the recording (the page's WebM/Opus), written down on this PC, never sent on. */

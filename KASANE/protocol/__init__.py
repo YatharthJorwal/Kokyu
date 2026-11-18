@@ -110,6 +110,13 @@ class ReadAloudData(_Data):
     on: bool
 
 
+class SpeakMessage(_Data):
+    """D-099: read one of her messages aloud now (its speaker button), Read aloud on or off."""
+    ref: str = Field(min_length=1, max_length=64)          # the window's key, echoed in `spoken`
+    text: str = Field(min_length=1, max_length=40_000)
+    speaker_id: str | None = Field(default=None, max_length=64)
+
+
 # D-097: about two minutes of WebM/Opus from the page's recorder is well under a
 # megabyte; the cap keeps a hostile frame from tying up the CPU's speech model.
 DICTATION_B64_MAX = 4_000_000
@@ -276,6 +283,8 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
     "read_aloud": ReadAloudData,      # D-097: Read aloud on or off; its voice starts only while on
+    "speak_message": SpeakMessage,    # D-099: read one message aloud now, in its speaker's voice
+    "speak_stop": Empty,              # D-099: stop reading aloud (never stops a reply being written)
     "dictate_start": Empty,           # D-097: recording began; load the speech-to-text model meanwhile
     "dictate": DictateData,           # D-097: a recording to write down for the input box
     "doctor": Empty,                  # K1-13 (FR-SET-3): run the Doctor's checks
@@ -305,6 +314,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "model_status",   # K1-10 (FR-M-6): loading / ready / failed
     "screen_companions",  # K1-05b (FR-SC-2): what is watching the screen
     "read_aloud_status",  # D-097: Read aloud on or off, and how its voice's start is going
+    "spoken",         # D-099: a message read on request has all been sent ({ref})
     "dictation",      # D-097: a recording's words (or why not), for this window's input box
     "waifu_state",    # FR-S-1: the roster, the active companion, a pending switch
     "waifu_roster",   # D-091: the roster alone changed (a new picture), for every window

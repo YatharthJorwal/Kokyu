@@ -42,3 +42,14 @@ test("the engine's read_aloud_status lands in the state and goes on disconnect",
   s = reduce(s, { kind: "status", status: "offline" });
   assert.equal(s.readAloud, null); // the engine re-sends it on reconnect (kept in settings.json)
 });
+
+test("the message being read on request is the window's own state, gone on disconnect (D-099)", () => {
+  let s = reduce(initialState, { kind: "status", status: "online" });
+  assert.equal(s.reading, null);
+  s = reduce(s, { kind: "reading", key: "m7" });
+  assert.equal(s.reading, "m7");
+  s = reduce(s, { kind: "reading", key: null });
+  assert.equal(s.reading, null);
+  s = reduce(reduce(s, { kind: "reading", key: "m8" }), { kind: "status", status: "offline" });
+  assert.equal(s.reading, null);
+});

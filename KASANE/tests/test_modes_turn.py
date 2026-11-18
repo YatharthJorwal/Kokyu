@@ -357,7 +357,7 @@ async def test_a_roleplay_speaks_only_her_dialogue_but_keeps_the_whole_reply(wai
     calls = _model(monkeypatch, [_text(p) for p in pieces])
     spoken: list[str] = []
 
-    async def fake_synth(websocket, text, voice=None):
+    async def fake_synth(websocket, text, voice=None, **_kw):
         spoken.append(text)
         return b""
 

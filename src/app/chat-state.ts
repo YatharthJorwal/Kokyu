@@ -153,6 +153,9 @@ export interface ChatState {
   confirm: ConfirmAsk | null;
   /** UI1-10: the Ctrl+K palette is open. */
   palette: boolean;
+  /** D-099: the message being read aloud on request (its key), from the click until
+   * the last of it has played; null otherwise. */
+  reading: string | null;
   /** FR-MODE-6: the dialog's card save. "pending" until its own answer: the
    * `scenarios` frame naming the saved card, or a store error. null: none asked. */
   scenarioSave: ScenarioSave;
@@ -184,6 +187,7 @@ export type ChatEvent =
   | { kind: "toast_gone"; id: number }
   | { kind: "confirm"; ask: ConfirmAsk | null }
   | { kind: "palette"; open: boolean }
+  | { kind: "reading"; key: string | null }
   /** A card save went out (FR-MODE-6). */
   | { kind: "scenario_saving" }
   /** The dialog's thread_new went out (FR-MODE-6). */
@@ -219,6 +223,7 @@ export const initialState: ChatState = {
   toasts: [],
   confirm: null,
   palette: false,
+  reading: null,
   scenarioSave: null,
   roleplayStart: null,
 };
@@ -567,7 +572,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // get no answer: the dialog stops waiting (FR-MODE-6).
       const scenarioSave = state.scenarioSave === "pending" ? "lost" : state.scenarioSave;
       const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to Kōkyū's engine dropped." } : state.roleplayStart;
-      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
+      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, reading: null, pendingCompanion: null, beforeRegenerate: null, scenarioSave, roleplayStart };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };
@@ -614,6 +619,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, confirm: event.ask };
     case "palette":
       return { ...state, palette: event.open, pickerOpen: event.open ? false : state.pickerOpen };
+    case "reading":
+      return { ...state, reading: event.key };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
     case "roleplay_starting":

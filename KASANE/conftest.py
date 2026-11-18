@@ -93,7 +93,7 @@ def read_aloud_on(monkeypatch):
     cfg = config.CONFIG
     config.install(dataclasses.replace(cfg, tts=dataclasses.replace(cfg.tts, read_aloud=True)))
 
-    async def ready() -> bool:
+    async def ready(**_kw: object) -> bool:
         return True
 
     monkeypatch.setattr(read_aloud.READ_ALOUD, "ready", ready)

@@ -45,12 +45,13 @@ log = logging.getLogger(__name__)
 LATENCY = latency.LatencyRecorder()
 
 
-async def synthesize_for(websocket: Any, spoken: str, *, voice: Any = ...) -> bytes:
+async def synthesize_for(websocket: Any, spoken: str, *, voice: Any = ..., once: bool = False) -> bytes:
     """Speak in the active waifu's voice, or in `voice` when given (a reply read
     aloud keeps the voice of the companion who wrote it). With Read aloud off
     (D-097) or a dead TTS backend this yields empty audio: the reply stays
-    text-only (FR-V-7)."""
-    if not read_aloud.READ_ALOUD.on:
+    text-only (FR-V-7). `once`: a message read on request (D-099) speaks with Read
+    aloud off."""
+    if not (read_aloud.READ_ALOUD.on or once):
         return b""
     voice_params = companions.voice_of(websocket) if voice is ... else voice
     try:
@@ -139,22 +140,37 @@ async def send_speak(websocket: WebSocket, text: str) -> None:
     await send_audio(websocket, prepared.display, await synthesize_for(websocket, prepared.spoken))
 
 
-async def speak_reply(websocket: WebSocket, text: str, mode: str, voice: "tts.VoiceParams | None") -> None:
+async def speak_reply(
+    websocket: WebSocket, text: str, mode: str, voice: "tts.VoiceParams | None", *, ref: str | None = None
+) -> None:
     """Read aloud (D-097): say one finished reply, in Chat and Roleplay. What is said
     is speech.speakable's cut (no code, tables, links or tags; her dialogue only in a
     roleplay), clause by clause, synthesizing one clause ahead, in `voice`: the
     voice of whoever wrote it, taken when the reply ended. Waits while the voice
     wakes up; the session cancels it when the user sends, stops or leaves the thread.
-    Never raises: a reply that cannot be spoken stays text (FR-V-7)."""
-    spoken = speech.speakable(text, mode)
-    if not spoken or not await read_aloud.READ_ALOUD.ready():
-        return
+    Never raises: a reply that cannot be spoken stays text (FR-V-7).
+
+    `ref`: one message read on request, its speaker button (D-099): it speaks with
+    Read aloud off too, and `spoken {ref}` tells the window when it has all been sent."""
+    once = ref is not None
+    try:
+        spoken = speech.speakable(text, mode)
+        if spoken and await read_aloud.READ_ALOUD.ready(once=once):
+            await _say(websocket, spoken, voice, once)
+    finally:
+        if once:
+            read_aloud.READ_ALOUD.done_once()
+            with contextlib.suppress(Exception):
+                await websocket.send_json(protocol.frame("spoken", {"ref": ref}))
+
+
+async def _say(websocket: WebSocket, spoken: str, voice: "tts.VoiceParams | None", once: bool) -> None:
     clauses = speech.split_segments(
         apply_persona_pass(spoken), CONFIG.speech.max_segment_chars, CONFIG.speech.min_segment_chars
     )
     stream = speech_stream.SpeechStream(
         send=lambda display, audio: send_audio(websocket, display, audio),
-        synth=lambda clause: synthesize_for(websocket, clause, voice=voice),
+        synth=lambda clause: synthesize_for(websocket, clause, voice=voice, once=once),
         # already speakable: each clause goes out as it is
         prepare=lambda clause: speech.PreparedSpeech(display=clause, spoken=clause, segments=(clause,)),
         on_first_audio=arbiter.ARBITER.on_first_audio,

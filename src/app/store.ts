@@ -38,6 +38,17 @@ function dispatch(event: ChatEvent): void {
 
 const voice = new VoicePlayer();
 
+/** D-099: the engine has sent all of the message being read; it ends once played. */
+let readingSent = false;
+
+function readingOver(): void {
+  if (useChat.getState().reading !== null) dispatch({ kind: "reading", key: null });
+}
+
+voice.onIdle = () => {
+  if (readingSent) readingOver();
+};
+
 const TYPING_EVERY_MS = 4000;
 let lastTypingSent = 0;
 
@@ -63,6 +74,10 @@ function researchThreads(): void {
 const socket = new KernelSocket({
   onFrame: (frame) => {
     if (frame.type === "speak") voice.enqueue(frame.data as ServerData["speak"]);
+    if (frame.type === "spoken" && (frame.data as ServerData["spoken"]).ref === useChat.getState().reading) {
+      readingSent = true;
+      if (voice.idle) readingOver(); // nothing to hear (code only, or her voice did not start)
+    }
     if (frame.type === "dictation") dictationDone(frame.data as Dictated);
     dispatch({ kind: "frame", frame });
   },
@@ -313,6 +328,22 @@ export const actions = {
   /** Task Guide (with the task in the user's words) or OCR watch, on or off (FR-SC-1, 4). */
   setScreenCompanion(mode: "task_guide" | "ocr_watch", on: boolean, task = ""): void {
     socket.send("screen_companion", task ? { mode, on, task } : { mode, on });
+  },
+
+  /** D-099: read one of her messages aloud now, in her voice, Read aloud on or off.
+   * The same message again stops it. */
+  readMessage(key: string, text: string, speakerId: string | null): void {
+    const reading = useChat.getState().reading;
+    voice.stop();
+    if (reading === key) {
+      socket.send("speak_stop", {});
+      readingSent = false;
+      readingOver();
+      return;
+    }
+    if (!socket.send("speak_message", { ref: key, text, speaker_id: speakerId })) return;
+    readingSent = false;
+    dispatch({ kind: "reading", key });
   },
 
   /** Dictation began recording (D-097): the engine loads speech-to-text meanwhile. */

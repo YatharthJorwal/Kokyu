@@ -60,6 +60,7 @@ function ActionBar({ m, lastReply, editable, onEdit }: { m: ChatMessage; lastRep
     <div className="msg-actions">
       {facts ? <span className="msg-when">{facts}</span> : null}
       <CopyButton icon text={m.text} label={m.role === "assistant" ? "Copy reply" : "Copy message"} />
+      {m.role === "assistant" && m.text.trim() ? <ReadButton m={m} /> : null}
       {regenerable ? (
         <button type="button" className="msg-action icon-action" aria-label="Regenerate" title="Ask for another reply" onClick={() => actions.regenerate()}>
           <Icon name="regenerate" />
@@ -71,6 +72,28 @@ function ActionBar({ m, lastReply, editable, onEdit }: { m: ChatMessage; lastRep
         </button>
       ) : null}
     </div>
+  );
+}
+
+/** D-099: read this message aloud now, in her voice, whether Read aloud is on or off.
+ * While it is being read, the same button stops it. */
+function ReadButton({ m }: { m: ChatMessage }) {
+  const reading = useChat((s) => s.reading === m.key);
+  const starting = useChat((s) => s.reading === m.key && s.readAloud?.state !== "ready");
+  const online = useChat((s) => s.connection === "online");
+  const label = reading ? (starting ? "Starting her voice… (about 47 s) Click to stop" : "Stop reading") : "Read aloud";
+  return (
+    <button
+      type="button"
+      className={`msg-action icon-action read-message${reading ? " reading" : ""}`}
+      aria-label={reading ? "Stop reading" : "Read aloud"}
+      aria-pressed={reading}
+      title={label}
+      disabled={!online}
+      onClick={() => actions.readMessage(m.key, m.text, m.speakerId ?? null)}
+    >
+      <Icon name="speaker" />
+    </button>
   );
 }
 

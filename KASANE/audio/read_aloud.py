@@ -100,10 +100,20 @@ class ReadAloud:
         self._cancel_stop()
         self.loader.request(VOICE_REF)
 
-    async def ready(self) -> bool:
+    async def ready(self, *, once: bool = False) -> bool:
         """Waits while the voice wakes up. True once it answers; False when Read
         aloud is off or the start failed (the reply then stays text-only, FR-V-7).
-        A failed start is not retried here, once per reply: Try again does that."""
+        A failed start is not retried here, once per reply: Try again does that.
+        `once`: one message read on request (its speaker button, D-099) starts the
+        voice even while Read aloud is off, and retries a failed start."""
+        if once:
+            self._cancel_stop()
+            if self.loader.state != model_loader.READY:
+                pending = self.loader.request(VOICE_REF)
+                if pending is not None:
+                    with contextlib.suppress(Exception):
+                        await asyncio.wait({pending})
+            return self.loader.state == model_loader.READY
         if not self.on or self.loader.state == model_loader.FAILED:
             return False
         if self.loader.state != model_loader.READY:
@@ -112,6 +122,12 @@ class ReadAloud:
                 with contextlib.suppress(Exception):
                     await asyncio.wait({pending})
         return self.on and self.loader.state == model_loader.READY
+
+    def done_once(self) -> None:
+        """A message read on request has finished: with Read aloud off, the voice
+        stops after the usual idle time, as if it had just been turned off."""
+        if not self.on:
+            self._schedule_stop()
 
     def _cancel_stop(self) -> None:
         if self._stop_task is not None and not self._stop_task.done():

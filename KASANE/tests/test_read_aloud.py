@@ -382,3 +382,66 @@ async def test_turning_read_aloud_off_silences_her_at_once(scripted, read_aloud_
     speaking = session.speech
     await session.on_read_aloud(SimpleNamespace(data=SimpleNamespace(on=False)))
     assert speaking.cancelled() and not read_aloud.READ_ALOUD.on
+
+
+# -- one message read on request: her speaker button (D-099) -------------------------
+
+
+@pytest.mark.asyncio
+async def test_a_message_is_read_on_request_with_read_aloud_off_then_the_voice_idles(spoken_aloud, voice):
+    switch, voices = spoken_aloud
+    _, seen, _ = voice
+    await idle_after(0.05)
+    assert not switch.on
+    ws = SpeakSocket()
+    await turns.speak_reply(ws, "Fine — here it is. [teasing]", "chat", None, ref="m7")
+    assert ws.spoken() == ["Fine, here it is."] and seen["start"] == [1]   # the voice started just for it
+    assert (ws.frames[-1]["type"], ws.frames[-1]["data"]) == ("spoken", {"ref": "m7"})
+    assert not switch.on                                                    # Read aloud stays off
+    await asyncio.sleep(0.1)
+    assert seen["stop"] == [1]                                              # and the voice goes idle again
+
+
+@pytest.mark.asyncio
+async def test_a_failed_start_is_retried_by_the_button_and_still_says_done(spoken_aloud, voice):
+    _, _, result = voice
+    result["up"] = False
+    ws = SpeakSocket()
+    await turns.speak_reply(ws, "Hello.", "chat", None, ref="m1")
+    assert ws.spoken() == [] and [(f["type"], f["data"]) for f in ws.frames] == [("spoken", {"ref": "m1"})]
+    result["up"] = True
+    await turns.speak_reply(ws, "Hello.", "chat", None, ref="m1")
+    assert ws.spoken() == ["Hello."]
+
+
+@pytest.mark.asyncio
+async def test_a_roleplay_message_read_on_request_speaks_only_dialogue(spoken_aloud):
+    ws = SpeakSocket()
+    await turns.speak_reply(ws, '*She smiles.* "Hi there." *waves*', "roleplay", None, ref="m2")
+    assert ws.spoken() == ["Hi there."]
+
+
+@pytest.mark.asyncio
+async def test_the_session_reads_a_message_in_its_speaker_s_voice_and_stops_on_request(monkeypatch, read_aloud_on):
+    said, release = [], asyncio.Event()
+
+    async def speak_reply(ws, text, mode, voice, *, ref=None):
+        said.append((text, mode, voice, ref))
+        await release.wait()
+
+    monkeypatch.setattr(turns, "speak_reply", speak_reply)
+    luna = SimpleNamespace(ref_audio_path="luna.wav", voice=SimpleNamespace(ref_text="hi", ref_lang="en"))
+    session = _session("roleplay")
+    session.registry = SimpleNamespace(get=lambda wid: luna if wid == "luna" else None)
+    msg = SimpleNamespace(data=SimpleNamespace(ref="k1", text="*nods* \"Yes.\"", speaker_id="luna"))
+    await session.on_speak_message(msg)
+    await asyncio.sleep(0)
+    [(text, mode, voice_params, ref)] = said
+    assert (text, mode, ref) == ("*nods* \"Yes.\"", "roleplay", "k1")
+    assert voice_params.ref_audio_path == "luna.wav"
+    reading = session.speech
+    await session.on_speak_message(SimpleNamespace(data=SimpleNamespace(ref="k2", text="Two.", speaker_id="gone")))
+    assert reading.cancelled()                      # one reading at a time
+    await session.on_speak_stop(SimpleNamespace(data=None))
+    assert session.speech is None
+    assert session.turn is None                      # Stop's job (a reply being written) is untouched

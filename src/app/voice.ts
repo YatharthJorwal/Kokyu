@@ -18,6 +18,8 @@ function toBlobUrl(clip: SpeakClip): string {
 }
 
 export class VoicePlayer {
+  /** Called whenever the last queued clip has finished or playback was stopped. */
+  onIdle: (() => void) | null = null;
   private queue: SpeakClip[] = [];
   private current: HTMLAudioElement | null = null;
   private currentUrl: string | null = null;
@@ -31,6 +33,12 @@ export class VoicePlayer {
   stop(): void {
     this.queue = [];
     this.release();
+    this.onIdle?.();
+  }
+
+  /** Nothing playing and nothing queued. */
+  get idle(): boolean {
+    return this.current === null && this.queue.length === 0;
   }
 
   private release(): void {
@@ -46,7 +54,10 @@ export class VoicePlayer {
   private playNext(): void {
     this.release();
     const clip = this.queue.shift();
-    if (!clip) return;
+    if (!clip) {
+      this.onIdle?.();
+      return;
+    }
     const url = toBlobUrl(clip);
     const audio = new Audio(url);
     this.current = audio;
