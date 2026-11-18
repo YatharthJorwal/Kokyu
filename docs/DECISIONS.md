@@ -299,6 +299,9 @@ The user's notes. Voice mode goes. **Read aloud** (speaker icon, `＋` menu) spe
 **D-098 Chat memory: a context length per model** · Accepted · User, with Assumed parts · 2026-11-18
 "add a memory configurator … a slider for tokens 8k till however far it goes for its respective model. show a brief warning when exceeding hardware limit" (relayed by a sibling session). It is the context length. Assumed: in the picker under Effort, named **Chat memory** (Settings → Memory keeps her saved facts); detents 8K doubling to the model's maximum, plus the maximum; per model for every thread, in settings.json; untouched, `llm.num_ctx`. One value per model reaches every request, the history budget and llama.cpp's `-c`. Local models: the fit point is estimated from Ollama's `model_info` or the GGUF header (weights, KV cache, margin) against the room the model would have; past it, one line warns, never blocks: Ollama loads anyway and spills to RAM (amends D-065), llama.cpp's refusal stands. API models: a cost note, no hardware warning. Amends FR-M rows; adds FR-M-13.
 
+**D-099 Read one message aloud on request** · Accepted · User · 2026-11-18
+"add a speaker icon next to each of her message bubble so selected message can be read aloud even when automatic mode is off". A speaker in her messages' hover bar reads that message now, through `speakable` (the thread's mode), in the voice of the companion who wrote it, Read aloud on or off; clicked again it stops. With Read aloud off her voice starts for it (the button says so) and idles afterwards as usual. One reading at a time; a new line, Stop or another thread ends it; stopping a reading never stops a reply being written.
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)

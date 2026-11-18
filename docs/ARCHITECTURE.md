@@ -160,6 +160,7 @@ The kernel validates client frames with pydantic models (`KASANE/protocol/__init
 | `set_portrait`, `waifu_roster` | both | Her picture from a file, or null for the model's face (D-091, FR-W-9); every window then gets the roster alone, active and pending untouched |
 | `surface_status` | K→C | Whether this window drives turns or observes |
 | `read_aloud`, `read_aloud_status` | both | Read aloud on or off, kept in `settings.json`; her voice's start state (idle, loading, ready, failed) to every window (D-097) |
+| `speak_message`, `speak_stop`, `spoken` | both | A message read aloud on request (`ref`, `text`, `speaker_id`), Read aloud on or off; stop reading (never a reply); `spoken {ref}` once all of it is sent (D-099) |
 | `dictate_start`, `dictate`, `dictation` | both | Dictation (D-097): recording began (load speech-to-text meanwhile); the recording (WebM/Opus, base64, at most 4 MB); its words or why not, to that window only. Never a turn |
 | `screen_companion`, `screen_companions` | both | Task Guide or OCR watch on or off (FR-SC-1..4); what is watching the screen |
 | `typing` | C→K | The user is typing; OCR watch keeps quiet (FR-SC-5) |

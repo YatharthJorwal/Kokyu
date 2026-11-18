@@ -47,6 +47,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [x] UI1-11 The user's notes of 2026-11-18 (D-096): Tauri crate and npm on 2.12 `514e5c6`; the effort slider dragged smoothly `3565673`; thinking beside her face with animated words, replies typed out, a compact loading strip `7203bb0`
 - [x] UI1-12 The user's notes of 2026-11-18, part two (D-097): "Waifu-mode-engaging" back, one slow letter lift, no slider end dots, a soft ⋯ hover `88ae626`; emotion tags shown like actions (FR-C-8) `510d629`; `speakable(text, mode)`, fixed rules before TTS (FR-V-2) `1562135`; Read aloud replaces voice mode, kept in settings.json, her voice only while on, the starting chip (FR-V-9) `c29500e`; dictation, the mic button and F9 into the input box, Settings → Voice, PyAV capped below 19 (FR-V-6) `6a254cf`; docs `c7fd2e4`
 - [x] UI1-13 Chat memory (D-098, FR-M-13; the user's task 10, relayed): a context-length slider per model under Effort, 8K doubling to the model's maximum, kept in settings.json; every Ollama request, the history budget and llama.cpp's `-c` follow it; the fit point from Ollama's `model_info` or the GGUF header, a warning past it that never blocks `b6e97c8`, `f9648b0`
+- [x] UI1-14 A speaker on each of her messages reads it aloud on request, Read aloud on or off (D-099, FR-V-10) `d65feec`
 - **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
 
 ## Phase UI-2: Design standard (D-086)
