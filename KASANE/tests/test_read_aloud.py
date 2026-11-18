@@ -305,7 +305,7 @@ def _session(mode="chat"):
 
     session = Session.__new__(Session)
     session.ws = SimpleNamespace(state=SimpleNamespace(waifu=None))
-    session.thread = SimpleNamespace(id="t1", mode=mode, scenario={}, model_ref=None, effort=None)
+    session.thread = SimpleNamespace(id="t1", mode=mode, scenario={}, model_ref=None, effort=None, note="")
     session.turn = session.speech = None
     session.pending_waifu = None
     session.history, session.temp, session.temp_flags, session.unprompted = [], False, [], []

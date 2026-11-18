@@ -656,3 +656,18 @@ test("a refused pin leaves a running turn alone", () => {
   s = reduce(s, frame("error", { code: "pin_limit", message: "A story can have 10 pinned messages." }));
   assert.equal(s.turn, "thinking");
 });
+
+// D-101: History and Memory belong to a roleplay; Memory follows its own story.
+test("a roleplay's pages open only in a roleplay, and Memory closes when another thread opens", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "story", panel: "memory" });
+  assert.equal(s.story, null); // a chat has no Memory
+  s = reduce(s, frame("thread_opened", { thread: thread("t2", { mode: "roleplay" }), messages: [] }, "t2"));
+  s = reduce(s, { kind: "story", panel: "memory" });
+  assert.equal(s.story, "memory");
+  s = reduce(s, frame("thread_opened", { thread: thread("t3", { mode: "roleplay" }), messages: [] }, "t3"));
+  assert.equal(s.story, null);
+  s = reduce(s, { kind: "story", panel: "history" });
+  s = reduce(s, frame("thread_opened", { thread: thread("t4", { mode: "roleplay" }), messages: [] }, "t4"));
+  assert.equal(s.story, "history"); // History closes itself when a story is picked
+});

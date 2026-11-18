@@ -321,6 +321,7 @@ async def run_turn(
     mode: str = "chat",
     story: str | None = None,
     pins: list[str] | None = None,
+    note: str | None = None,
 ) -> str:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, commit (or roll back) history. Returns the reply to read aloud
@@ -355,7 +356,8 @@ async def run_turn(
 
     pins: a roleplay thread's pinned messages as lines (D-100), always in the note,
     so they stay with her after the history window has moved past them. They are
-    the thread's own words, not memory, so Temp Chat keeps them."""
+    the thread's own words, not memory, so Temp Chat keeps them. `note`: the
+    roleplay's Memory box (D-101), kept the same way."""
     if mode not in prompting.MODE_LAYERS:
         raise ValueError(f"unknown conversation mode: {mode!r}")
     roleplay = mode == "roleplay"
@@ -443,7 +445,10 @@ async def run_turn(
     # FR-MODE-5: the story so far, for a roleplay only and never in Temp Chat (D-074).
     story_note = prompting.STORY_NOTE.format(summary=story) if story and roleplay and not temp_mode else None
     pins_note = prompting.PINS_NOTE.format(lines="\n".join(pins)) if pins and roleplay else None
-    memory_parts = [part for part in (forget_hint, task_hint, look_hint, memory_block, story_note, pins_note) if part]
+    box_note = prompting.MEMORY_BOX_NOTE.format(note=note) if note and roleplay else None
+    memory_parts = [
+        part for part in (forget_hint, task_hint, look_hint, memory_block, story_note, box_note, pins_note) if part
+    ]
 
     if memory_parts:
         combined = " ".join(memory_parts)

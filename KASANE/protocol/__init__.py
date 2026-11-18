@@ -55,6 +55,15 @@ class ThreadPin(_Data):
     on: bool
 
 
+NOTE_MAX = 1000
+
+
+class ThreadNote(_Data):
+    """D-101: the open roleplay's Memory box; "" clears it."""
+
+    text: str = Field(default="", max_length=NOTE_MAX)
+
+
 class MessageRef(_Data):
     """D-100: a stored message of the open thread (Rewind to here, New chat from here)."""
 
@@ -304,6 +313,7 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "message_branch": MessageRef,     # D-100: a new thread of the same mode, up to this message
     "message_pin": MessagePin,        # D-100: roleplay only; pinned messages stay in her prompt
     "message_swipe": MessageSwipe,    # D-100: another candidate of her latest reply
+    "thread_note": ThreadNote,        # D-101: the open roleplay's Memory box
     "screen_companion": ScreenCompanion,  # K1-05b: Task Guide / OCR watch on or off
     "typing": Empty,                  # K1-05b (FR-SC-5): the user is typing; OCR watch keeps quiet
     "read_aloud": ReadAloudData,      # D-097: Read aloud on or off; its voice starts only while on

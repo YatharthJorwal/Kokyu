@@ -2,11 +2,12 @@
 // popover with a searchable list plus "＋ New waifu". Switching changes only her
 // voice and persona (FR-W-3); mid-reply it waits for the reply to finish, and the
 // chip says who comes next (FR-S-2). The kernel writes the divider. Her face is
-// the portrait from her VRM (D-091).
+// the portrait from her VRM (D-091). In a roleplay she stays (D-101): the chip opens
+// her profile instead, and another companion means a new chat.
 
 import { useEffect, useRef, useState, type KeyboardEvent } from "react";
 
-import type { Companion } from "../chat-state";
+import { currentMode, type Companion } from "../chat-state";
 import { actions, useChat } from "../store";
 import { Portrait } from "./Portrait";
 
@@ -15,6 +16,7 @@ export function CompanionChip() {
   const pending = useChat((s) => s.pendingCompanion);
   const roster = useChat((s) => s.roster);
   const enabled = useChat((s) => s.role === "driver" && s.connection === "online" && s.roster.length > 0);
+  const roleplay = useChat((s) => currentMode(s) === "roleplay");
   const [open, setOpen] = useState(false);
   const wrapper = useRef<HTMLDivElement>(null);
 
@@ -28,6 +30,21 @@ export function CompanionChip() {
   }, [open]);
 
   const name = companion?.name ?? "No companion";
+  if (roleplay && companion) {
+    return (
+      <div className="model-picker companion-picker">
+        <button
+          type="button"
+          className="model-chip companion-chip"
+          title={`${companion.name} stays for this story. Start a new chat to talk to someone else.`}
+          onClick={() => actions.openProfile(companion.id)}
+        >
+          <Portrait id={companion.id} name={companion.name} portrait={companion.portrait} className="avatar-dot" />
+          <span className="model-name">{name}</span>
+        </button>
+      </div>
+    );
+  }
   const title = pending ? `${pending.name} takes over after this reply` : "Choose who you talk to";
 
   return (

@@ -220,3 +220,113 @@ def test_new_chat_from_here_opens_a_copy_in_the_same_mode(kernel, monkeypatch):
     assert [m["content"] for m in opened["data"]["messages"]] == [CARD["opening"], "one", "Mm."]
     original = conversation.get_manager().store.messages(story["id"])
     assert [m.content for m in original][-2:] == ["two", "Mm."]
+
+
+# ── the review's fixes (D-100) ────────────────────────────────────────────
+
+
+def _transcript(monkeypatch):
+    """A fake transcript log: rows by id, and the ids dropped."""
+    import turns
+
+    rows: dict[int, tuple[str, str]] = {}
+    dropped: list[int] = []
+
+    async def log(user_text, reply, temp=False, speaker=None):
+        rows[len(rows) + 1] = (user_text, reply)
+        return len(rows)
+
+    async def drop(row_id):
+        dropped.append(row_id)
+
+    monkeypatch.setattr(turns, "log_transcript_turn", log)
+    monkeypatch.setattr(turns, "drop_transcript_turn", drop)
+    return rows, dropped
+
+
+def test_a_pinned_reply_regenerated_is_quoted_with_its_new_text(kernel, monkeypatch):
+    seen = _recording(monkeypatch, ["the old words", "the new words"])
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _new_roleplay(ws)
+        _temp_on(ws)
+        _send(ws, "send", {"text": "Hello."})
+        saved, _ = _until(ws, "exchange_saved")
+        _until(ws, "turn_done")
+        _send(ws, "message_pin", {"id": saved["data"]["reply"]["id"], "on": True})
+        _until(ws, "message_updated")
+        _send(ws, "regenerate", {})
+        again, _ = _until(ws, "exchange_saved")
+        _until(ws, "turn_done")
+        assert again["data"]["reply"]["meta"]["pinned"] is True
+        _chat(ws, "And?")
+    notes = " ".join(m["content"] for m in seen[-1] if m["role"] == "system")
+    assert "the new words" in notes and "the old words" not in notes
+
+
+def test_rewinding_to_a_user_line_drops_the_row_that_held_its_reply(kernel, monkeypatch):
+    _recording(monkeypatch)
+    rows, dropped = _transcript(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _send(ws, "send", {"text": "one"})
+        first, _ = _until(ws, "exchange_saved")
+        _until(ws, "turn_done")
+        _chat(ws, "two")
+        _send(ws, "message_rewind", {"id": first["data"]["user"]["id"]})
+        opened, _ = _until(ws, "thread_opened")
+    assert [m["content"] for m in opened["data"]["messages"]] == ["one"]
+    assert sorted(dropped) == [1, 2]   # the kept line's row (its reply is gone) and the later exchange
+    assert "log_id" not in opened["data"]["messages"][0]["meta"]
+
+
+def test_a_swipe_in_a_chat_moves_the_transcript_to_the_reply_shown(kernel, monkeypatch):
+    _recording(monkeypatch, ["first", "second"])
+    rows, dropped = _transcript(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _chat(ws, "tell me")
+        _send(ws, "regenerate", {})
+        saved, _ = _until(ws, "exchange_saved")
+        _until(ws, "turn_done")
+        _send(ws, "message_swipe", {"id": saved["data"]["reply"]["id"], "to": 0})
+        _until(ws, "message_updated")
+    latest = max(rows)
+    assert rows[latest] == ("tell me", "first") and latest not in dropped
+    assert all(row in dropped for row in rows if row != latest)
+
+
+# ── a roleplay's companion and Memory (D-101) ─────────────────────────────
+
+
+def test_a_roleplay_keeps_its_companion(kernel):
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _new_roleplay(ws)
+        _send(ws, "switch_waifu", {"id": "beta"})
+        refused, _ = _until(ws, "error")
+    assert refused["data"]["code"] == "bad_message" and "new chat" in refused["data"]["message"]
+
+
+def test_a_roleplays_memory_is_kept_and_in_her_note_every_turn(kernel, monkeypatch):
+    seen = _recording(monkeypatch)
+    with kernel.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _send(ws, "thread_note", {"text": "x"})
+        refused, _ = _until(ws, "error")
+        assert refused["data"]["code"] == "bad_message"   # a chat has no Memory box
+        story = _new_roleplay(ws)
+        _temp_on(ws)
+        _send(ws, "thread_note", {"text": "  She owes you an umbrella.  "})
+        updated, _ = _until(ws, "thread_updated")
+        assert updated["data"]["thread"]["note"] == "She owes you an umbrella."
+        _chat(ws, "Hi.")
+    notes = " ".join(m["content"] for m in seen[-1] if m["role"] == "system")
+    assert prompting.MEMORY_BOX_NOTE.format(note="She owes you an umbrella.") in notes
+    assert conversation.get_manager().store.get_thread(story["id"]).note == "She owes you an umbrella."
+
+
+def test_a_branch_keeps_the_stories_memory(store):
+    t, ids = _thread_with(store, [("user", "a", None)], mode="roleplay")
+    store.update_thread(t.id, note="umbrella")
+    assert store.branch(t.id, ids[0]).note == "umbrella"

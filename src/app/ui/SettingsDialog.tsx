@@ -341,7 +341,7 @@ function VoiceSection() {
               onChange={(e) => actions.setReadAloud(e.target.checked)}
             />
             <span className="switch-track" aria-hidden="true" />
-            On
+            {readAloud?.on ? "On" : "Off"}
           </label>
         </li>
         <li>

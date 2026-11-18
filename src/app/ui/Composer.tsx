@@ -6,6 +6,8 @@
 // FR-SC-2; Temp Chat; else a keyboard hint) and the model chip (K1-10, FR-M-1)
 // at the right. The companion chip moved to the top bar. Beside Send, the mic
 // (D-097): it or its key (F9 unless changed) dictates into the box, never sends.
+// D-101: in a roleplay the paperclip becomes the story tray (a book): History, New
+// chat and Memory first, then Upload file and Read aloud; no screen companions.
 
 import {
   useEffect,
@@ -19,7 +21,7 @@ import {
 } from "react";
 
 import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
-import { canSend, currentMode } from "../chat-state";
+import { canSend, canStartThread, currentMode } from "../chat-state";
 import { MAX_DICTATION_S, insertDictation, isDictationKey, micProblem, recordingTime } from "../dictation";
 import { useDictationKey } from "../dictation-key";
 import { anyModal } from "../keys";
@@ -422,6 +424,8 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
   const [task, setTask] = useState("");
   const screen = useChat((s) => s.screen);
   const readAloudOn = useChat((s) => s.readAloud?.on ?? false);
+  const roleplay = useChat((s) => currentMode(s) === "roleplay");
+  const canStart = useChat(canStartThread);
   const wrapper = useRef<HTMLDivElement>(null);
   const picker = useRef<HTMLInputElement>(null);
   const first = useRef<HTMLButtonElement>(null);
@@ -453,21 +457,66 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
       <button
         type="button"
         className="tray-toggle"
-        aria-label="Attach"
-        title="Attach a file; Read aloud; screen companions"
+        aria-label={roleplay ? "Story" : "Attach"}
+        title={roleplay ? "History, a new chat, Memory; a file; Read aloud" : "Attach a file; Read aloud; screen companions"}
         aria-haspopup="menu"
         aria-expanded={open}
         disabled={disabled}
         onClick={() => setOpen((o) => !o)}
       >
         <svg viewBox="0 0 24 24" aria-hidden="true">
-          <path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" />
+          {roleplay ? (
+            <path d="M12 6.5C10 5 7.5 4.5 4 4.5v13c3.5 0 6 .5 8 2 2-1.5 4.5-2 8-2v-13c-3.5 0-6 .5-8 2zM12 6.5v13" />
+          ) : (
+            <path d="M20 11.5l-7.8 7.8a5 5 0 0 1-7.1-7.1l8.2-8.2a3.3 3.3 0 0 1 4.7 4.7l-8.2 8.2a1.7 1.7 0 0 1-2.4-2.4l7.6-7.6" />
+          )}
         </svg>
       </button>
       {open ? (
-        <div className="tray-menu" role="menu" aria-label="Attach">
+        <div className="tray-menu" role="menu" aria-label={roleplay ? "Story" : "Attach"}>
+          {roleplay ? (
+            <>
+              <button
+                ref={first}
+                type="button"
+                role="menuitem"
+                title="Every roleplay with her"
+                onClick={() => {
+                  setOpen(false);
+                  actions.openStory("history");
+                }}
+              >
+                History
+              </button>
+              {canStart ? (
+                <button
+                  type="button"
+                  role="menuitem"
+                  title="This story again from the start, with her"
+                  onClick={() => {
+                    setOpen(false);
+                    actions.newStory();
+                  }}
+                >
+                  New chat
+                </button>
+              ) : null}
+              <button
+                type="button"
+                role="menuitem"
+                title="What she keeps in mind for this story, and its pinned messages"
+                onClick={() => {
+                  setOpen(false);
+                  actions.openStory("memory");
+                }}
+              >
+                Memory
+              </button>
+              <div className="tray-section" role="presentation" />
+            </>
+          ) : null}
           <button
-            ref={first}
+            ref={roleplay ? undefined : first}
             type="button"
             role="menuitem"
             onClick={() => {
@@ -492,6 +541,8 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
             Read aloud
             <span className="menu-state">{readAloudOn ? "on" : "off"}</span>
           </button>
+          {roleplay ? null : (
+            <>
           <div className="tray-section" role="presentation">
             Screen companions
           </div>
@@ -542,6 +593,8 @@ function Tray({ onFile, disabled }: { onFile: (file: File | undefined) => void; 
             OCR watch
             <span className="menu-state">{screen?.ocr_watch.on ? "on" : "off"}</span>
           </button>
+            </>
+          )}
         </div>
       ) : null}
       <input

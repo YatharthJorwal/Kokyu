@@ -409,6 +409,8 @@ class Session:
                 meta=meta,
                 reply_meta=reply_meta,
             )
+            if (line_meta or (reply_meta and reply_meta.get("pinned"))) and self.thread_id == thread.id:
+                await self.load_pins()   # a pin carried over now quotes the new text
             with contextlib.suppress(Exception):
                 await self.ws.send_json(
                     protocol.frame(
@@ -472,6 +474,7 @@ class Session:
             mode=mode,
             story=self.turn_story(),
             pins=self.pins if mode == "roleplay" else None,
+            note=(self.thread.note or None) if mode == "roleplay" and self.thread is not None else None,
         )
         self.turn = asyncio.create_task(self._then_switch(turn, mode))
 
@@ -597,14 +600,18 @@ class Session:
         if self.busy:
             await self.refuse("turn_running", BUSY)
             return
-        if await self.message_here(msg.data.id) is None:
+        target = await self.message_here(msg.data.id)
+        if target is None:
             return
         await self.hush()
         story.KEEPER.preempt()   # a summary being written could reach past this point
         try:
             gone = await self.manager.rewind(self.thread.id, msg.data.id)
-            for m in gone:
-                log_id = m.meta.get("log_id")
+            # A user line's row holds its reply too: rewound to the line, that reply is gone.
+            line_log = target.meta.get("log_id") if target.role == "user" and gone else None
+            if isinstance(line_log, int):
+                await self.manager.set_meta(target, log_id=None)
+            for log_id in [line_log, *(m.meta.get("log_id") for m in gone)]:
                 if isinstance(log_id, int):
                     await turns.drop_transcript_turn(log_id)
             await self.load_thread(self.thread, load=False)
@@ -629,14 +636,35 @@ class Session:
         except ValueError:
             await self.refuse("bad_message", "That reply is no longer there.")
             return
+        await self.relog(found[1][0], found[0], shown.content)
         await self.hush()
         self.history[:] = await self.manager.history(self.thread, self.system_prompt())
         self.reset_history_flags()
         await self.load_pins()
         await self.send_message_updated(shown)
 
+    async def relog(self, line_id: int, line_text: str, reply: str) -> None:
+        """A chat swiped to another reply: its transcript row now holds the shown one,
+        so the memory writer learns from what the user kept. A roleplay is never logged."""
+        if self.in_roleplay():
+            return
+        line = await self.manager.message(self.thread.id, line_id)
+        if line is None:
+            return
+        old = line.meta.get("log_id")
+        if isinstance(old, int):
+            await turns.drop_transcript_turn(old)
+        new = await turns.log_transcript_turn(
+            line_text, turns.apply_persona_pass(reply), self.temp, speaker=companions.speaker_of(self.ws)
+        )
+        await self.manager.set_meta(line, log_id=new)
+
     async def on_message_pin(self, msg: Any) -> None:
-        """Pins exist only in a roleplay (D-100): a story's own memory, never the app's."""
+        """Pins exist only in a roleplay (D-100): a story's own memory, never the app's.
+        Not during a turn: a Regenerate would replace the message and lose the pin."""
+        if self.busy:
+            await self.refuse("turn_running", BUSY)
+            return
         if not self.in_roleplay():
             await self.refuse("bad_message", "Pins are for roleplay stories.")
             return
@@ -654,6 +682,19 @@ class Session:
         updated = await self.manager.set_pin(message, msg.data.on)
         await self.load_pins()
         await self.send_message_updated(updated)
+
+    async def on_thread_note(self, msg: Any) -> None:
+        """D-101: the open roleplay's Memory box, in her note every turn."""
+        if not self.in_roleplay():
+            await self.refuse("bad_message", "Memory is for roleplay stories.")
+            return
+        try:
+            self.thread = await asyncio.to_thread(self.manager.store.update_thread, self.thread.id, note=msg.data.text)
+        except Exception as exc:  # noqa: BLE001 -- report, keep the connection
+            log.warning(f"could not save the story's memory: {exc}")
+            await self.refuse("threads_unavailable", NO_THREADS)
+            return
+        await self.send_thread_updated()
 
     async def on_message_branch(self, msg: Any) -> None:
         """Start a new chat from here: a copy of the thread up to this message, in the
@@ -677,7 +718,10 @@ class Session:
 
     async def on_switch_waifu(self, msg: Any) -> None:
         target_id = msg.data.id
-        if self.registry.get(target_id) is None:
+        if self.in_roleplay():
+            # D-101: a story keeps its character; another one starts a new chat.
+            await self.refuse("bad_message", "In a roleplay she stays. Start a new chat to talk to someone else.")
+        elif self.registry.get(target_id) is None:
             await self.refuse("unknown_waifu", f"There is no companion called {target_id!r}.")
         elif self.busy:
             self.pending_waifu = target_id

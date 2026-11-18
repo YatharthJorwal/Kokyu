@@ -35,6 +35,7 @@ export const CLIENT_TYPES = [
   "message_branch",
   "message_pin",
   "message_swipe",
+  "thread_note",
   "screen_companion",
   "typing",
   "read_aloud",
@@ -161,6 +162,8 @@ export interface ThreadInfo {
   scenario: Scenario;
   /** Kept at the top of the history list (UI1-09, D-094); absent from an older engine. */
   pinned?: boolean;
+  /** D-101: a roleplay's Memory box, written by the user. */
+  note?: string;
 }
 
 /** A saved scenario card (FR-MODE-6): `title` is the card's own, else derived from its setting. */
@@ -388,6 +391,8 @@ export interface ClientData {
   message_pin: { id: number; on: boolean };
   /** D-100: show another candidate (its index) of her latest reply. */
   message_swipe: { id: number; to: number };
+  /** D-101: the open roleplay's Memory box; "" clears it. */
+  thread_note: { text: string };
   set_model: { model_ref: string | null };
   set_effort: { effort: Effort | null };
   /** D-098: a model's Chat memory (context length) for every thread; null: the default. */

@@ -12,6 +12,7 @@ import { NoticeBar } from "./ui/NoticeBar";
 import { ProfileDialog } from "./ui/ProfileDialog";
 import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
+import { StoryDialog } from "./ui/StoryDialog";
 import { Sidebar } from "./ui/Sidebar";
 import { Toasts } from "./ui/Toasts";
 import { ThreadView } from "./ui/ThreadView";
@@ -53,6 +54,7 @@ export function App() {
       <SettingsDialog />
       <RoleplayDialog />
       <ProfileDialog />
+      <StoryDialog />
       <ConfirmDialog />
       <CommandPalette />
       <Toasts />

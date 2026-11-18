@@ -285,6 +285,16 @@ class ConversationManager:
         await self._run(self.store.set_kv, LAST_THREAD_KEY, thread.id)
         return thread
 
+    async def set_meta(self, message: Message, **fields: Any) -> Message:
+        """Sets (or, with None, removes) meta fields of a message, the rest kept."""
+        meta = dict(message.meta)
+        for key, value in fields.items():
+            if value is None:
+                meta.pop(key, None)
+            else:
+                meta[key] = value
+        return await self._run(self.store.update_message, message.id, meta=meta)
+
     async def set_pin(self, message: Message, on: bool) -> Message:
         meta = {k: v for k, v in message.meta.items() if k != "pinned"}
         if on:

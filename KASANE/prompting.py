@@ -99,6 +99,9 @@ STORY_NOTE = "The story so far, summarized from earlier scenes: {summary}"
 # D-100: a roleplay thread's pinned messages, in the same per-turn note: always remembered.
 PINS_NOTE = "Moments of this story the user pinned, so always keep them in mind:\n{lines}"
 
+# D-101: a roleplay's Memory box, written by the user, in the same note.
+MEMORY_BOX_NOTE = "What the user wants you to remember in this story: {note}"
+
 
 def scenario_block(scenario: Mapping[str, Any] | None) -> str:
     """The scenario card as text, or "" when it has nothing filled in (FR-MODE-6)."""

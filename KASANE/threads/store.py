@@ -19,9 +19,9 @@ from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Iterator
 
-SCHEMA_VERSION = 6   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074);
+SCHEMA_VERSION = 7   # 2: threads.efforts (FR-M-11); 3: threads.mode and threads.scenario (FR-MODE-1, D-074);
                      # 4: the story_memory table (FR-MODE-5, D-074); 5: the scenarios table (FR-MODE-6, D-074);
-                     # 6: threads.pinned (UI1-09, D-094)
+                     # 6: threads.pinned (UI1-09, D-094); 7: threads.note, a roleplay's Memory (D-101)
 TITLE_MAX = 80
 SEARCH_LIMIT = 50
 # FR-MODE-6: what a saved card is called when its title was left empty and it has no setting.
@@ -45,7 +45,8 @@ CREATE TABLE IF NOT EXISTS threads (
     efforts         TEXT,
     mode            TEXT NOT NULL DEFAULT 'chat',
     scenario        TEXT,
-    pinned          INTEGER NOT NULL DEFAULT 0
+    pinned          INTEGER NOT NULL DEFAULT 0,
+    note            TEXT NOT NULL DEFAULT ''
 );
 CREATE TABLE IF NOT EXISTS messages (
     id               INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -96,6 +97,7 @@ _ADDED_COLUMNS = (
     ("mode", "mode TEXT NOT NULL DEFAULT 'chat'"),
     ("scenario", "scenario TEXT"),
     ("pinned", "pinned INTEGER NOT NULL DEFAULT 0"),
+    ("note", "note TEXT NOT NULL DEFAULT ''"),
 )
 
 
@@ -119,6 +121,8 @@ class Thread:
     scenario: dict[str, Any] = field(default_factory=dict)
     # UI1-09 (D-094): kept at the top of the history list
     pinned: bool = False
+    # D-101: a roleplay's Memory, written by the user; in her note every turn
+    note: str = ""
 
     def to_dict(self) -> dict[str, Any]:
         return {
@@ -134,6 +138,7 @@ class Thread:
             "mode": self.mode,
             "scenario": dict(self.scenario),
             "pinned": self.pinned,
+            "note": self.note,
         }
 
 
@@ -234,6 +239,7 @@ def _thread(row: sqlite3.Row) -> Thread:
         mode=row["mode"] if row["mode"] in MODES else "chat",
         scenario=_json_dict(row["scenario"]),
         pinned=bool(row["pinned"]),
+        note=row["note"] or "",
     )
 
 
@@ -355,10 +361,10 @@ class ThreadStore:
             return [_thread(r) for r in db.execute(sql, (limit,)).fetchall()]
 
     def update_thread(self, thread_id: str, **fields: Any) -> Thread:
-        """Sets any of: title, active_waifu_id, model_ref, effort, temp, archived, efforts, pinned.
+        """Sets any of: title, active_waifu_id, model_ref, effort, temp, archived, efforts, pinned, note.
         Settings changes do not reorder the history list (updated_at is for messages).
         Mode and scenario are not here on purpose: fixed when the thread is made (FR-MODE-1)."""
-        allowed = {"title", "active_waifu_id", "model_ref", "effort", "temp", "archived", "efforts", "pinned"}
+        allowed = {"title", "active_waifu_id", "model_ref", "effort", "temp", "archived", "efforts", "pinned", "note"}
         unknown = set(fields) - allowed
         if unknown:
             raise ValueError(f"unknown thread fields: {sorted(unknown)}")
@@ -441,8 +447,8 @@ class ThreadStore:
         with self._connect() as db:
             db.execute(
                 "INSERT INTO threads (id, title, created_at, updated_at, active_waifu_id, model_ref, effort, temp,"
-                " efforts, mode, scenario) SELECT ?, title, ?, ?, active_waifu_id, model_ref, effort, temp,"
-                " efforts, mode, scenario FROM threads WHERE id = ?",
+                " efforts, mode, scenario, note) SELECT ?, title, ?, ?, active_waifu_id, model_ref, effort, temp,"
+                " efforts, mode, scenario, note FROM threads WHERE id = ?",
                 (new_id, now, now, src.id),
             )
             new_ids: dict[int, int] = {}

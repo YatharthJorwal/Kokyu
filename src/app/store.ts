@@ -321,6 +321,27 @@ export const actions = {
     dispatch({ kind: "profile", id: null });
   },
 
+  // ── a roleplay's tray (D-101) ───────────────────────────────────────
+
+  openStory(panel: "history" | "memory"): void {
+    dispatch({ kind: "story", panel });
+  },
+
+  closeStory(): void {
+    dispatch({ kind: "story", panel: null });
+  },
+
+  /** The roleplay's Memory box, kept by the engine with the thread. */
+  saveStoryNote(text: string): void {
+    if (canActOnMessages(useChat.getState())) socket.send("thread_note", { text });
+  },
+
+  /** A new roleplay from the open one's card, with her: her greeting starts it again. */
+  newStory(): void {
+    const scenario = useChat.getState().thread?.scenario ?? null;
+    actions.newRoleplay(scenario && Object.keys(scenario).length > 0 ? scenario : null);
+  },
+
   /** The profile's Chat button: a new chat that starts with her. The open chat gets
    * no divider, since nobody switched in it. */
   chatWith(id: string): void {

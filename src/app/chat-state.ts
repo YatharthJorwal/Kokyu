@@ -156,6 +156,8 @@ export interface ChatState {
   roleplayOpen: boolean;
   /** D-091 (FR-W-9): whose profile is open, or null. */
   profile: string | null;
+  /** D-101: a roleplay's History or Memory page, or null. */
+  story: "history" | "memory" | null;
   /** UI1-09: the toasts on screen, oldest first. */
   toasts: Toast[];
   /** UI1-09: the in-app confirm being asked, or null. */
@@ -192,6 +194,7 @@ export type ChatEvent =
   | { kind: "settings"; section: SettingsSection | null }
   | { kind: "roleplay"; open: boolean }
   | { kind: "profile"; id: string | null }
+  | { kind: "story"; panel: "history" | "memory" | null }
   | { kind: "toast"; text: string }
   | { kind: "toast_gone"; id: number }
   | { kind: "confirm"; ask: ConfirmAsk | null }
@@ -230,6 +233,7 @@ export const initialState: ChatState = {
   scenarios: null,
   roleplayOpen: false,
   profile: null,
+  story: null,
   toasts: [],
   confirm: null,
   palette: false,
@@ -432,6 +436,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         messages: data.messages.map(fromStored),
         beforeRegenerate: null,
         saved: null,
+        // A Memory page belongs to the story it was opened in.
+        story: state.story === "memory" && state.thread?.id !== data.thread.id ? null : state.story,
         streamRaw: "",
         notice: null,
         // The dialog's roleplay opened: only now does the dialog close (FR-MODE-6).
@@ -650,6 +656,9 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, roleplayOpen: event.open && canStartThread(state), pickerOpen: false, scenarioSave: null, roleplayStart: null };
     case "profile":
       return { ...state, profile: event.id, pickerOpen: false };
+    case "story":
+      // Roleplay pages only: a chat thread has no History or Memory (D-101).
+      return { ...state, story: event.panel && currentMode(state) === "roleplay" ? event.panel : null, pickerOpen: false };
     case "toast": {
       toastCounter += 1;
       return { ...state, toasts: [...state.toasts, { id: toastCounter, text: event.text }].slice(-MAX_TOASTS) };

@@ -623,9 +623,10 @@ def test_a_chat_thread_ignores_a_card_sent_with_it(kernel):
     assert opened["data"]["thread"]["title"] == ""
 
 
-def test_a_companion_switch_and_a_regenerate_keep_the_roleplay_layer(kernel, monkeypatch):
+def test_a_refused_switch_and_a_regenerate_keep_the_roleplay_layer(kernel, monkeypatch):
     """FR-MODE-2: every place history[0] is rebuilt uses the thread's mode, so neither
-    a switch nor a regenerate drops a roleplay back to chat."""
+    a regenerate nor a reopen drops a roleplay back to chat. A switch in a roleplay is
+    refused and she stays (D-101, FR-S-1)."""
     seen = _systems(monkeypatch)
     with kernel.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
@@ -633,7 +634,7 @@ def test_a_companion_switch_and_a_regenerate_keep_the_roleplay_layer(kernel, mon
         _temp_on(ws)
         _chat(ws, "Hello")
         ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
-        _until(ws, "thread_message")
+        _until(ws, "error")
         _chat(ws, "Who are you now?")
         ws.send_json({"v": 1, "type": "regenerate", "data": {}})
         _until(ws, "turn_done")
@@ -646,12 +647,7 @@ def test_a_companion_switch_and_a_regenerate_keep_the_roleplay_layer(kernel, mon
     for turn in seen:
         assert prompting.ROLEPLAY_LAYER in turn["system"] and "Title: Rain at the station" in turn["system"]
         assert prompting.TOOL_GUIDANCE not in turn["system"]
-    assert seen[0]["system"].startswith("You are Alpha")
-    assert all(turn["system"].startswith("You are Beta") for turn in seen[1:])
-    # only the persona changed with the switch (FR-W-3)
-    registry = waifus.get_registry()
-    alpha, beta = registry.get("alpha").prompt.rstrip(), registry.get("beta").prompt.rstrip()
-    assert seen[0]["system"].removeprefix(alpha) == seen[1]["system"].removeprefix(beta)
+    assert all(turn["system"].startswith("You are Alpha") for turn in seen)
 
 
 def test_a_roleplay_thread_keeps_its_story_out_of_the_transcript_and_regenerates(kernel, monkeypatch):

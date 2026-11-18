@@ -3,7 +3,7 @@
 // the palette, Ctrl+, Settings, Esc stops a reply. The palette lists what works now:
 // actions, companions and conversations.
 
-import { canPickModel, canStartThread, type ChatState, type SettingsSection } from "./chat-state";
+import { canPickModel, canStartThread, currentMode, type ChatState, type SettingsSection } from "./chat-state";
 
 export type Shortcut = "new_chat" | "palette" | "settings" | "stop";
 
@@ -33,7 +33,7 @@ export function shortcutFor(e: KeyLike): Shortcut | null {
 
 /** A dialog or pop-up is open: Escape and the shortcuts belong to it. */
 export function anyModal(s: ChatState): boolean {
-  return s.settings !== null || s.roleplayOpen || s.profile !== null || s.confirm !== null || s.pickerOpen || s.palette;
+  return s.settings !== null || s.roleplayOpen || s.profile !== null || s.story !== null || s.confirm !== null || s.pickerOpen || s.palette;
 }
 
 export type PaletteAction =
@@ -80,7 +80,8 @@ export function paletteItems(s: ChatState, query: string): PaletteItem[] {
     { key: "doctor", label: "Doctor", group: "Actions", action: { kind: "settings", section: "doctor" } },
   ];
   const companions: PaletteItem[] = s.roster.flatMap((w) => [
-    ...(w.id !== s.companion?.id
+    // In a roleplay she stays (D-101): no "Talk to" there.
+    ...(w.id !== s.companion?.id && currentMode(s) !== "roleplay"
       ? [{ key: `talk-${w.id}`, label: `Talk to ${w.name}`, group: "Companions" as const, action: { kind: "companion" as const, id: w.id } }]
       : []),
     { key: `profile-${w.id}`, label: `${w.name}'s profile`, group: "Companions" as const, action: { kind: "profile" as const, id: w.id } },
