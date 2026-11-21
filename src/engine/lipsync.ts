@@ -216,7 +216,12 @@ export function speakWithLipsync(audioUrl: string): SpeakHandle {
   currentMouthDriver = getMouthOpen;
   currentSpeechEl = audioEl;
   audioEl.addEventListener("ended", onEnded);
-  audioEl.play().catch((err) => console.error("[yuri] audio playback failed", err));
+  // A clip that cannot play ends at once, so a queue behind it moves on (FR-V-7).
+  audioEl.addEventListener("error", onEnded);
+  audioEl.play().catch((err) => {
+    console.warn("[kokyu] could not play a voice clip", err);
+    onEnded();
+  });
 
   return {
     onFinish(cb) {

@@ -27,6 +27,7 @@ export function TopBar({ onShowSidebar }: { onShowSidebar?: () => void }) {
       <span className="top-bar-title" data-tauri-drag-region title={title || undefined}>
         {title}
       </span>
+      <ViewSwitch />
       <TempSwitch />
       {desktop ? <WindowControls /> : null}
     </header>
@@ -50,8 +51,25 @@ function PetButton() {
       title={label}
       onClick={() => (has ? setPetPrefs({ show: !show }) : actions.openSettings("pet"))}
     >
-      <Icon name="paw" size={17} />
+      <Icon name="cat" size={17} />
     </button>
+  );
+}
+
+/** D-104 (D-009): the same thread as text, or her on the Stage. */
+function ViewSwitch() {
+  const view = useChat((s) => s.view);
+  const has = useChat((s) => s.companion !== null);
+  if (!has) return null;
+  return (
+    <div className="view-switch" role="group" aria-label="View">
+      <button type="button" aria-pressed={view === "chat"} onClick={() => actions.setView("chat")}>
+        Chat
+      </button>
+      <button type="button" aria-pressed={view === "stage"} onClick={() => actions.setView("stage")}>
+        Stage
+      </button>
+    </div>
   );
 }
 

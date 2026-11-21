@@ -1,8 +1,10 @@
-// Plays the kernel's `speak` clips one after another (K1-02). The chat window
-// has no avatar until the Stage view (K2), so there is no lip-sync here: just
-// the audio, in order, and a Stop that silences it at once (FR-C-2). A clip
-// with no audio (voice backend down) is skipped: the text is already in the
-// thread (FR-V-7).
+// Plays the kernel's `speak` clips one after another (K1-02), in order, with a
+// Stop that silences them at once (FR-C-2). Each clip goes through the engine's
+// lip-sync player, so the Stage's mouth follows whatever is playing (D-104). A
+// clip with no audio (voice backend down) is skipped: the text is already in
+// the thread (FR-V-7).
+
+import { speakWithLipsync, type SpeakHandle } from "../engine/lipsync";
 
 export interface SpeakClip {
   text: string;
@@ -21,7 +23,7 @@ export class VoicePlayer {
   /** Called whenever the last queued clip has finished or playback was stopped. */
   onIdle: (() => void) | null = null;
   private queue: SpeakClip[] = [];
-  private current: HTMLAudioElement | null = null;
+  private current: SpeakHandle | null = null;
   private currentUrl: string | null = null;
 
   enqueue(clip: SpeakClip): void {
@@ -42,10 +44,7 @@ export class VoicePlayer {
   }
 
   private release(): void {
-    if (this.current) {
-      this.current.pause();
-      this.current.src = "";
-    }
+    this.current?.stop();
     if (this.currentUrl) URL.revokeObjectURL(this.currentUrl);
     this.current = null;
     this.currentUrl = null;
@@ -59,17 +58,11 @@ export class VoicePlayer {
       return;
     }
     const url = toBlobUrl(clip);
-    const audio = new Audio(url);
-    this.current = audio;
     this.currentUrl = url;
-    const next = () => {
-      if (this.current === audio) this.playNext();
-    };
-    audio.addEventListener("ended", next);
-    audio.addEventListener("error", next);
-    audio.play().catch((err) => {
-      console.warn("[kokyu] could not play a voice clip", err);
-      next();
+    const handle = speakWithLipsync(url);
+    this.current = handle;
+    handle.onFinish(() => {
+      if (this.current === handle) this.playNext();
     });
   }
 }

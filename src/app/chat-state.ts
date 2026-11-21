@@ -171,6 +171,10 @@ export interface ChatState {
   confirm: ConfirmAsk | null;
   /** UI1-10: the Ctrl+K palette is open. */
   palette: boolean;
+  /** D-104: the last finished reply's emotion tag, a new object per reply (the Stage's mood). */
+  mood: { emotion: string | null } | null;
+  /** D-104: the conversation as text, or her on the Stage. This window's own. */
+  view: "chat" | "stage";
   /** D-103: Create pet's cut sheet, being checked; null otherwise. */
   petDraft: ServerData["pet_draft"] | null;
   /** D-099: the message being read aloud on request (its key), from the click until
@@ -209,6 +213,7 @@ export type ChatEvent =
   | { kind: "confirm"; ask: ConfirmAsk | null }
   | { kind: "palette"; open: boolean }
   | { kind: "pet_draft_done" }
+  | { kind: "view"; view: "chat" | "stage" }
   | { kind: "reading"; key: string | null }
   /** A card save went out (FR-MODE-6). */
   | { kind: "scenario_saving" }
@@ -247,6 +252,8 @@ export const initialState: ChatState = {
   toasts: [],
   confirm: null,
   palette: false,
+  mood: null,
+  view: "chat",
   petDraft: null,
   reading: null,
   scenarioSave: null,
@@ -512,7 +519,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
     }
     case "turn_done": {
       if (!forCurrentThread(state, frame)) return state;
-      const { text, stopped } = frame.data as { text: string; stopped: boolean };
+      const { text, stopped, emotion } = frame.data as ServerData["turn_done"];
       const reply = text || visibleStream(state);
       // A Regenerate that brought nothing back: the kernel kept the old exchange, so does the view.
       if (!reply && state.beforeRegenerate) {
@@ -543,7 +550,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
             },
           ]
         : withLine;
-      return { ...state, messages, beforeRegenerate: null, saved: null, turn: "idle", streamRaw: "" };
+      return { ...state, messages, beforeRegenerate: null, saved: null, turn: "idle", streamRaw: "", mood: { emotion: emotion ?? null } };
     }
     case "model_list":
       return { ...state, models: frame.data as ModelListData };
@@ -686,6 +693,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, reading: event.key };
     case "pet_draft_done":
       return { ...state, petDraft: null };
+    case "view":
+      return { ...state, view: event.view };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
     case "roleplay_starting":

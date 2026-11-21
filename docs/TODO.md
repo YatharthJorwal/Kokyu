@@ -57,8 +57,9 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's items get their final look here.
 
 - [ ] UI2-00 The user's first references (D-102): Settings restyled to `settings-general.png` and `settings-models.png`; the chat title centred on the top bar
-- [ ] UI2-01 Her pet (D-103): chibi her walking above the input box in chat and roleplay; the paw button; Settings → Pet with behaviour, size and Create pet (prompt, upload a 4×3 sheet, check the poses, save) (FR-P-1..4)
-- [ ] UI2-02 The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
+- [ ] UI2-00b Her pet (D-103; first numbered UI2-01 in 5e679a8's message): chibi her walking above the input box in chat and roleplay; the cat button; Settings → Pet with behaviour, size and Create pet (prompt, upload a 4×3 sheet, check the poses, save) (FR-P-1..4)
+- [ ] UI2-00d The Stage, the user's "VR mode" (D-104): Yuri's shell, the Chat | Stage switch, captions, lip-sync from the played voice, her mood from the emotion tag (FR-ST-1..3, 5, 7; K2-01, most of K2-02). Not yet: the chat log slide-over (FR-ST-4), the frame-rate check (FR-ST-6)
+- [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
 - [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
 - [ ] UI2-03 Tokens in code; no white flash at startup

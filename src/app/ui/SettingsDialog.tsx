@@ -28,7 +28,7 @@ import { portraitUrl } from "./Portrait";
 const SECTIONS: { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: "models", label: "Models", icon: "models" },
   { id: "appearance", label: "Appearance", icon: "sun" },
-  { id: "pet", label: "Pet", icon: "paw" },
+  { id: "pet", label: "Pet", icon: "cat" },
   { id: "voice", label: "Voice", icon: "mic" },
   { id: "screen", label: "Screen", icon: "monitor" },
   { id: "memory", label: "Memory", icon: "memory" },
@@ -674,7 +674,7 @@ function PetSection() {
   return (
     <>
       <h3>Pet</h3>
-      <p className="muted">A chibi {name} walking along the bottom of the chat while you talk. The paw button beside her name shows or hides it.</p>
+      <p className="muted">A chibi {name} walking along the bottom of the chat while you talk. The cat button beside her name shows or hides it.</p>
       <div className="setting-group">
         <Row title="Show the pet" about="In chats and roleplays, while this companion is active.">
           <label className="switch">
@@ -733,7 +733,7 @@ function CreatePet({ id, name, online, draft, own, has }: {
   own: boolean;
   has: boolean;
 }) {
-  const [copied, setCopied] = useState(false);
+  const [copied, setCopied] = useState<"prompt" | "picture" | null>(null);
   const [labels, setLabels] = useState<(Pose | null)[]>([]);
   const portrait = useChat((s) => s.companion?.portrait ?? null);
 
@@ -742,11 +742,23 @@ function CreatePet({ id, name, online, draft, own, has }: {
     setLabels(draft ? draft.cells.map((full, n) => (full ? POSES[n] : null)) : []);
   }, [draft]);
 
+  const done = (what: "prompt" | "picture") => {
+    setCopied(what);
+    window.setTimeout(() => setCopied(null), 1500);
+  };
   const copy = () => {
-    void navigator.clipboard.writeText(petPrompt(name)).then(() => {
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
-    });
+    void navigator.clipboard.writeText(petPrompt(name)).then(() => done("prompt"));
+  };
+  // The desktop app opens no links, so her picture goes to the clipboard for pasting
+  // into the image model, next to the prompt.
+  const copyPicture = async () => {
+    try {
+      const blob = await (await fetch(portraitUrl(id, portrait ?? ""))).blob();
+      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
+      done("picture");
+    } catch {
+      actions.toast("Her picture could not be copied. Save it from her profile instead.");
+    }
   };
   const used = labels.filter((l): l is Pose => l !== null);
   const repeated = used.length !== new Set(used).size;
@@ -795,15 +807,15 @@ function CreatePet({ id, name, online, draft, own, has }: {
         <li>
           <span>Copy the prompt and paste it into an image model that makes pictures, such as ChatGPT.</span>
           <button type="button" onClick={copy}>
-            {copied ? "Copied" : "Copy prompt"}
+            {copied === "prompt" ? "Copied" : "Copy prompt"}
           </button>
         </li>
         {portrait ? (
           <li>
-            <span>Attach a picture of {name} with it, such as her portrait.</span>
-            <a className="pet-link" href={portraitUrl(id, portrait)} download={`${name}.png`} target="_blank" rel="noreferrer">
-              Open her portrait
-            </a>
+            <span>Paste a picture of {name} with it, such as her portrait.</span>
+            <button type="button" onClick={() => void copyPicture()}>
+              {copied === "picture" ? "Copied" : "Copy her picture"}
+            </button>
           </li>
         ) : (
           <li>

@@ -399,6 +399,11 @@ export const actions = {
     dispatch({ kind: "pet_draft_done" });
   },
 
+  /** D-104: Chat or Stage for this window. */
+  setView(view: "chat" | "stage"): void {
+    dispatch({ kind: "view", view });
+  },
+
   dropPetDraft(): void {
     dispatch({ kind: "pet_draft_done" });
   },
