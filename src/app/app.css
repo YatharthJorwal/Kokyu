@@ -520,9 +520,20 @@ button:disabled {
   padding-right: 0;
 }
 
+/* Centred on the whole bar, not on the space between its sides (the user's note). */
+.top-bar {
+  position: relative;
+}
+
+.top-bar > .switch {
+  margin-left: auto;
+}
+
 .top-bar-title {
-  flex: 1;
-  min-width: 0;
+  position: absolute;
+  left: 50%;
+  max-width: 36%;
+  transform: translateX(-50%);
   overflow: hidden;
   color: var(--muted);
   font-size: 14px;
@@ -2801,76 +2812,102 @@ button:disabled {
 
 .settings-dialog {
   display: flex;
-  width: min(860px, calc(100vw - 48px));
-  height: min(640px, calc(100vh - 48px));
+  width: min(880px, calc(100vw - 48px));
+  height: min(680px, calc(100vh - 48px));
   overflow: hidden;
   border: 1px solid var(--line);
-  border-radius: var(--radius);
+  border-radius: 16px;
   background: var(--panel);
   box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
 }
 
+/* D-102: icons beside the sections, a filled pill for the current one. */
 .settings-nav {
   display: flex;
   flex: none;
   flex-direction: column;
-  gap: 2px;
-  width: 180px;
-  padding: 18px 10px;
-  border-right: 1px solid var(--line);
+  gap: 4px;
+  width: 200px;
+  padding: 22px 12px;
 }
 
 .settings-nav h2 {
-  margin: 0 8px 12px;
-  font-size: 15px;
+  margin: 0 10px 18px;
+  font-size: 18px;
+  font-weight: 700;
 }
 
 .settings-nav button {
-  padding: 7px 10px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  height: 38px;
+  padding: 0 12px;
   border: 0;
-  border-radius: 8px;
+  border-radius: 10px;
   background: transparent;
   color: var(--text);
+  font-size: 14px;
   text-align: left;
   cursor: pointer;
 }
 
-.settings-nav button:hover,
-.settings-nav button.current {
-  background: var(--panel-2);
+.settings-nav button .icon {
+  flex: none;
+  color: var(--muted);
+}
+
+.settings-nav button:hover {
+  background: color-mix(in srgb, var(--panel-2) 60%, transparent);
 }
 
 .settings-nav button.current {
-  color: var(--accent);
+  background: var(--panel-2);
+  font-weight: 600;
+}
+
+.settings-nav button.current .icon {
+  color: var(--text);
 }
 
 .settings-body {
   position: relative;
   flex: 1;
   overflow-y: auto;
-  padding: 18px 24px 24px;
+  padding: 24px 28px 28px 20px;
 }
 
 .settings-body h3 {
-  margin: 0 0 6px;
-  font-size: 17px;
+  margin: 4px 0 6px;
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.settings-body > p.muted {
+  margin: 0 48px 18px 0;
+  font-size: 13px;
+  line-height: 1.5;
 }
 
 .settings-body h4 {
-  margin: 18px 0 6px;
-  font-size: 13px;
-  color: var(--muted);
-  text-transform: uppercase;
-  letter-spacing: 0.04em;
+  margin: 26px 0 10px;
+  font-size: 15px;
+  font-weight: 600;
 }
 
 .settings-body button {
-  padding: 5px 10px;
+  min-height: 32px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 8px;
   background: var(--panel-2);
   color: var(--text);
+  font-size: 13px;
   cursor: pointer;
+}
+
+.settings-body button:hover:not(:disabled) {
+  border-color: color-mix(in srgb, var(--muted) 60%, var(--line));
 }
 
 .settings-body button.ghost {
@@ -2879,10 +2916,196 @@ button:disabled {
   color: var(--muted);
 }
 
-.settings-close {
+.settings-body button.danger-text {
+  border-color: transparent;
+  background: transparent;
+  color: var(--danger);
+}
+
+.settings-body .settings-close {
   position: absolute;
-  top: 12px;
-  right: 12px;
+  top: 18px;
+  right: 20px;
+  display: grid;
+  place-items: center;
+  width: 34px;
+  min-height: 34px;
+  padding: 0;
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.settings-body .settings-close:hover {
+  background: var(--panel-2);
+  color: var(--text);
+}
+
+/* D-102: one setting per row, its name and a muted line left, its control right. */
+.setting-group {
+  border-top: 1px solid var(--line);
+}
+
+.setting-group + button {
+  margin-top: 16px;
+}
+
+.setting-row {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 16px 0;
+  border-bottom: 1px solid var(--line);
+}
+
+.setting-row.stacked {
+  flex-direction: column;
+  align-items: stretch;
+  gap: 12px;
+}
+
+.setting-text {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  gap: 4px;
+  min-width: 0;
+}
+
+.setting-text strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+.setting-text .muted {
+  font-size: 13px;
+  line-height: 1.45;
+}
+
+.setting-control {
+  display: flex;
+  flex: none;
+  flex-wrap: wrap;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+  max-width: 60%;
+}
+
+.setting-control .switch {
+  font-size: 13px;
+}
+
+/* Theme cards, each with a small sample of its colours. */
+.theme-cards {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(140px, 1fr));
+  gap: 10px;
+}
+
+.settings-body .theme-cards button {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 10px;
+  padding: 14px 12px 12px;
+  border-radius: 12px;
+  background: transparent;
+  font-size: 14px;
+}
+
+.settings-body .theme-cards button[aria-pressed="true"] {
+  border-color: color-mix(in srgb, var(--text) 55%, transparent);
+  background: var(--panel-2);
+}
+
+.theme-sample {
+  display: flex;
+  align-items: flex-end;
+  gap: 6px;
+  width: 64px;
+  height: 40px;
+  padding: 6px;
+  border: 1px solid;
+  border-radius: 8px;
+}
+
+.theme-sample span:first-child {
+  flex: 1;
+  height: 100%;
+  border-radius: 4px;
+}
+
+.theme-sample span:last-child {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}
+
+/* Settings → Models: one card per provider (D-102). */
+.provider-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.provider-card {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+}
+
+.provider-card .settings-form {
+  margin: 0;
+}
+
+.provider-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-name {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.provider-badge {
+  padding: 1px 7px;
+  border: 1px solid var(--line);
+  border-radius: 5px;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+}
+
+.status-dot.ok {
+  background: #4ade80;
+}
+
+.status-dot.fail {
+  background: var(--danger);
+}
+
+.settings-body button.provider-add {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  min-height: 46px;
+  border: 1px dashed var(--line);
+  border-radius: 12px;
+  background: transparent;
+  font-size: 14px;
 }
 
 .settings-list {
@@ -2944,34 +3167,28 @@ button:disabled {
   cursor: pointer;
 }
 
-.settings-list.doctor li {
+.doctor-state {
+  min-width: 72px;
+  padding: 3px 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  font-size: 12px;
+  text-align: center;
+}
+
+.doctor-state.doctor-ok { color: #8fd4a4; border-color: #3d6b4b; }
+.doctor-state.doctor-warn { color: #e8c37a; border-color: #6b5a33; }
+.doctor-state.doctor-fail { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
+.doctor-state.doctor-off { color: var(--muted); }
+
+.setting-group.doctor .setting-row {
   align-items: flex-start;
 }
 
-.settings-list.doctor .doctor-state {
-  flex: none;
-  width: 64px;
-  padding: 2px 0;
-  border-radius: 999px;
-  font-size: 11px;
-  text-align: center;
-  border: 1px solid var(--line);
-}
-
-.doctor-ok .doctor-state { color: #8fd4a4; border-color: #3d6b4b; }
-.doctor-warn .doctor-state { color: #e8c37a; border-color: #6b5a33; }
-.doctor-fail .doctor-state { color: var(--danger); border-color: color-mix(in srgb, var(--danger) 50%, transparent); }
-.doctor-off .doctor-state { color: var(--muted); }
-
-.doctor-main {
-  display: flex;
-  flex: 1;
-  flex-direction: column;
-  gap: 2px;
-}
-
 .doctor-hint {
-  font-size: 13px;
+  display: block;
+  margin-top: 2px;
+  color: var(--text);
 }
 
 /* K1-13b: the editable settings (FR-SET-2, D-070) */
@@ -3095,7 +3312,7 @@ button:disabled {
 }
 
 .settings-hint {
-  margin: 0;
+  margin: 12px 0 0;
   font-size: 13px;
 }
 
@@ -3105,14 +3322,6 @@ button:disabled {
   overflow-wrap: anywhere;
 }
 
-.settings-list.screen li {
-  gap: 16px;
-}
-
-.settings-list.screen .switch {
-  flex: none;
-  font-size: 13px;
-}
 
 /* Roleplay threads (K1c-08, FR-MODE-7): actions italic and softer, asides small and
    muted. The action colour sits between the muted and the body text, so it stays

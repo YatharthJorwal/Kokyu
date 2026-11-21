@@ -8,7 +8,7 @@
 // and the dictation key (kept by the page, like Appearance) (D-097). Waifus, Scenes,
 // Pets and Advanced arrive with their phases.
 
-import { useEffect, useState, type FormEvent, type KeyboardEvent } from "react";
+import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, SettingsChange, SettingsData } from "../../net/protocol";
 import { modelLabel, type SettingsSection } from "../chat-state";
@@ -19,16 +19,30 @@ import { formatSize, formatUsd } from "../models";
 import { actions, useChat } from "../store";
 import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
 import { version } from "../../../package.json";
+import { Icon, type IconName } from "./Icon";
 
-const SECTIONS: { id: SettingsSection; label: string }[] = [
-  { id: "models", label: "Models" },
-  { id: "appearance", label: "Appearance" },
-  { id: "voice", label: "Voice" },
-  { id: "screen", label: "Screen" },
-  { id: "memory", label: "Memory" },
-  { id: "doctor", label: "Doctor" },
-  { id: "about", label: "About" },
+const SECTIONS: { id: SettingsSection; label: string; icon: IconName }[] = [
+  { id: "models", label: "Models", icon: "models" },
+  { id: "appearance", label: "Appearance", icon: "sun" },
+  { id: "voice", label: "Voice", icon: "mic" },
+  { id: "screen", label: "Screen", icon: "monitor" },
+  { id: "memory", label: "Memory", icon: "memory" },
+  { id: "doctor", label: "Doctor", icon: "pulse" },
+  { id: "about", label: "About", icon: "info" },
 ];
+
+/** One setting (D-102): its name and a muted line on the left, its control on the right. */
+function Row({ title, about, children }: { title: string; about?: ReactNode; children?: ReactNode }) {
+  return (
+    <div className="setting-row">
+      <div className="setting-text">
+        <strong>{title}</strong>
+        {about ? <span className="muted">{about}</span> : null}
+      </div>
+      {children ? <div className="setting-control">{children}</div> : null}
+    </div>
+  );
+}
 
 export function SettingsDialog() {
   const section = useChat((s) => s.settings);
@@ -56,13 +70,14 @@ export function SettingsDialog() {
               aria-current={s.id === section ? "page" : undefined}
               onClick={() => actions.openSettings(s.id)}
             >
+              <Icon name={s.icon} size={17} />
               {s.label}
             </button>
           ))}
         </nav>
         <section className="settings-body">
-          <button type="button" className="settings-close ghost" aria-label="Close settings" onClick={() => actions.closeSettings()}>
-            ✕
+          <button type="button" className="settings-close" aria-label="Close settings" title="Close (Esc)" onClick={() => actions.closeSettings()}>
+            <Icon name="close" size={16} />
           </button>
           {section === "models" ? <ModelsSection /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
@@ -110,12 +125,49 @@ function FormStatus({ text, failed }: { text: string | null; failed: boolean }) 
   );
 }
 
+/** A provider's card (D-102): a status dot, its name, a muted line, and Edit opening its form. */
+function ProviderCard({ name, badge, dot, about, editing, onEdit, extra, children }: {
+  name: string;
+  badge?: string;
+  dot?: "ok" | "fail" | null;
+  about: ReactNode;
+  editing: boolean;
+  onEdit?: () => void;
+  extra?: ReactNode;
+  children?: ReactNode;
+}) {
+  return (
+    <div className="provider-card">
+      <div className="provider-head">
+        <div className="setting-text">
+          <span className="provider-name">
+            <strong>{name}</strong>
+            {badge ? <span className="provider-badge">{badge}</span> : null}
+            {dot ? <span className={`status-dot ${dot}`} aria-label={dot === "ok" ? "Working" : "Not working"} /> : null}
+          </span>
+          <span className="muted">{about}</span>
+        </div>
+        {onEdit ? (
+          <button type="button" onClick={onEdit} aria-expanded={editing}>
+            {editing ? "Done" : "Edit"}
+          </button>
+        ) : null}
+        {extra}
+      </div>
+      {editing ? children : null}
+    </div>
+  );
+}
+
 function ModelsSection() {
   const models = useChat((s) => s.models);
   const prefs = useChat((s) => s.prefs);
   const defaultLabel = useChat((s) => modelLabel(s, s.defaults?.model_ref ?? s.models?.default_ref ?? null));
   const saving = useSaving();
+  const [editing, setEditing] = useState<"ollama" | "custom" | null>(null);
+  const toggle = (card: "ollama" | "custom") => setEditing((e) => (e === card ? null : card));
   const spend = models?.spend;
+  const custom = prefs?.custom_api ?? null;
   const row = (r: ModelRow) => (
     <li key={r.ref}>
       <span>{r.label}</span>
@@ -130,19 +182,55 @@ function ModelsSection() {
         default model and the llama.cpp presets are set in <code>config/config.yaml</code>.
       </p>
 
-      <h4>On this PC</h4>
-      {prefs ? <OllamaForm key={prefs.ollama_url} prefs={prefs} saving={saving} /> : null}
-      {!models ? <p className="muted">Looking for models…</p> : null}
-      {models?.local_error ? <p className="muted">{models.local_error}</p> : null}
-      <ul className="settings-list">{(models?.local ?? []).map(row)}</ul>
-
-      <h4>API {models?.api_provider ? `· ${models.api_provider.label}` : ""}</h4>
-      {models ? (
-        <p className="muted">
-          {models.api_key ? `Key saved; ${models.api.length} models listed.` : "No API key. Add one with Key in the model picker."}
-        </p>
-      ) : null}
-      {prefs ? <CustomApiForm key={JSON.stringify(prefs.custom_api)} prefs={prefs} saving={saving} /> : null}
+      <div className="provider-list">
+        <ProviderCard
+          name="Ollama"
+          badge="On this PC"
+          dot={models ? (models.local_error ? "fail" : "ok") : null}
+          about={models?.local_error ?? (models ? `${models.local.length} models · ${prefs?.ollama_url ?? ""}` : "Looking for models…")}
+          editing={editing === "ollama" && !!prefs}
+          onEdit={prefs ? () => toggle("ollama") : undefined}
+        >
+          {prefs ? <OllamaForm key={prefs.ollama_url} prefs={prefs} saving={saving} /> : null}
+        </ProviderCard>
+        {models ? (
+          <ProviderCard
+            name={models.api_provider?.label ?? "API"}
+            dot={models.api_key ? "ok" : "fail"}
+            about={models.api_key ? `Key saved; ${models.api.length} models listed.` : "No API key. Add one with Key in the model picker."}
+            editing={false}
+          />
+        ) : null}
+        {custom ? (
+          <ProviderCard
+            name={custom.label}
+            badge="Custom"
+            about={custom.base_url}
+            editing={editing === "custom"}
+            onEdit={() => toggle("custom")}
+            extra={
+              <button type="button" className="danger-text" onClick={() => saving.save("custom", { custom_api: null })}>
+                Remove
+              </button>
+            }
+          >
+            {prefs ? <CustomApiForm key={JSON.stringify(custom)} prefs={prefs} saving={saving} /> : null}
+          </ProviderCard>
+        ) : prefs && editing === "custom" ? (
+          <div className="provider-card">
+            <CustomApiForm key="new" prefs={prefs} saving={saving} />
+            <button type="button" className="ghost" onClick={() => setEditing(null)}>
+              Cancel
+            </button>
+          </div>
+        ) : prefs ? (
+          <button type="button" className="provider-add" onClick={() => setEditing("custom")}>
+            <Icon name="plus" size={15} />
+            Add your own endpoint
+          </button>
+        ) : null}
+      </div>
+      <FormStatus text={editing === null ? saving.status("custom") : null} failed={saving.failed("custom")} />
 
       <h4>Budget</h4>
       {spend ? (
@@ -153,6 +241,13 @@ function ModelsSection() {
         </p>
       ) : null}
       {prefs ? <BudgetForm key={JSON.stringify(prefs.budget)} prefs={prefs} saving={saving} /> : null}
+
+      {models && models.local.length > 0 ? (
+        <>
+          <h4>On this PC</h4>
+          <ul className="settings-list">{models.local.map(row)}</ul>
+        </>
+      ) : null}
 
       {prefs ? <p className="muted settings-file">Your changes here are saved in {prefs.file}.</p> : null}
     </>
@@ -199,7 +294,7 @@ function CustomApiForm({ prefs, saving }: { prefs: SettingsData; saving: Saving 
   };
   return (
     <form className="settings-form" onSubmit={submit}>
-      <p className="settings-form-title">Your own endpoint</p>
+      {current ? null : <p className="settings-form-title">Your own endpoint</p>}
       <div className="settings-row">
         <label className="settings-field narrow">
           <span>Name</span>
@@ -214,11 +309,6 @@ function CustomApiForm({ prefs, saving }: { prefs: SettingsData; saving: Saving 
         <button type="submit" disabled={!label.trim() || !url.trim() || !changed}>
           Save
         </button>
-        {current ? (
-          <button type="button" className="ghost" onClick={() => saving.save("custom", { custom_api: null })}>
-            Remove
-          </button>
-        ) : null}
         <FormStatus text={saving.status("custom")} failed={saving.failed("custom")} />
       </div>
       <p className="muted settings-hint">
@@ -323,15 +413,11 @@ function VoiceSection() {
       <p className="muted">
         Her voice and your speech are handled on this PC. Nothing you say is kept after it is written down.
       </p>
-      <ul className="settings-list voice">
-        <li>
-          <span className="doctor-main">
-            <strong>Read aloud</strong>
-            <span className="muted">
-              She reads each reply aloud once it is written, in chats and roleplays (in a roleplay, only what she
-              says). Her voice takes about {VOICE_START_S} seconds to start.
-            </span>
-          </span>
+      <div className="setting-group">
+        <Row
+          title="Read aloud"
+          about={`She reads each reply aloud once it is written, in chats and roleplays (in a roleplay, only what she says). Her voice takes about ${VOICE_START_S} seconds to start.`}
+        >
           <label className="switch">
             <input
               type="checkbox"
@@ -343,15 +429,11 @@ function VoiceSection() {
             <span className="switch-track" aria-hidden="true" />
             {readAloud?.on ? "On" : "Off"}
           </label>
-        </li>
-        <li>
-          <span className="doctor-main">
-            <strong>Dictation key</strong>
-            <span className="muted">
-              Press it to start speaking and again to stop; your words go into the message box and are not sent. It
-              works while the Kōkyū window is in front.
-            </span>
-          </span>
+        </Row>
+        <Row
+          title="Dictation key"
+          about="Press it to start speaking and again to stop; your words go into the message box and are not sent. It works while the Kōkyū window is in front."
+        >
           {capturing ? (
             <span className="key-capture" role="status">
               Press a key… (Esc to cancel)
@@ -373,8 +455,8 @@ function VoiceSection() {
               Use {DEFAULT_DICTATION_KEY}
             </button>
           ) : null}
-        </li>
-      </ul>
+        </Row>
+      </div>
       <FormStatus text={problem} failed />
     </>
   );
@@ -399,13 +481,9 @@ function ScreenSection() {
         Screen companions look at your screen with a local model that can see images. What they see never leaves this PC.
         A chip under the message box shows while one is on.
       </p>
-      <ul className="settings-list screen">
+      <div className="setting-group">
         {SCREEN_MODES.map((m) => (
-          <li key={m.mode}>
-            <span className="doctor-main">
-              <strong>{m.label}</strong>
-              <span className="muted">{m.about}</span>
-            </span>
+          <Row key={m.mode} title={m.label} about={m.about}>
             <label className="switch">
               <input
                 type="checkbox"
@@ -428,9 +506,9 @@ function ScreenSection() {
               <span className="switch-track" aria-hidden="true" />
               On at start
             </label>
-          </li>
+          </Row>
         ))}
-      </ul>
+      </div>
       <FormStatus text={refused ?? (saving.failed("screen") ? saving.status("screen") : null)} failed />
       <p className="muted settings-hint">Both start off unless you set them to start with Kōkyū.</p>
     </>
@@ -524,18 +602,22 @@ function DoctorSection() {
       <h3>Doctor</h3>
       <p className="muted">Each part Kōkyū needs, whether it works, and how to fix it if not.</p>
       {!checks ? <p className="muted">Checking…</p> : null}
-      <ul className="settings-list doctor">
+      <div className="setting-group doctor">
         {(checks ?? []).map((c) => (
-          <li key={c.id} className={`doctor-${c.state}`}>
-            <span className="doctor-state">{STATE_LABEL[c.state]}</span>
-            <span className="doctor-main">
-              <strong>{c.label}</strong>
-              <span className="muted">{c.detail}</span>
-              {c.hint ? <span className="doctor-hint">{c.hint}</span> : null}
-            </span>
-          </li>
+          <Row
+            key={c.id}
+            title={c.label}
+            about={
+              <>
+                {c.detail}
+                {c.hint ? <span className="doctor-hint">{c.hint}</span> : null}
+              </>
+            }
+          >
+            <span className={`doctor-state doctor-${c.state}`}>{STATE_LABEL[c.state]}</span>
+          </Row>
         ))}
-      </ul>
+      </div>
       <button type="button" onClick={() => actions.runDoctor()}>
         Check again
       </button>
@@ -573,55 +655,69 @@ function AppearanceSection() {
   return (
     <>
       <h3>Appearance</h3>
-      <h4>Theme</h4>
-      <Choices
-        label="Theme"
-        value={theme.preset}
-        options={(Object.keys(PRESETS) as Preset[]).map((id) => ({ id, label: PRESETS[id].label }))}
-        onPick={(preset) => change({ preset })}
-      />
-      <h4>Accent color</h4>
-      <div className="settings-choices accents" role="group" aria-label="Accent color">
-        <button type="button" aria-pressed={theme.accent === null} onClick={() => change({ accent: null })}>
-          The theme's own
-        </button>
-        {ACCENTS.map((c) => (
-          <button
-            key={c}
-            type="button"
-            className="swatch"
-            style={{ background: c }}
-            aria-pressed={theme.accent === c}
-            aria-label={`Accent ${c}`}
-            onClick={() => change({ accent: c })}
+      <p className="muted">How this window looks. Saved on this PC for every Kōkyū window.</p>
+      <div className="setting-group">
+        <div className="setting-row stacked">
+          <div className="setting-text">
+            <strong>Theme</strong>
+          </div>
+          <div className="theme-cards" role="group" aria-label="Theme">
+            {(Object.keys(PRESETS) as Preset[]).map((id) => (
+              <button key={id} type="button" aria-pressed={theme.preset === id} onClick={() => change({ preset: id })}>
+                <span className="theme-sample" style={{ background: PRESETS[id].vars["--bg"], borderColor: PRESETS[id].vars["--line"] }}>
+                  <span style={{ background: PRESETS[id].vars["--panel"] }} />
+                  <span style={{ background: PRESETS[id].vars["--accent"] }} />
+                </span>
+                {PRESETS[id].label}
+              </button>
+            ))}
+          </div>
+        </div>
+        <Row title="Accent color" about="Buttons, links and highlights.">
+          <div className="settings-choices accents" role="group" aria-label="Accent color">
+            <button type="button" aria-pressed={theme.accent === null} onClick={() => change({ accent: null })}>
+              The theme's own
+            </button>
+            {ACCENTS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="swatch"
+                style={{ background: c }}
+                aria-pressed={theme.accent === c}
+                aria-label={`Accent ${c}`}
+                onClick={() => change({ accent: c })}
+              />
+            ))}
+            <label className="swatch custom" title="Any color">
+              <input type="color" value={accent} aria-label="Pick any accent color" onChange={(e) => change({ accent: e.target.value.toLowerCase() })} />
+            </label>
+          </div>
+        </Row>
+        <Row title="Messages" about="Her replies as open text, or in bubbles.">
+          <Choices
+            label="Messages"
+            value={theme.messages}
+            options={[
+              { id: "open", label: "Open" },
+              { id: "bubbles", label: "Bubbles" },
+            ]}
+            onPick={(messages) => change({ messages })}
           />
-        ))}
-        <label className="swatch custom" title="Any color">
-          <input type="color" value={accent} aria-label="Pick any accent color" onChange={(e) => change({ accent: e.target.value.toLowerCase() })} />
-        </label>
+        </Row>
+        <Row title="Text size" about="Only the conversation's text.">
+          <Choices
+            label="Text size"
+            value={theme.size}
+            options={[
+              { id: "small", label: "Small" },
+              { id: "normal", label: "Normal" },
+              { id: "large", label: "Large" },
+            ]}
+            onPick={(size) => change({ size })}
+          />
+        </Row>
       </div>
-      <h4>Messages</h4>
-      <Choices
-        label="Messages"
-        value={theme.messages}
-        options={[
-          { id: "open", label: "Open" },
-          { id: "bubbles", label: "Bubbles with her initial" },
-        ]}
-        onPick={(messages) => change({ messages })}
-      />
-      <h4>Text size</h4>
-      <Choices
-        label="Text size"
-        value={theme.size}
-        options={[
-          { id: "small", label: "Small" },
-          { id: "normal", label: "Normal" },
-          { id: "large", label: "Large" },
-        ]}
-        onPick={(size) => change({ size })}
-      />
-      <p className="muted settings-hint">Saved on this PC for every Kōkyū window.</p>
     </>
   );
 }
