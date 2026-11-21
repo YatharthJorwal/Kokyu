@@ -9,7 +9,7 @@
 // behaviour and size (the page's) and Create pet (D-103). Waifus, Scenes and Advanced
 // arrive with their phases.
 
-import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, ServerData, SettingsChange, SettingsData } from "../../net/protocol";
 import { modelLabel, type SettingsSection } from "../chat-state";
@@ -23,7 +23,6 @@ import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type T
 import { version } from "../../../package.json";
 import { Icon, type IconName } from "./Icon";
 import { petDraftUrl, petPoseUrl } from "./Pet";
-import { portraitUrl } from "./Portrait";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: "models", label: "Models", icon: "models" },
@@ -649,6 +648,9 @@ function Choices<T extends string>({ label, value, options, onPick }: {
   );
 }
 
+// three.js loads only when the picture viewer opens.
+const PictureViewer = lazy(() => import("./PictureViewer").then((m) => ({ default: m.PictureViewer })));
+
 const POSE_LABELS: Record<Pose, string> = {
   idle: "Idle",
   walk_1: "Walk 1",
@@ -733,32 +735,21 @@ function CreatePet({ id, name, online, draft, own, has }: {
   own: boolean;
   has: boolean;
 }) {
-  const [copied, setCopied] = useState<"prompt" | "picture" | null>(null);
+  const [copied, setCopied] = useState(false);
+  const [viewer, setViewer] = useState(false);
+  const closeViewer = useCallback(() => setViewer(false), []);
   const [labels, setLabels] = useState<(Pose | null)[]>([]);
-  const portrait = useChat((s) => s.companion?.portrait ?? null);
 
   useEffect(() => {
     // A new sheet: each cell that holds a pose starts with its place in the grid.
     setLabels(draft ? draft.cells.map((full, n) => (full ? POSES[n] : null)) : []);
   }, [draft]);
 
-  const done = (what: "prompt" | "picture") => {
-    setCopied(what);
-    window.setTimeout(() => setCopied(null), 1500);
-  };
   const copy = () => {
-    void navigator.clipboard.writeText(petPrompt(name)).then(() => done("prompt"));
-  };
-  // The desktop app opens no links, so her picture goes to the clipboard for pasting
-  // into the image model, next to the prompt.
-  const copyPicture = async () => {
-    try {
-      const blob = await (await fetch(portraitUrl(id, portrait ?? ""))).blob();
-      await navigator.clipboard.write([new ClipboardItem({ "image/png": blob })]);
-      done("picture");
-    } catch {
-      actions.toast("Her picture could not be copied. Save it from her profile instead.");
-    }
+    void navigator.clipboard.writeText(petPrompt(name)).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
   };
   const used = labels.filter((l): l is Pose => l !== null);
   const repeated = used.length !== new Set(used).size;
@@ -807,21 +798,20 @@ function CreatePet({ id, name, online, draft, own, has }: {
         <li>
           <span>Copy the prompt and paste it into an image model that makes pictures, such as ChatGPT.</span>
           <button type="button" onClick={copy}>
-            {copied === "prompt" ? "Copied" : "Copy prompt"}
+            {copied ? "Copied" : "Copy prompt"}
           </button>
         </li>
-        {portrait ? (
-          <li>
-            <span>Paste a picture of {name} with it, such as her portrait.</span>
-            <button type="button" onClick={() => void copyPicture()}>
-              {copied === "picture" ? "Copied" : "Copy her picture"}
-            </button>
-          </li>
-        ) : (
-          <li>
-            <span>Attach a picture of {name} with it.</span>
-          </li>
-        )}
+        <li>
+          <span>Add a picture of {name}: take one of her model, then copy or save it.</span>
+          <button type="button" onClick={() => setViewer(true)}>
+            Take her picture
+          </button>
+          {viewer ? (
+            <Suspense fallback={null}>
+              <PictureViewer id={id} name={name} onClose={closeViewer} />
+            </Suspense>
+          ) : null}
+        </li>
         <li>
           <span>Save the sheet it draws and upload it here. Kōkyū cuts out the twelve poses for you to check.</span>
           <label className={online ? "pet-upload" : "pet-upload disabled"}>

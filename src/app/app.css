@@ -3795,3 +3795,104 @@ button:disabled {
   -webkit-line-clamp: 3;
   backdrop-filter: blur(6px);
 }
+
+/* Her picture for Create pet (D-104) */
+.picture-dialog {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  width: min(560px, calc(100vw - 48px));
+  height: min(680px, calc(100vh - 48px));
+  padding: 18px 20px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: var(--panel);
+  box-shadow: 0 24px 64px rgb(0 0 0 / 45%);
+}
+
+.picture-dialog header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+}
+
+.picture-dialog h2 {
+  margin: 0;
+  font-size: 17px;
+}
+
+.picture-dialog .settings-close {
+  position: static;
+  width: 32px;
+  height: 32px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: var(--muted);
+  cursor: pointer;
+}
+
+.picture-view {
+  position: relative;
+  flex: 1;
+  min-height: 0;
+  overflow: hidden;
+  border-radius: 12px;
+  background: repeating-conic-gradient(var(--panel-2) 0% 25%, var(--panel) 0% 50%) 0 0 / 20px 20px;
+}
+
+.picture-view img {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+.picture-actions {
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  gap: 10px;
+}
+
+.picture-actions .muted {
+  margin-right: auto;
+  font-size: 13px;
+}
+
+.picture-actions .view-switch {
+  display: flex;
+  gap: 2px;
+  padding: 2px;
+  border: 1px solid var(--line);
+  border-radius: 9px;
+}
+
+.picture-actions > button {
+  min-height: 32px;
+  padding: 0 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel-2);
+  color: var(--text);
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.picture-actions > button.primary {
+  border-color: var(--accent);
+  background: var(--accent);
+  color: var(--on-accent);
+}
+
+.picture-actions > button.ghost {
+  border-color: transparent;
+  background: transparent;
+  color: var(--muted);
+}
+
+.picture-actions > button:disabled {
+  opacity: 0.5;
+  cursor: default;
+}

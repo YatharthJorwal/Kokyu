@@ -6,6 +6,7 @@
 
 import * as THREE from "three";
 import { GLTFLoader } from "three/examples/jsm/loaders/GLTFLoader.js";
+import { OrbitControls } from "three/examples/jsm/controls/OrbitControls.js";
 import { VRMLoaderPlugin, VRMUtils, type VRM } from "@pixiv/three-vrm";
 
 import { ExpressionLife, blendTarget } from "./expression-life";
@@ -40,11 +41,19 @@ const BLEND_SPEED = 4;   // per second
 export interface StageHooks {
   /** A turn is running or she is speaking: expression life holds her mood. */
   busy(): boolean;
+  /** The picture viewer (D-104): the user turns and zooms her with the mouse. */
+  orbit?: boolean;
 }
+
+export type Framing = "bust" | "full";
 
 export interface Stage {
   /** A finished reply's emotion tag (FR-ST-7); unknown names are ignored. */
   setEmotion(emotion: string | null | undefined): void;
+  /** Bust-up (the Stage) or her whole body (the picture viewer). */
+  frame(framing: Framing): void;
+  /** A PNG of what is on screen now, with a see-through background. */
+  capture(): Promise<Blob | null>;
   dispose(): void;
 }
 
@@ -90,9 +99,32 @@ export async function createStage(canvas: HTMLCanvasElement, url: string, hooks:
   const head = new THREE.Vector3(0, 1.4, 0);
   vrm.humanoid?.getNormalizedBoneNode("head")?.getWorldPosition(head);
   const top = new THREE.Box3().setFromObject(vrm.scene, true).max.y;
-  const lookY = lookAtHeight(head.y, top, { distance: DISTANCE, fovDegrees: FOV, headroom: HEADROOM, maxRise: MAX_RISE });
-  camera.position.set(head.x, lookY + HEIGHT_OVER_HEAD, head.z + DISTANCE);
-  camera.lookAt(head.x, lookY, head.z);
+  const box = new THREE.Box3().setFromObject(vrm.scene, true);
+  const controls = hooks.orbit ? new OrbitControls(camera, canvas) : null;
+  if (controls) {
+    controls.enableDamping = true;
+    controls.enablePan = false;
+    controls.minDistance = 0.4;
+    controls.maxDistance = 6;
+  }
+  const frameAs = (framing: Framing) => {
+    const target = new THREE.Vector3();
+    if (framing === "bust") {
+      const lookY = lookAtHeight(head.y, top, { distance: DISTANCE, fovDegrees: FOV, headroom: HEADROOM, maxRise: MAX_RISE });
+      target.set(head.x, lookY, head.z);
+      camera.position.set(head.x, lookY + HEIGHT_OVER_HEAD, head.z + DISTANCE);
+    } else {
+      // Her whole height in the frame, with a little room round her.
+      const height = box.max.y - box.min.y;
+      const distance = (height * 0.58) / Math.tan(THREE.MathUtils.degToRad(FOV / 2));
+      target.set(head.x, box.min.y + height / 2, head.z);
+      camera.position.set(head.x, target.y, head.z + distance);
+    }
+    camera.lookAt(target);
+    controls?.target.copy(target);
+    controls?.update();
+  };
+  frameAs("bust");
 
   const fit = () => {
     const w = canvas.clientWidth;
@@ -114,11 +146,11 @@ export async function createStage(canvas: HTMLCanvasElement, url: string, hooks:
   const weights: Record<Preset, number> = { happy: 0, angry: 0, sad: 0, relaxed: 0, surprised: 0, neutral: 1 };
   let gazeFrame: GazeFrame = { yaw: 0, pitch: 0, headYaw: 0, headPitch: 0 };
   let idleTime = 0;
-  let frame = 0;
+  let raf = 0;
   const clock = new THREE.Clock();
 
   const animate = () => {
-    frame = requestAnimationFrame(animate);
+    raf = requestAnimationFrame(animate);
     const dt = Math.min(0.1, clock.getDelta());
     const speaking = getSpeechProgress() !== null;
     gazeFrame = gaze.update(dt, speaking);
@@ -142,6 +174,7 @@ export async function createStage(canvas: HTMLCanvasElement, url: string, hooks:
     applyIdleOffsets(idleBones, idleOffsets(idleTime));
     addHeadFollow(idleBones, gazeFrame);
     vrm.update(dt);
+    controls?.update();
     renderer.render(scene, camera);
   };
   animate();
@@ -150,8 +183,15 @@ export async function createStage(canvas: HTMLCanvasElement, url: string, hooks:
     setEmotion(emotion) {
       if (emotion && (EMOTIONS as readonly string[]).includes(emotion)) life.set(emotion);
     },
+    frame: frameAs,
+    capture() {
+      // toBlob copies the canvas as it is now, before the browser clears it.
+      renderer.render(scene, camera);
+      return new Promise((resolve) => canvas.toBlob(resolve, "image/png"));
+    },
     dispose() {
-      cancelAnimationFrame(frame);
+      cancelAnimationFrame(raf);
+      controls?.dispose();
       resize.disconnect();
       scene.remove(vrm.scene);
       VRMUtils.deepDispose(vrm.scene);
