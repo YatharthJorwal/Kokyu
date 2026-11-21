@@ -399,16 +399,14 @@ Requirements for the system prompt you write:
 
 ## Appendix B: Release 1.1+ (not specified in detail)
 
-Planned for 1.1 (D-034, D-085): desktop pets in K4, the 3D apartment in K5, built from Luna's apartment (D-078). Rows keep their IDs; each is designed in its phase.
+Planned for 1.1 (D-034, D-085): the 3D apartment in K5 (pets moved into UI-2 by D-103), built from Luna's apartment (D-078). Rows keep their IDs; each is designed in its phase.
 
 | ID | Requirement |
 |---|---|
-| FR-P-1 | A companion can be brought out as a **2D pet**, one to three at once; the entry point is designed in K4 (no control before it works, FR-C-4). |
-| FR-P-2 | Sprites are **baked from her VRM**: orthographic, transparent renders through VRMA clips (idle, sit, walk) into an atlas (PNG + JSON); procedural idle and walk without clips. |
-| FR-P-3 | Behaviour: idle, sit, walk left and right along the bottom of the work area, react to a click, dragged, small looks and gestures. |
-| FR-P-4 | Pets render in one transparent, undecorated, always-on-top overlay per monitor (primary only), hidden from the taskbar, click-through except over opaque pixels. A K4 spike confirms this beats one window per pet (D-014). |
-| FR-P-5 | Clicking a pet opens a quick reply and a speech bubble; she speaks through the arbiter. Right-click: open chat, dismiss. |
-| FR-P-6 | Pets live while the app runs in the tray; closing the main window does not close them. TARGET: under 2% CPU walking, about zero GPU. |
+| FR-P-1 | A companion can have a **pet**: chibi her, walking along the bottom of the conversation in chat and roleplay while that companion is active (D-103). The paw button beside the companion chip shows or hides it; with no pet yet it opens Settings → Pet. |
+| FR-P-2 | A pet is a skin: up to 12 labelled poses (idle, walk 1, walk 2, sit, sleep, eat, wave, think, talk, happy, sad, surprised). **Create pet** takes one 4×3 pose sheet made with the prompt the app gives; the engine cuts it, keys out a flat background, trims each pose on a shared scale; the user checks and relabels the poses before saving. A premade pet ships in her pack's `pet/`. |
+| FR-P-3 | Behaviour: Roam (idle, walk left and right, sit, eat, sleep after a long quiet), Stay put, or Sleep; Size. While she thinks she shows *think*, while she replies *talk*, after a reply *happy* briefly, after a failure *sad*. A click makes her wave. A missing pose falls back to *idle*. |
+| FR-P-4 | The pet never leaves the window and never covers the input box; it costs no GPU beyond the page's own drawing. |
 | FR-3D-1 | The room is a prebuilt GLB apartment supplied as a **user asset**, with a collision mesh she and the user share. |
 | FR-3D-2 | Two cameras: a spectator free-fly camera and a first-person **visitor** camera (WASD, pointer lock, about 1.5 m eye height, walk and run), clamped to the walkable area. |
 | FR-3D-3 | She wanders the walkable area with walk start, loop and stop clips sized to her hip height. |

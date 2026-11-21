@@ -27,7 +27,7 @@ import { shortRef } from "./models";
 
 export type ConnectionStatus = "connecting" | "online" | "offline";
 /** K1-13: the Settings dialog's sections (FR-SET-1; the rest arrive with their phases). */
-export type SettingsSection = "models" | "appearance" | "voice" | "screen" | "memory" | "doctor" | "about";
+export type SettingsSection = "models" | "appearance" | "pet" | "voice" | "screen" | "memory" | "doctor" | "about";
 export type TurnPhase = "idle" | "thinking" | "replying";
 export type SurfaceRole = "driver" | "observer";
 
@@ -96,6 +96,10 @@ export interface Companion {
   traits?: string[];
   about?: string | null;
   portraitChosen?: boolean;
+  /** D-103: her pet's version stamp and poses; null when she has none. */
+  pet?: string | null;
+  petPoses?: string[];
+  petOwn?: boolean;
 }
 
 function toCompanion(w: CompanionInfo): Companion {
@@ -106,6 +110,9 @@ function toCompanion(w: CompanionInfo): Companion {
     traits: w.traits ?? [],
     about: w.about ?? null,
     portraitChosen: w.portrait_chosen ?? false,
+    pet: w.pet ?? null,
+    petPoses: w.pet_poses ?? [],
+    petOwn: w.pet_own ?? false,
   };
 }
 
@@ -164,6 +171,8 @@ export interface ChatState {
   confirm: ConfirmAsk | null;
   /** UI1-10: the Ctrl+K palette is open. */
   palette: boolean;
+  /** D-103: Create pet's cut sheet, being checked; null otherwise. */
+  petDraft: ServerData["pet_draft"] | null;
   /** D-099: the message being read aloud on request (its key), from the click until
    * the last of it has played; null otherwise. */
   reading: string | null;
@@ -199,6 +208,7 @@ export type ChatEvent =
   | { kind: "toast_gone"; id: number }
   | { kind: "confirm"; ask: ConfirmAsk | null }
   | { kind: "palette"; open: boolean }
+  | { kind: "pet_draft_done" }
   | { kind: "reading"; key: string | null }
   /** A card save went out (FR-MODE-6). */
   | { kind: "scenario_saving" }
@@ -237,6 +247,7 @@ export const initialState: ChatState = {
   toasts: [],
   confirm: null,
   palette: false,
+  petDraft: null,
   reading: null,
   scenarioSave: null,
   roleplayStart: null,
@@ -549,6 +560,8 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       const pending = data.pending !== data.active ? roster.find((w) => w.id === data.pending) : undefined;
       return { ...state, roster, companion: found ?? null, pendingCompanion: pending ?? null };
     }
+    case "pet_draft":
+      return { ...state, petDraft: frame.data as ServerData["pet_draft"] };
     case "waifu_roster": {
       // A new picture (D-091): the same companions, fresh details; who is active stays.
       const roster = ((frame.data as ServerData["waifu_roster"]).waifus ?? []).map(toCompanion);
@@ -671,6 +684,8 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return { ...state, palette: event.open, pickerOpen: event.open ? false : state.pickerOpen };
     case "reading":
       return { ...state, reading: event.key };
+    case "pet_draft_done":
+      return { ...state, petDraft: null };
     case "scenario_saving":
       return { ...state, scenarioSave: "pending" };
     case "roleplay_starting":

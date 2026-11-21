@@ -15,6 +15,7 @@ import base64
 import binascii
 import contextlib
 import logging
+import time
 from collections.abc import Awaitable, Callable, Coroutine
 from typing import Any
 
@@ -42,7 +43,7 @@ from memory import viewer as memory_viewer
 from memory import writer
 from router import listing as model_listing
 from senses import camera, ocr_watch, task_guide
-from waifus import portrait
+from waifus import pet, portrait
 
 log = logging.getLogger(__name__)
 
@@ -743,6 +744,39 @@ class Session:
         except (ValueError, binascii.Error):
             await self.refuse("picture_unreadable", "That file is not a picture Kōkyū can read. Try a PNG or JPEG.")
             return
+        await hub.broadcast(protocol.frame("waifu_roster", {"waifus": self.registry.describe()}))
+
+    async def on_pet_sheet(self, msg: Any) -> None:
+        """Create pet (D-103): cut the sheet and show this window its cells to check."""
+        data = msg.data
+        if self.registry.get(data.waifu_id) is None:
+            await self.refuse("unknown_waifu", f"There is no companion called {data.waifu_id!r}.")
+            return
+        try:
+            raw = base64.b64decode(data.image_b64, validate=True)
+            cells = await asyncio.to_thread(pet.make_draft, data.waifu_id, raw)
+        except (ValueError, binascii.Error):
+            await self.refuse("picture_unreadable", "Kōkyū found no poses in that file. Use a PNG of the pose sheet.")
+            return
+        await self.ws.send_json(protocol.frame("pet_draft", {"waifu_id": data.waifu_id, "cells": cells, "stamp": f"{time.time_ns():x}"}))
+
+    async def on_pet_save(self, msg: Any) -> None:
+        data = msg.data
+        if self.registry.get(data.waifu_id) is None:
+            await self.refuse("unknown_waifu", f"There is no companion called {data.waifu_id!r}.")
+            return
+        try:
+            await asyncio.to_thread(pet.save, data.waifu_id, data.labels)
+        except (ValueError, OSError):
+            await self.refuse("picture_unreadable", "Those poses could not be saved. Give each pose one cell, then save again.")
+            return
+        await hub.broadcast(protocol.frame("waifu_roster", {"waifus": self.registry.describe()}))
+
+    async def on_pet_remove(self, msg: Any) -> None:
+        if self.registry.get(msg.data.waifu_id) is None:
+            await self.refuse("unknown_waifu", f"There is no companion called {msg.data.waifu_id!r}.")
+            return
+        await asyncio.to_thread(pet.remove, msg.data.waifu_id)
         await hub.broadcast(protocol.frame("waifu_roster", {"waifus": self.registry.describe()}))
 
     async def on_set_temp(self, msg: Any) -> None:

@@ -343,7 +343,7 @@ test("companion name, observer role and a lost connection", () => {
     online,
     frame("waifu_state", { active: "yuri", waifus: [{ id: "yuri", name: "Yuri" }], problems: [], pending: null }, null),
   );
-  assert.deepEqual(s.companion, { id: "yuri", name: "Yuri", portrait: null, traits: [], about: null, portraitChosen: false });
+  assert.deepEqual(s.companion, { id: "yuri", name: "Yuri", portrait: null, traits: [], about: null, portraitChosen: false, pet: null, petPoses: [], petOwn: false });
   s = reduce(s, frame("surface_status", { role: "observer" }, null));
   assert.equal(canSend(s), false);
   s = reduce(s, frame("surface_status", { role: "driver" }, null));

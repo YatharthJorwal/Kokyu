@@ -5,25 +5,30 @@
 // Doctor (each component's state with a fix hint) and About. What is edited here is
 // saved in settings.json and applies at once (D-070). Appearance is this window's own
 // look, kept on this PC by the page (D-073). Voice: Read aloud (kept by the engine)
-// and the dictation key (kept by the page, like Appearance) (D-097). Waifus, Scenes,
-// Pets and Advanced arrive with their phases.
+// and the dictation key (kept by the page, like Appearance) (D-097). Pet: her pet's
+// behaviour and size (the page's) and Create pet (D-103). Waifus, Scenes and Advanced
+// arrive with their phases.
 
 import { useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
-import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, SettingsChange, SettingsData } from "../../net/protocol";
+import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, ServerData, SettingsChange, SettingsData } from "../../net/protocol";
 import { modelLabel, type SettingsSection } from "../chat-state";
 import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
 import { setDictationKey, useDictationKey } from "../dictation-key";
 import { VOICE_START_S } from "../read-aloud";
 import { formatSize, formatUsd } from "../models";
-import { actions, useChat } from "../store";
+import { PET_SIZE_MAX, PET_SIZE_MIN, POSES, petPrompt, type Pose } from "../pet-brain";
+import { actions, setPetPrefs, useChat, usePetPrefs } from "../store";
 import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
 import { version } from "../../../package.json";
 import { Icon, type IconName } from "./Icon";
+import { petDraftUrl, petPoseUrl } from "./Pet";
+import { portraitUrl } from "./Portrait";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: "models", label: "Models", icon: "models" },
   { id: "appearance", label: "Appearance", icon: "sun" },
+  { id: "pet", label: "Pet", icon: "paw" },
   { id: "voice", label: "Voice", icon: "mic" },
   { id: "screen", label: "Screen", icon: "monitor" },
   { id: "memory", label: "Memory", icon: "memory" },
@@ -81,6 +86,7 @@ export function SettingsDialog() {
           </button>
           {section === "models" ? <ModelsSection /> : null}
           {section === "appearance" ? <AppearanceSection /> : null}
+          {section === "pet" ? <PetSection /> : null}
           {section === "voice" ? <VoiceSection /> : null}
           {section === "screen" ? <ScreenSection /> : null}
           {section === "memory" ? <MemorySection /> : null}
@@ -639,6 +645,194 @@ function Choices<T extends string>({ label, value, options, onPick }: {
           {o.label}
         </button>
       ))}
+    </div>
+  );
+}
+
+const POSE_LABELS: Record<Pose, string> = {
+  idle: "Idle",
+  walk_1: "Walk 1",
+  walk_2: "Walk 2",
+  sit: "Sit",
+  sleep: "Sleep",
+  eat: "Eat",
+  wave: "Wave",
+  think: "Think",
+  talk: "Talk",
+  happy: "Happy",
+  sad: "Sad",
+  surprised: "Surprised",
+};
+
+/** D-103 (FR-P-1..3): her pet's behaviour and size, and Create pet. */
+function PetSection() {
+  const prefs = usePetPrefs();
+  const companion = useChat((s) => s.companion);
+  const online = useChat((s) => s.connection === "online");
+  const draft = useChat((s) => (s.petDraft && s.petDraft.waifu_id === s.companion?.id ? s.petDraft : null));
+  const name = companion?.name ?? "her";
+  return (
+    <>
+      <h3>Pet</h3>
+      <p className="muted">A chibi {name} walking along the bottom of the chat while you talk. The paw button beside her name shows or hides it.</p>
+      <div className="setting-group">
+        <Row title="Show the pet" about="In chats and roleplays, while this companion is active.">
+          <label className="switch">
+            <input type="checkbox" role="switch" checked={prefs.show} onChange={(e) => setPetPrefs({ show: e.target.checked })} />
+            <span className="switch-track" aria-hidden="true" />
+          </label>
+        </Row>
+        <Row title="Behaviour" about="Roam walks, sits and eats; she naps after a long quiet.">
+          <Choices
+            label="Behaviour"
+            value={prefs.mode}
+            options={[
+              { id: "roam", label: "Roam" },
+              { id: "stay", label: "Stay put" },
+              { id: "sleep", label: "Sleep" },
+            ]}
+            onPick={(mode) => setPetPrefs({ mode })}
+          />
+        </Row>
+        <Row title="Size">
+          <input
+            type="range"
+            className="pet-size"
+            min={PET_SIZE_MIN}
+            max={PET_SIZE_MAX}
+            step={5}
+            value={prefs.size}
+            aria-label="Pet size"
+            onChange={(e) => setPetPrefs({ size: Number(e.target.value) })}
+          />
+          <span className="pet-size-value">{prefs.size}%</span>
+        </Row>
+      </div>
+
+      <h4>{draft ? `Check ${name}'s new pet` : companion?.pet ? `${name}'s pet` : `Create ${name}'s pet`}</h4>
+      {companion?.pet && !draft ? (
+        <div className="pet-poses">
+          {(companion.petPoses ?? []).map((pose) => (
+            <figure key={pose}>
+              <img src={petPoseUrl(companion.id, pose, companion.pet ?? "")} alt="" />
+              <figcaption>{POSE_LABELS[pose as Pose] ?? pose}</figcaption>
+            </figure>
+          ))}
+        </div>
+      ) : null}
+      {companion ? <CreatePet id={companion.id} name={name} online={online} draft={draft} own={companion.petOwn ?? false} has={!!companion.pet} /> : null}
+    </>
+  );
+}
+
+function CreatePet({ id, name, online, draft, own, has }: {
+  id: string;
+  name: string;
+  online: boolean;
+  draft: ServerData["pet_draft"] | null;
+  own: boolean;
+  has: boolean;
+}) {
+  const [copied, setCopied] = useState(false);
+  const [labels, setLabels] = useState<(Pose | null)[]>([]);
+  const portrait = useChat((s) => s.companion?.portrait ?? null);
+
+  useEffect(() => {
+    // A new sheet: each cell that holds a pose starts with its place in the grid.
+    setLabels(draft ? draft.cells.map((full, n) => (full ? POSES[n] : null)) : []);
+  }, [draft]);
+
+  const copy = () => {
+    void navigator.clipboard.writeText(petPrompt(name)).then(() => {
+      setCopied(true);
+      window.setTimeout(() => setCopied(false), 1500);
+    });
+  };
+  const used = labels.filter((l): l is Pose => l !== null);
+  const repeated = used.length !== new Set(used).size;
+
+  if (draft) {
+    return (
+      <div className="pet-steps">
+        <p className="muted">Check each pose and fix any label that is wrong. A cell set to Leave out is not used.</p>
+        <div className="pet-cells">
+          {draft.cells.map((full, n) =>
+            full ? (
+              <figure key={n}>
+                <img src={petDraftUrl(id, n, draft.stamp)} alt={`Cell ${n + 1}`} />
+                <select
+                  aria-label={`Cell ${n + 1}`}
+                  value={labels[n] ?? ""}
+                  onChange={(e) => setLabels((old) => old.map((l, i) => (i === n ? ((e.target.value || null) as Pose | null) : l)))}
+                >
+                  <option value="">Leave out</option>
+                  {POSES.map((p) => (
+                    <option key={p} value={p}>
+                      {POSE_LABELS[p]}
+                    </option>
+                  ))}
+                </select>
+              </figure>
+            ) : null,
+          )}
+        </div>
+        {repeated ? <p className="settings-hint pet-warn">Each pose can be used once.</p> : null}
+        <div className="pet-actions">
+          <button type="button" className="ghost" onClick={() => actions.dropPetDraft()}>
+            Cancel
+          </button>
+          <button type="button" disabled={!online || repeated || used.length === 0} onClick={() => actions.savePet(id, labels)}>
+            Save pet
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="pet-steps">
+      <ol>
+        <li>
+          <span>Copy the prompt and paste it into an image model that makes pictures, such as ChatGPT.</span>
+          <button type="button" onClick={copy}>
+            {copied ? "Copied" : "Copy prompt"}
+          </button>
+        </li>
+        {portrait ? (
+          <li>
+            <span>Attach a picture of {name} with it, such as her portrait.</span>
+            <a className="pet-link" href={portraitUrl(id, portrait)} download={`${name}.png`} target="_blank" rel="noreferrer">
+              Open her portrait
+            </a>
+          </li>
+        ) : (
+          <li>
+            <span>Attach a picture of {name} with it.</span>
+          </li>
+        )}
+        <li>
+          <span>Save the sheet it draws and upload it here. Kōkyū cuts out the twelve poses for you to check.</span>
+          <label className={online ? "pet-upload" : "pet-upload disabled"}>
+            Upload the sheet
+            <input
+              type="file"
+              accept="image/png,image/webp,image/jpeg"
+              disabled={!online}
+              hidden
+              onChange={(e) => {
+                const file = e.target.files?.[0];
+                e.target.value = "";
+                if (file) void actions.sendPetSheet(id, file);
+              }}
+            />
+          </label>
+        </li>
+      </ol>
+      {has && own ? (
+        <button type="button" className="danger-text" onClick={() => actions.removePet(id)}>
+          Remove this pet
+        </button>
+      ) : null}
     </div>
   );
 }

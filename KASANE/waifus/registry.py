@@ -10,7 +10,7 @@ from dataclasses import dataclass
 from pathlib import Path
 
 import paths
-from waifus import portrait
+from waifus import pet, portrait
 from waifus.pack import PackError, Waifu, load_pack
 
 log = logging.getLogger("kokyu.waifus")
@@ -80,6 +80,9 @@ class WaifuRegistry:
                 "about": w.about,
                 "portrait": portrait.version(w),
                 "portrait_chosen": portrait.chosen_path(w.id).is_file(),
+                "pet": pet.version(w),
+                "pet_poses": pet.poses(w),
+                "pet_own": (paths.pets_dir() / w.id / "live").is_dir(),
             }
             for w in self.list()
         ]

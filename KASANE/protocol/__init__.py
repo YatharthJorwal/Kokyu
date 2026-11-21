@@ -197,6 +197,24 @@ class SetPortrait(_Data):
     image_b64: str | None = Field(default=None, min_length=1, max_length=FILE_MAX)
 
 
+class PetSheet(_Data):
+    """D-103 (FR-P-2): a pose sheet for her pet, as bare base64, to be cut and checked."""
+
+    waifu_id: str = Field(min_length=1, max_length=64)
+    image_b64: str = Field(min_length=1, max_length=FILE_MAX)
+
+
+class PetSave(_Data):
+    """D-103: the checked draft's cells saved as her pet; `labels[n]` names cell n's pose."""
+
+    waifu_id: str = Field(min_length=1, max_length=64)
+    labels: list[str | None] = Field(min_length=1, max_length=12)
+
+
+class PetRemove(_Data):
+    waifu_id: str = Field(min_length=1, max_length=64)
+
+
 class CameraFrame(_Data):
     image_b64: str | None = Field(default=None, max_length=FILE_MAX)   # None: the camera could not answer
 
@@ -293,6 +311,9 @@ CLIENT_TYPES: dict[str, type[_Data]] = {
     "stop": Empty,                    # Stop the reply in flight (FR-C-2)
     "switch_waifu": SwitchWaifu,      # FR-S-1: changes only persona and voice
     "set_portrait": SetPortrait,      # D-091 (FR-W-9): her picture, chosen or reset
+    "pet_sheet": PetSheet,            # D-103: a pose sheet to cut and check
+    "pet_save": PetSave,              # D-103: the checked poses become her pet
+    "pet_remove": PetRemove,          # D-103: her own pet goes (a premade one comes back)
     "set_temp": TempChat,             # FR-MEM-5: Temp Chat on or off for the open thread
     "camera_frame": CameraFrame,      # the answer to camera_request (K2-07)
     "thread_list": Empty,
@@ -361,6 +382,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "scenarios",      # FR-MODE-6: the saved scenario cards, newest first
     "exchange_saved", # D-100: the stored line and reply of a turn, sent before turn_done
     "message_updated",  # D-100: one stored message changed (a pin, a swipe)
+    "pet_draft",      # D-103: a cut sheet's cells, for this window's Create pet
 )
 
 ERROR_CODES: tuple[str, ...] = (

@@ -39,7 +39,7 @@ from audio import arbiter, read_aloud, tts
 from config import CONFIG
 from memory import writer
 from router import listing as model_listing
-from waifus import portrait
+from waifus import pet, portrait
 
 log = logging.getLogger(__name__)
 
@@ -129,6 +129,29 @@ async def waifu_portrait(waifu_id: str) -> FileResponse:
     if path is None:
         raise HTTPException(status_code=404, detail="no portrait")
     return FileResponse(path, media_type="image/png", headers={"Cache-Control": "max-age=31536000, immutable"})
+
+
+@app.get("/waifus/{waifu_id}/pet/{pose}")
+async def waifu_pet_pose(waifu_id: str, pose: str) -> FileResponse:
+    """One pose of her pet (D-103). The URL carries a version (`?v=`)."""
+    waifu = waifus.get_registry().get(waifu_id)
+    if waifu is None:
+        raise HTTPException(status_code=404, detail="unknown companion")
+    path = await asyncio.to_thread(pet.pose_file, waifu, pose)
+    if path is None:
+        raise HTTPException(status_code=404, detail="no such pose")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "max-age=31536000, immutable"})
+
+
+@app.get("/waifus/{waifu_id}/pet-draft/{cell}")
+async def waifu_pet_draft(waifu_id: str, cell: int) -> FileResponse:
+    """One cell of the sheet being checked in Create pet (D-103). Never cached."""
+    if waifus.get_registry().get(waifu_id) is None:
+        raise HTTPException(status_code=404, detail="unknown companion")
+    path = pet.draft_file(waifu_id, cell) if 0 <= cell < len(pet.POSES) else None
+    if path is None:
+        raise HTTPException(status_code=404, detail="no such cell")
+    return FileResponse(path, media_type="image/png", headers={"Cache-Control": "no-store"})
 
 
 async def apply_shell_key(provider_id: str, key: str | None) -> None:

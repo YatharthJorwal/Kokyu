@@ -180,13 +180,13 @@ Story folds wait for the chat model; a remark is dropped if the thread changed. 
 **D-009 Stage view is Ani-style** · Accepted · User · 2026-11-11
 Her VRM bust-up with lip-sync, eye contact and idle motion; Chat | Stage toggles the same thread. Amended by D-068 (no sidebar companion list).
 
-**D-010 Desktop pets are 2D sprites baked from the VRM** · Accepted · User (2D), Claude (baking) · 2026-11-11
+**D-010 Desktop pets are 2D sprites baked from the VRM** · Superseded by D-103 · User (2D), Claude (baking) · 2026-11-11
 Orthographic sprite atlases baked through VRMA clips, played as 2D animation (K4, release 1.1).
 
 **D-013 Frontend stack** · Accepted · Claude · 2026-11-11
 Tauri 2, Vite, strict TypeScript, three.js with `@pixiv/three-vrm`, React for chrome, Zustand, plain CSS variables. Confirmed by D-053.
 
-**D-014 Pets in one overlay window per monitor** · Provisional · Claude · 2026-11-11
+**D-014 Pets in one overlay window per monitor** · Superseded by D-103 · Claude · 2026-11-11
 One transparent always-on-top overlay with alpha hit-testing; K4 starts with a spike, falling back to one window per pet.
 
 **D-053 React chat window** · Accepted · User · 2026-11-14
@@ -311,6 +311,9 @@ The user's notes, with a c.ai screenshot. "in a roleplay, the character cannot b
 **D-102 UI-2 starts from the user's references, one screen at a time** · Accepted · User, with Claude's parts · 2026-11-22
 The user opened UI-2 with screenshots: "first fix the settings and make them look proper like ref images", and "shift chat title to middle". So UI-2 restyles a screen against a reference the user gives, instead of a full `DESIGN.md` first; the tokens and type scale grow from those screens. Settings first: icons in the section list, rows with a title and a muted line left and the control right, theme cards, bordered provider cards with a status dot and Edit, nothing under 12 px; same sections and features. The chat title is centred on the whole top bar. Claude's: the icons are drawn in-house like the rest (no icon library yet, D-086's UI2-04 still open). Amends D-086.
 
+**D-103 The pet is chibi her, inside the window, from a pose sheet** · Accepted · User, with Claude's parts · 2026-11-22
+The user, after ThatPet's screenshots: the pet is "the companion herself, chibi luna while you chat with luna", in chat and roleplay, not in the stage view; it stays in the app window ("doesnt interact with desktop stuff"), about ten animations; Kōkyū sells two premade pets and has a step-by-step Create pet; "develop the pipeline first"; the art comes from a strong image model drawing many poses on one sheet. A pet is a skin: labelled pose images, one engine plays any of them. Claude's parts: a 4×3 sheet of 12 named poses; the engine cuts the grid, keys out a flat background when the sheet has no transparency, trims each pose and keeps the sheet's scale, so her feet sit on one line; each animation is one to three stills moved by code (slide, bob, breathe, flip), not frame-by-frame art, because image models do not keep a walk cycle consistent; the user generates the sheet outside the app with the prompt it gives (an in-app image call with the user's key comes later); her pet lives in the app data folder, or in her pack's `pet/` for a premade; the behaviour setting and size are the window's own, like Appearance. Supersedes D-010 and D-014; FR-P rewritten; pulled forward from 1.1 into UI-2.
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)
@@ -327,3 +330,4 @@ The user opened UI-2 with screenshots: "first fix the settings and make them loo
 - D-049 Flat and v1 messages side by side → superseded by D-062 (v1 only)
 - D-052 Helpers kept loaded; boot warm-up → superseded by D-072 (one model in memory) and D-060 (lazy boot)
 - D-061 Voice mode, a kernel-wide switch → superseded by D-097 (Read aloud and dictation)
+- D-010 Pets baked from the VRM, D-014 desktop overlay → superseded by D-103 (chibi her in the window, from a pose sheet)

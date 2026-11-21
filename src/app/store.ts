@@ -22,6 +22,7 @@ import {
   type SettingsSection,
 } from "./chat-state";
 import { resizeImageToBase64Jpeg } from "./file-upload";
+import { PET_PREFS_KEY, parsePetPrefs, type PetPrefs } from "./pet-brain";
 import { VoicePlayer } from "./voice";
 
 /** A file ready to send: an image as base64 JPEG, or a text file's content (src/file-upload.ts). */
@@ -32,6 +33,24 @@ export interface Attachment {
 }
 
 export const useChat = create<ChatState>(() => initialState);
+
+/** D-103: the pet's show, behaviour and size; this window's own, like Appearance. */
+export const usePetPrefs = create<PetPrefs>(() => {
+  try {
+    return parsePetPrefs(localStorage.getItem(PET_PREFS_KEY));
+  } catch {
+    return parsePetPrefs(null);
+  }
+});
+
+export function setPetPrefs(change: Partial<PetPrefs>): void {
+  usePetPrefs.setState(change);
+  try {
+    localStorage.setItem(PET_PREFS_KEY, JSON.stringify(usePetPrefs.getState()));
+  } catch {
+    // storage blocked: the change holds for this session
+  }
+}
 
 function dispatch(event: ChatEvent): void {
   useChat.setState((state) => reduce(state, event), true);
@@ -360,6 +379,32 @@ export const actions = {
       return;
     }
     socket.send("set_portrait", { waifu_id: id, image_b64: image });
+  },
+
+  /** Create pet (D-103): the sheet goes to the engine, which cuts it and answers with
+   * `pet_draft`. PNG keeps its transparency. */
+  async sendPetSheet(id: string, file: File): Promise<void> {
+    let image: string;
+    try {
+      image = await resizeImageToBase64Jpeg(file, "image/png", 2048);   // a sheet's 12 cells need more pixels than a photo
+    } catch {
+      dispatch({ kind: "problem", reason: "That file is not a picture Kōkyū can read. Use a PNG of the pose sheet." });
+      return;
+    }
+    socket.send("pet_sheet", { waifu_id: id, image_b64: image });
+  },
+
+  savePet(id: string, labels: (string | null)[]): void {
+    socket.send("pet_save", { waifu_id: id, labels });
+    dispatch({ kind: "pet_draft_done" });
+  },
+
+  dropPetDraft(): void {
+    dispatch({ kind: "pet_draft_done" });
+  },
+
+  removePet(id: string): void {
+    socket.send("pet_remove", { waifu_id: id });
   },
 
   /** Back to the face from her model. */

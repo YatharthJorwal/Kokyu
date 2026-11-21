@@ -92,6 +92,11 @@ def waifus_dir() -> Path:
     return app_data_dir() / "waifus"
 
 
+def pets_dir() -> Path:
+    """The pets the user made: one folder per companion, its poses and a draft (D-103)."""
+    return app_data_dir() / "pets"
+
+
 def portraits_dir() -> Path:
     """Companion portraits: the user's chosen pictures and the cached VRM thumbnails (D-091)."""
     return app_data_dir() / "portraits"

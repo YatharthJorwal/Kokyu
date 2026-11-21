@@ -92,7 +92,11 @@ export function classifyFile(file: File): ClassifiedFile {
  * project already use. Plain 2D canvas, same reasoning as camera.ts's
  * own choice: this is one still image with no filters or live rendering
  * involved, so WebGL wouldn't add anything here either. */
-export async function resizeImageToBase64Jpeg(file: File, type: "image/jpeg" | "image/png" = "image/jpeg"): Promise<string> {
+export async function resizeImageToBase64Jpeg(
+  file: File,
+  type: "image/jpeg" | "image/png" = "image/jpeg",
+  maxSide: number = MAX_IMAGE_DIMENSION,
+): Promise<string> {
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
@@ -102,7 +106,7 @@ export async function resizeImageToBase64Jpeg(file: File, type: "image/jpeg" | "
       el.src = objectUrl;
     });
 
-    const scale = Math.min(1, MAX_IMAGE_DIMENSION / Math.max(img.naturalWidth, img.naturalHeight));
+    const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
     const width = Math.max(1, Math.round(img.naturalWidth * scale));
     const height = Math.max(1, Math.round(img.naturalHeight * scale));
 

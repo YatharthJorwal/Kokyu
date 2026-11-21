@@ -7,7 +7,7 @@
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
 
-import { actions, useChat } from "../store";
+import { actions, setPetPrefs, useChat, usePetPrefs } from "../store";
 import { CompanionChip } from "./CompanionChip";
 import { Icon } from "./Icon";
 
@@ -23,12 +23,35 @@ export function TopBar({ onShowSidebar }: { onShowSidebar?: () => void }) {
         </button>
       ) : null}
       <CompanionChip />
+      <PetButton />
       <span className="top-bar-title" data-tauri-drag-region title={title || undefined}>
         {title}
       </span>
       <TempSwitch />
       {desktop ? <WindowControls /> : null}
     </header>
+  );
+}
+
+/** D-103 (FR-P-1): shows or hides her pet; with no pet yet it opens Settings → Pet. */
+function PetButton() {
+  const name = useChat((s) => s.companion?.name ?? null);
+  const has = useChat((s) => Boolean(s.companion?.pet));
+  const show = usePetPrefs((p) => p.show);
+  if (name === null) return null;
+  const on = has && show;
+  const label = has ? (show ? `Hide ${name}'s pet` : `Show ${name}'s pet`) : `Create ${name}'s pet`;
+  return (
+    <button
+      type="button"
+      className={on ? "pet-toggle on" : "pet-toggle"}
+      aria-label={label}
+      aria-pressed={has ? on : undefined}
+      title={label}
+      onClick={() => (has ? setPetPrefs({ show: !show }) : actions.openSettings("pet"))}
+    >
+      <Icon name="paw" size={17} />
+    </button>
   );
 }
 

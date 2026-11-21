@@ -9,6 +9,7 @@ import { CommandPalette } from "./ui/CommandPalette";
 import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { ConnectionBanner } from "./ui/ConnectionBanner";
 import { NoticeBar } from "./ui/NoticeBar";
+import { Pet } from "./ui/Pet";
 import { ProfileDialog } from "./ui/ProfileDialog";
 import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
@@ -46,6 +47,7 @@ export function App() {
       <main className="chat">
         <TopBar onShowSidebar={hidden ? () => hide(false) : undefined} />
         <ThreadView />
+        <Pet />
         <ConnectionBanner />
         <NoticeBar />
         <WakingCard />

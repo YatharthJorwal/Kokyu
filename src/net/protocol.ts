@@ -15,6 +15,9 @@ export const CLIENT_TYPES = [
   "stop",
   "switch_waifu",
   "set_portrait",
+  "pet_sheet",
+  "pet_save",
+  "pet_remove",
   "set_temp",
   "camera_frame",
   "thread_list",
@@ -82,6 +85,7 @@ export const SERVER_TYPES = [
   "scenarios",
   "exchange_saved",
   "message_updated",
+  "pet_draft",
 ] as const;
 
 export const ERROR_CODES = [
@@ -128,6 +132,11 @@ export interface CompanionInfo {
   portrait?: string | null;
   /** The picture is one the user chose, not the model's face. */
   portrait_chosen?: boolean;
+  /** D-103: a version stamp for `/waifus/<id>/pet/<pose>`, or null when she has no pet. */
+  pet?: string | null;
+  pet_poses?: string[];
+  /** Her pet is one the user made (Remove brings back a premade one, if any). */
+  pet_own?: boolean;
 }
 
 export type ClientType = (typeof CLIENT_TYPES)[number];
@@ -314,6 +323,8 @@ export interface ServerData {
   exchange_saved: { user: ThreadMessage; reply: ThreadMessage | null };
   /** D-100: one stored message changed (a pin, a swipe). */
   message_updated: { message: ThreadMessage };
+  /** D-103: a cut sheet; `cells[n]` says whether cell n holds a pose (`/waifus/<id>/pet-draft/<n>`). */
+  pet_draft: { waifu_id: string; cells: boolean[]; stamp: string };
 }
 
 /** K1-13b (FR-SET-2, D-070): the editable settings in effect. `saved` names the ones
@@ -372,6 +383,10 @@ export interface ClientData {
   switch_waifu: { id: string };
   /** D-091: bare base64 (already scaled down), or null for the model's face. */
   set_portrait: { waifu_id: string; image_b64: string | null };
+  /** D-103: a pose sheet as bare base64; `labels[n]` names cell n's pose, null leaves it out. */
+  pet_sheet: { waifu_id: string; image_b64: string };
+  pet_save: { waifu_id: string; labels: (string | null)[] };
+  pet_remove: { waifu_id: string };
   set_temp: { on: boolean };
   camera_frame: { image_b64: string | null };
   thread_list: Record<string, never>;
