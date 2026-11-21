@@ -14,7 +14,7 @@ The compact decision reference: what holds now, what is open, what was replaced.
 
 | # | Question | Blocks |
 |---|---|---|
-| 1 | Design references: which apps and screens the look follows. UI-2 starts by collecting them (D-086). | UI-2 |
+| 1 | Design references: which apps and screens the look follows. The user gives them screen by screen (D-102); Settings and the top bar so far. | UI-2 |
 | 2 | The voice a buyer hears. The premades ship their clips and transcripts (D-087) and GPT-SoVITS is set up automatically (D-080). Open: buyers without an NVIDIA GPU (D-036); the ElevenLabs plan's commercial rights for the clips (D-041). | K2, W, K7 |
 | 3 | Premade personas: explicit or not? The audience is 18+ (D-090), but every payment provider checked bans sexual products whatever the age; the report recommends non-explicit premades. Also open: a written yes from a provider, UK sales (Ofcom), a lawyer's read on California SB 243. | K7, B-3 |
 | 4 | Premade packs in git. Claude's recommendation: track `persona.md`, `waifu.yaml` and the clip transcripts in the private repo; keep VRM and WAV out of git (size, invariant 5) with a separate backup. | Every commit |
@@ -307,6 +307,9 @@ The user's notes, with c.ai screenshots. The hover bar goes: a ⋯ beside each b
 
 **D-101 A roleplay keeps its character; the story tray** · Accepted · User, with Claude's parts · 2026-11-18
 The user's notes, with a c.ai screenshot. "in a roleplay, the character cannot be changed. start a new chat if user wants to": the chip opens her profile and the engine refuses a switch. In a roleplay the paperclip becomes a book opening the story tray: History (a page listing every roleplay with her), New chat (the story again from its card), Memory (a box the user writes, in her note every turn, with the story's pinned messages listed); "no ocr watch and task guide". Claude's: Memory is per story (c.ai's is per chat) and up to 1000 characters; Upload file and Read aloud stay in the tray; History lists the roleplays the window knows (the newest 200). Settings → Voice's switch now says Off or On.
+
+**D-102 UI-2 starts from the user's references, one screen at a time** · Accepted · User, with Claude's parts · 2026-11-22
+The user opened UI-2 with screenshots: "first fix the settings and make them look proper like ref images", and "shift chat title to middle". So UI-2 restyles a screen against a reference the user gives, instead of a full `DESIGN.md` first; the tokens and type scale grow from those screens. Settings first: icons in the section list, rows with a title and a muted line left and the control right, theme cards, bordered provider cards with a status dot and Edit, nothing under 12 px; same sections and features. The chat title is centred on the whole top bar. Claude's: the icons are drawn in-house like the rest (no icon library yet, D-086's UI2-04 still open). Amends D-086.
 
 ## Superseded
 

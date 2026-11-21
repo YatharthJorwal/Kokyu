@@ -12,8 +12,8 @@ Last updated: 2026-11-18 (session 7: UI1-15 and UI1-16, the c.ai-style message c
 | K1 | Chat app: threads, model picker, effort, API endpoint, VRAM checks, failure cards, settings | 1.0 | Done (`5deb6b6..89bdb95`) |
 | K1c | Conversation modes: Chat and Roleplay, story memory, scenario cards (D-074, D-075) | 1.0 | Done (`470a05e..2b99262`); the user ran it on their PC 2026-11-17 |
 | Docs | Docs reset (D-076) | n/a | Done (`5e82558`) |
-| **UI-1** | **Chat app polish: names, working controls, behaviour (D-084, D-082)** | 1.0 | **In progress** |
-| UI-2 | Design standard: references first, then DESIGN.md, then build (D-086) | 1.0 | Not started |
+| UI-1 | Chat app polish: names, working controls, behaviour (D-084, D-082) | 1.0 | Code-complete; the checkpoint is the user's |
+| **UI-2** | **Design standard: the user's references, screen by screen (D-086, D-102)** | 1.0 | **In progress** |
 | K1b | Installer walking skeleton, time-boxed | 1.0 | Not started |
 | K2 | Stage view, voice providers, voice input | 1.0 | Not started |
 | K3 | Companion creator (D-077) | 1.0 | Not started |
@@ -56,6 +56,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 
 Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's items get their final look here.
 
+- [ ] UI2-00 The user's first references (D-102): Settings restyled to `settings-general.png` and `settings-models.png`; the chat title centred on the top bar
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
 - [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
 - [ ] UI2-03 Tokens in code; no white flash at startup
