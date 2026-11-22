@@ -25,6 +25,7 @@ export class VoicePlayer {
   private queue: SpeakClip[] = [];
   private current: SpeakHandle | null = null;
   private currentUrl: string | null = null;
+  private currentText = "";
 
   enqueue(clip: SpeakClip): void {
     if (!clip.audio_b64) return;
@@ -36,6 +37,11 @@ export class VoicePlayer {
     this.queue = [];
     this.release();
     this.onIdle?.();
+  }
+
+  /** The words of the clip playing now, or null (the Stage's caption, D-111). */
+  get line(): string | null {
+    return this.current ? this.currentText : null;
   }
 
   /** Nothing playing and nothing queued. */
@@ -59,6 +65,7 @@ export class VoicePlayer {
     }
     const url = toBlobUrl(clip);
     this.currentUrl = url;
+    this.currentText = clip.text;
     const handle = speakWithLipsync(url);
     this.current = handle;
     handle.onFinish(() => {

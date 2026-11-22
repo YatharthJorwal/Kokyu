@@ -340,6 +340,10 @@ The user, with screenshots after D-107: sit and sleep "are still distinct". Two 
 "the pet settings on hover must disappear when it is clicked. and dont show it on hover at stage. also in pet settings card, add an option to switch character (same list thing)". Clicking Pet settings hides the menu until the pointer leaves the cat; on the Stage the cat offers no menu. Settings → Pet gains Switch character beside Make a new pet: the same list of characters, the current one marked; picking one switches to her as the companion chip does. Not in a roleplay (she stays for the story, D-101) or with no one else. Amends D-109.
 
 
+**D-111 The Stage caption is Yuri's; its glow color is the user's** · Accepted · User, with Claude's parts · 2026-11-22
+"take the caption style from the yuri repo for stage. and the glow color must be changable". Yuri's caption (`src/style.css` `#caption`, `src/main.ts` `applyCaptionProgress`): no box; while her voice plays, the clip's words pop in one at a time, each given a share of the clip's length by its letters (no word timings from the voice engine); the word being said glows; the four behind it dim; older ones fold away. Settings → Appearance gains Caption glow: six swatches and any color, Yuri's pink by default, kept with the theme in this window. Claude's: without her voice (Read aloud off, or before the first clip) the caption shows her latest words still, in the same lettering and glow; the colors follow the theme's text color so the light theme stays readable. Amends D-104.
+
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)

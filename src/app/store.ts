@@ -58,6 +58,11 @@ function dispatch(event: ChatEvent): void {
 
 const voice = new VoicePlayer();
 
+/** The words of the voice clip playing now, or null: the Stage's caption follows it (D-111). */
+export function speakingLine(): string | null {
+  return voice.line;
+}
+
 /** D-099: the engine has sent all of the message being read; it ends once played. */
 let readingSent = false;
 

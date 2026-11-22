@@ -9,7 +9,7 @@ test("a stored theme is read field by field; junk falls back to the default (D-0
   assert.deepEqual(parseTheme('"a string"'), DEFAULT_THEME);
   assert.deepEqual(
     parseTheme('{"preset":"midnight","accent":"#ABCDEF","messages":"bubbles","size":"large"}'),
-    { preset: "midnight", accent: "#abcdef", messages: "bubbles", size: "large" },
+    { preset: "midnight", accent: "#abcdef", messages: "bubbles", size: "large", glow: null },
   );
   // an unknown preset, a CSS injection in the accent, an unknown size
   assert.deepEqual(

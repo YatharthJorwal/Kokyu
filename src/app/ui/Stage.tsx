@@ -5,10 +5,12 @@
 
 import { useEffect, useRef, useState } from "react";
 
+import { getSpeechProgress } from "../../engine/lipsync";
 import { createStage, type Stage as StageApi } from "../../engine/stage";
 import { KERNEL_HTTP_URL } from "../../net/kernel";
+import { activeWord, splitWords, wordStarts, wordState } from "../caption";
 import { visibleStream } from "../chat-state";
-import { useChat } from "../store";
+import { speakingLine, useChat } from "../store";
 
 export function Stage() {
   const id = useChat((s) => s.companion?.id ?? null);
@@ -87,10 +89,63 @@ function Caption() {
     return "";
   });
   const thinking = useChat((s) => s.turn === "thinking");
-  if (!text && !thinking) return null;
+  const box = useRef<HTMLDivElement>(null);
+  const [speaking, setSpeaking] = useState(false);
+
+  // Yuri's caption (D-111): while her voice plays, its words pop in one at a time
+  // with the clip, the one being said glowing. Drawn straight into the DOM from one
+  // rAF loop, as in Yuri: no React render per word.
+  useEffect(() => {
+    let frame = 0;
+    let line: string | null = null;
+    let spans: HTMLSpanElement[] = [];
+    let starts: number[] = [];
+    let active = -1;
+    const show = (index: number) => {
+      if (index === active) return;
+      active = index;
+      spans.forEach((el, i) => {
+        const state = wordState(i, index);
+        const first = state === "active" && !el.classList.contains("shown");
+        el.className = state === "hidden" ? "caption-word" : `caption-word shown ${state}`;
+        if (first) {
+          void el.offsetWidth;   // restart the pop for a word shown for the first time
+          el.classList.add("pop");
+        }
+      });
+    };
+    const tick = () => {
+      frame = requestAnimationFrame(tick);
+      const now = speakingLine();
+      if (now !== line) {
+        line = now;
+        setSpeaking(now !== null);
+        const el = box.current;
+        if (!el) return;
+        const words = now ? splitWords(now) : [];
+        starts = wordStarts(words);
+        spans = words.map((word) => {
+          const span = document.createElement("span");
+          span.className = "caption-word";
+          span.textContent = word;
+          return span;
+        });
+        el.replaceChildren(...spans);
+        active = -1;
+        if (spans.length > 0) show(0);   // at once: the clip's length is not known for a frame or two
+      }
+      const progress = line ? getSpeechProgress() : null;
+      if (progress && progress.duration > 0) show(activeWord(starts, Math.min(1, progress.elapsed / progress.duration)));
+    };
+    frame = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(frame);
+  }, []);
+
   return (
-    <p className="stage-caption" aria-live="polite">
-      {thinking && !text ? "…" : tail(text)}
-    </p>
+    <>
+      <div ref={box} className={speaking ? "stage-caption visible" : "stage-caption"} aria-live="polite" />
+      {/* Read aloud off, or before her voice starts: the latest words, in the same lettering. */}
+      {!speaking && (text || thinking) ? <p className="stage-caption-text">{thinking && !text ? "…" : tail(text)}</p> : null}
+    </>
   );
 }

@@ -12,9 +12,13 @@ export interface Theme {
   accent: string | null;
   messages: MessageStyle;
   size: TextSize;
+  /** The Stage caption's glow (D-111); null = DEFAULT_GLOW, Yuri's pink. */
+  glow?: string | null;
 }
 
-export const DEFAULT_THEME: Theme = { preset: "kokyu", accent: null, messages: "open", size: "normal" };
+export const DEFAULT_THEME: Theme = { preset: "kokyu", accent: null, messages: "open", size: "normal", glow: null };
+export const DEFAULT_GLOW = "#ffc3e2";
+export const GLOWS = [DEFAULT_GLOW, "#cba6f7", "#8fd4ff", "#9cf0c0", "#ffd38a", "#ffffff"];
 
 /** The CSS variables each preset sets (app.css reads them; its :root holds Kōkyū's). */
 export const PRESETS: Record<Preset, { label: string; scheme: "dark" | "light"; vars: Record<string, string> }> = {
@@ -91,6 +95,7 @@ export function parseTheme(raw: string | null): Theme {
     accent: typeof d.accent === "string" && HEX.test(d.accent) ? d.accent.toLowerCase() : null,
     messages: pick(d.messages, ["open", "bubbles"] as const, DEFAULT_THEME.messages),
     size: pick(d.size, Object.keys(TEXT_SIZES) as TextSize[], DEFAULT_THEME.size),
+    glow: typeof d.glow === "string" && HEX.test(d.glow) ? d.glow.toLowerCase() : null,
   };
 }
 
@@ -113,6 +118,7 @@ export function themeVars(theme: Theme): Record<string, string> {
     "--accent": accent,
     "--on-accent": inkFor(accent),
     "--chat-size": TEXT_SIZES[theme.size],
+    "--caption-glow": theme.glow ?? DEFAULT_GLOW,
   };
 }
 

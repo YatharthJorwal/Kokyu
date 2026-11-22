@@ -3838,25 +3838,97 @@ button:disabled {
   font-size: 15px;
 }
 
-.stage-caption {
+/* The caption, Yuri's (D-111): no box, her words pop in one at a time with her voice;
+   the one being said glows in --caption-glow (Settings → Appearance), the few behind it
+   dim, older ones fold away so a long line never piles up. */
+.stage-caption,
+.stage-caption-text {
   position: absolute;
-  right: 8%;
-  bottom: 14px;
-  left: 8%;
-  display: -webkit-box;
-  max-height: calc(3 * 1.5em + 20px);
+  left: 50%;
+  bottom: 28px;
+  max-width: min(84%, 560px);
   margin: 0;
-  padding: 10px 18px;
-  overflow: hidden;
-  border-radius: 12px;
-  background: color-mix(in srgb, var(--bg) 72%, transparent);
-  color: var(--text);
-  font-size: calc(var(--chat-size, 15px) + 2px);
-  line-height: 1.5;
   text-align: center;
+  line-height: 1.55;
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+.stage-caption {
+  opacity: 0;
+  transition: opacity 420ms ease;
+}
+
+.stage-caption.visible {
+  opacity: 1;
+}
+
+.caption-word {
+  display: none;
+  max-width: 240px;
+  margin-right: 0.28em;
+  overflow: hidden;
+  color: color-mix(in srgb, var(--text) 68%, transparent);
+  font-size: calc(var(--chat-size, 15px) + 2px);
+  font-weight: 700;
+  letter-spacing: 0.2px;
+  white-space: nowrap;
+  vertical-align: bottom;
+  transition:
+    color 380ms ease,
+    text-shadow 380ms ease,
+    opacity 600ms ease,
+    max-width 600ms ease,
+    margin-right 600ms ease;
+}
+
+.caption-word.shown {
+  display: inline-block;
+}
+
+/* The word being said: the glow bleeds out of the letters, no box behind them. */
+.caption-word.active,
+.stage-caption-text {
+  color: var(--text);
+  text-shadow:
+    0 0 6px color-mix(in srgb, var(--caption-glow, #ffc3e2) 90%, transparent),
+    0 0 16px color-mix(in srgb, var(--caption-glow, #ffc3e2) 70%, transparent),
+    0 0 28px color-mix(in srgb, var(--caption-glow, #ffc3e2) 40%, transparent);
+}
+
+.caption-word.spoken {
+  color: color-mix(in srgb, var(--text) 58%, transparent);
+  text-shadow: none;
+}
+
+.caption-word.fading {
+  max-width: 0;
+  margin-right: 0;
+  opacity: 0;
+}
+
+.caption-word.pop {
+  animation: caption-word-pop 480ms cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+@keyframes caption-word-pop {
+  from { opacity: 0; transform: translateY(5px) scale(0.94); }
+  to { opacity: 1; transform: none; }
+}
+
+/* Without her voice the latest words stand still, in the same lettering and glow. */
+.stage-caption-text {
+  display: -webkit-box;
+  overflow: hidden;
+  font-size: calc(var(--chat-size, 15px) + 2px);
+  font-weight: 700;
+  letter-spacing: 0.2px;
   -webkit-box-orient: vertical;
   -webkit-line-clamp: 3;
-  backdrop-filter: blur(6px);
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .caption-word.pop { animation: none; }
 }
 
 /* Her picture for Create pet (D-104) */

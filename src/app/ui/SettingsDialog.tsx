@@ -20,7 +20,7 @@ import { VOICE_START_S } from "../read-aloud";
 import { formatSize, formatUsd } from "../models";
 import { PET_SIZE_MAX, PET_SIZE_MIN, POSES, petPrompt, type Pose } from "../pet-brain";
 import { actions, setPetPrefs, useChat, usePetPrefs } from "../store";
-import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
+import { ACCENTS, DEFAULT_GLOW, GLOWS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
 import { version } from "../../../package.json";
 import { Icon, type IconName } from "./Icon";
 import { petDraftUrl, petPoseUrl } from "./Pet";
@@ -979,6 +979,29 @@ function AppearanceSection() {
             ))}
             <label className="swatch custom" title="Any color">
               <input type="color" value={accent} aria-label="Pick any accent color" onChange={(e) => change({ accent: e.target.value.toLowerCase() })} />
+            </label>
+          </div>
+        </Row>
+        <Row title="Caption glow" about="The glow on her words on the Stage.">
+          <div className="settings-choices accents" role="group" aria-label="Caption glow">
+            {GLOWS.map((c) => (
+              <button
+                key={c}
+                type="button"
+                className="swatch"
+                style={{ background: c }}
+                aria-pressed={(theme.glow ?? DEFAULT_GLOW) === c}
+                aria-label={`Glow ${c}`}
+                onClick={() => change({ glow: c === DEFAULT_GLOW ? null : c })}
+              />
+            ))}
+            <label className="swatch custom" title="Any color">
+              <input
+                type="color"
+                value={theme.glow ?? DEFAULT_GLOW}
+                aria-label="Pick any glow color"
+                onChange={(e) => change({ glow: e.target.value.toLowerCase() })}
+              />
             </label>
           </div>
         </Row>
