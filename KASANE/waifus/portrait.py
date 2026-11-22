@@ -17,6 +17,7 @@ import struct
 from pathlib import Path
 
 import paths
+import uploads
 from waifus.pack import Waifu
 
 log = logging.getLogger("kokyu.waifus")
@@ -57,15 +58,11 @@ def vrm_thumbnail(vrm_path: Path) -> bytes | None:
 
 
 def square(data: bytes, size: int = SIZE) -> bytes:
-    """Any image as a centred square PNG of `size` px. Raises ValueError if it is not an image."""
-    from PIL import Image, UnidentifiedImageError
+    """Any allowed picture (uploads.FORMATS) as a centred square PNG of `size` px.
+    Raises ValueError if it is not one."""
+    from PIL import Image
 
-    try:
-        with Image.open(io.BytesIO(data)) as img:
-            img.load()
-            rgba = img.convert("RGBA")
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
-        raise ValueError("not an image") from exc
+    rgba = uploads.open_image(data)
     side = min(rgba.size)
     left, top = (rgba.width - side) // 2, (rgba.height - side) // 2
     out = rgba.crop((left, top, left + side, top + side)).resize((size, size), Image.Resampling.LANCZOS)

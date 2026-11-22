@@ -5,6 +5,7 @@
 import { useEffect, useRef } from "react";
 
 import { canStartThread, type Companion } from "../chat-state";
+import { PICTURE_ACCEPT } from "../file-upload";
 import { actions, useChat } from "../store";
 import { Portrait } from "./Portrait";
 
@@ -72,7 +73,7 @@ function ProfileBody({ companion }: { companion: Companion }) {
         <input
           ref={file}
           type="file"
-          accept="image/png,image/jpeg,image/webp,image/gif"
+          accept={PICTURE_ACCEPT}
           hidden
           onChange={(e) => {
             const picked = e.target.files?.[0];

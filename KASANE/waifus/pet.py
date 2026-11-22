@@ -10,11 +10,11 @@ Every function here blocks: call it in a thread.
 """
 from __future__ import annotations
 
-import io
 import shutil
 from pathlib import Path
 
 import paths
+import uploads
 from waifus.pack import Waifu
 
 COLS, ROWS = 4, 3
@@ -26,21 +26,24 @@ POSES: tuple[str, ...] = (
 )
 HEIGHT = 320                    # idle's height in px once saved; the window scales it by Size
 MAX_SIDE = 4096                 # a bigger sheet is scaled down before cutting
-MAX_PIXELS = 40_000_000         # refuse anything larger outright (decompression bombs)
+# The size checker (D-107): the box each pose must fit, as (width, height) in HEIGHTs.
+# The image model often draws some cells larger than others (her head bigger when
+# sitting or lying), so a pose drawn too big for its box is shrunk to fit. Never grown:
+# an arm raised or a hand on the chin may legitimately make a pose shorter or taller.
+_BOX: dict[str, tuple[float, float]] = {
+    **{pose: (1.0, 1.0) for pose in POSES},
+    "happy": (1.0, 1.12),     # arms up
+    "sit": (0.75, 0.74),
+    "sleep": (0.72, 0.5),     # curled up on the floor
+}
 _KEY = (255, 0, 255)            # the fill colour that marks background while keying
 _THRESH = 40                    # how far from the background colour still counts as background
 
 
 def _open(data: bytes):
-    from PIL import Image, UnidentifiedImageError
+    from PIL import Image
 
-    Image.MAX_IMAGE_PIXELS = MAX_PIXELS
-    try:
-        with Image.open(io.BytesIO(data)) as img:
-            img.load()
-            rgba = img.convert("RGBA")
-    except (UnidentifiedImageError, OSError, Image.DecompressionBombError) as exc:
-        raise ValueError("not an image") from exc
+    rgba = uploads.open_image(data)   # allowed formats and size only (D-106)
     if max(rgba.size) > MAX_SIDE:
         rgba.thumbnail((MAX_SIDE, MAX_SIDE), Image.Resampling.LANCZOS)
     return rgba
@@ -131,7 +134,8 @@ def draft_file(waifu_id: str, n: int) -> Path | None:
 
 def save(waifu_id: str, labels: list[str | None]) -> None:
     """Stores the draft's cells as her pet, cell n under `labels[n]` (None: left out).
-    All poses share one scale, set so *idle* (else the tallest) is HEIGHT px.
+    All poses share one scale, set so *idle* (else the tallest) is HEIGHT px; then any
+    pose too big for its box is shrunk to fit (`fit`).
     Raises ValueError for unknown or repeated labels, or when nothing is labelled."""
     from PIL import Image
 
@@ -154,12 +158,19 @@ def save(waifu_id: str, labels: list[str | None]) -> None:
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
     for label, img in images.items():
-        size = (max(1, round(img.width * scale)), max(1, round(img.height * scale)))
+        k = scale * fit(label, img.width * scale, img.height * scale)
+        size = (max(1, round(img.width * k)), max(1, round(img.height * k)))
         img.resize(size, Image.Resampling.LANCZOS).save(tmp / f"{label}.png", format="PNG", optimize=True)
     live = _dir(waifu_id) / "live"
     shutil.rmtree(live, ignore_errors=True)
     tmp.replace(live)
     shutil.rmtree(draft_dir(waifu_id), ignore_errors=True)
+
+
+def fit(pose: str, width: float, height: float) -> float:
+    """How much to shrink a pose drawn at `width` x `height` px so it fits its box: 1 if it already does."""
+    bw, bh = _BOX.get(pose, (1.0, 1.0))
+    return min(1.0, bw * HEIGHT / width, bh * HEIGHT / height)
 
 
 def remove(waifu_id: str) -> None:

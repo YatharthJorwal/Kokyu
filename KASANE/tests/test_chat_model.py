@@ -486,11 +486,46 @@ def test_an_image_the_vision_model_cannot_see_ends_the_turn_without_a_line(kerne
     with client.websocket_connect("/ws") as ws:
         _until(ws, "thread_opened")
         _temp_on(ws)
-        ws.send_json({"v": 1, "type": "send_file", "data": {"filename": "cat.jpg", "kind": "image", "content": "abc"}})
+        ws.send_json({"v": 1, "type": "send_file", "data": {"filename": "cat.jpg", "kind": "image", "content": _JPEG}})
         err, _ = _until(ws, "error")
         done, seen = _until(ws, "turn_done")
     assert err["data"]["code"] == "vision_unavailable"
     assert done["data"]["text"] == "" and "turn_start" not in [m["type"] for m in seen]
+
+
+def _jpeg() -> str:
+    import base64
+    import io
+
+    from PIL import Image
+
+    buf = io.BytesIO()
+    Image.new("RGB", (8, 8), (90, 120, 200)).save(buf, format="JPEG")
+    return base64.b64encode(buf.getvalue()).decode()
+
+
+_JPEG = _jpeg()
+
+
+def test_a_file_that_is_not_an_allowed_picture_never_reaches_the_vision_model(kernel, monkeypatch):
+    # D-106: the kernel opens uploads itself; garbage, or a format off the list, is refused.
+    client, _ = kernel
+    looked: list[str] = []
+
+    async def vision(_role, _prompt, image):
+        looked.append(image)
+        return "a cat"
+
+    monkeypatch.setattr(router, "describe_image", vision)
+    with client.websocket_connect("/ws") as ws:
+        _until(ws, "thread_opened")
+        _temp_on(ws)
+        ws.send_json({"v": 1, "type": "send_file", "data": {"filename": "cat.jpg", "kind": "image", "content": "abc"}})
+        err, _ = _until(ws, "error")
+        done, seen = _until(ws, "turn_done")
+    assert err["data"]["code"] == "picture_unreadable"
+    assert done["data"]["text"] == "" and "turn_start" not in [m["type"] for m in seen]
+    assert looked == []
 
 
 @pytest.mark.asyncio

@@ -7,11 +7,32 @@
 // own real parsing/frame-extraction work this round didn't attempt. See
 // docs/DECISIONS.md for the full scoping reasoning.
 
-/** Hard ceiling before even trying to read a file -- rejects absurd
- * uploads (a multi-hundred-MB video someone picked by mistake, say)
- * before spending any time on them. Well above what any real image or
- * text file used with this feature should need. */
-const MAX_FILE_BYTES = 15 * 1024 * 1024;
+/** Every upload is checked here before it is read (D-106): chat files, her
+ * picture and the pet sheet. The kernel checks again (KASANE/uploads.py). */
+
+/** The only pictures accepted, by MIME type: what every webview decodes and the
+ * kernel's allowlist opens. No SVG (scripts), HEIC, TIFF, BMP or ICO. */
+export const PICTURE_TYPES = ["image/png", "image/jpeg", "image/webp", "image/gif"] as const;
+/** For an <input type="file" accept>. */
+export const PICTURE_ACCEPT = PICTURE_TYPES.join(",");
+export const MAX_PICTURE_BYTES = 20 * 1024 * 1024;
+/** Same as KASANE/uploads.py MAX_PIXELS: about 6300 x 6300. */
+export const MAX_PICTURE_PIXELS = 40_000_000;
+/** A text or code file is read whole before it is cut to MAX_TEXT_CHARS. */
+export const MAX_TEXT_BYTES = 2 * 1024 * 1024;
+
+const mb = (bytes: number) => `${bytes / 1024 / 1024} MB`;
+
+/** A refusal meant for the user, as thrown by resizeImageToBase64Jpeg. */
+export class UploadProblem extends Error {}
+
+/** Why this file cannot be used as a picture, or null when it can. */
+export function pictureProblem(file: File): string | null {
+  if (!(PICTURE_TYPES as readonly string[]).includes(file.type)) return "Pictures must be PNG, JPEG, WebP or GIF.";
+  if (file.size > MAX_PICTURE_BYTES) return `That picture is too big (over ${mb(MAX_PICTURE_BYTES)}).`;
+  if (file.size === 0) return "That file is empty.";
+  return null;
+}
 
 /** Longest side an uploaded image gets resized to before encoding, via
  * canvas (see resizeImageToBase64Jpeg below) -- matches what a vision
@@ -70,19 +91,20 @@ export type ClassifiedFile = { kind: "image" | "text" } | { kind: "unsupported";
  * PDF, a video, a spreadsheet) fails fast with a clear reason instead of
  * partway through trying to read it as text and producing garbage. */
 export function classifyFile(file: File): ClassifiedFile {
-  if (file.size > MAX_FILE_BYTES) {
-    return { kind: "unsupported", reason: `File's too big (over ${MAX_FILE_BYTES / 1024 / 1024}MB).` };
-  }
   if (file.type.startsWith("image/")) {
-    return { kind: "image" };
+    const reason = pictureProblem(file);
+    return reason ? { kind: "unsupported", reason } : { kind: "image" };
   }
-  const ext = file.name.split(".").pop()?.toLowerCase() ?? "";
-  if (file.type.startsWith("text/") || TEXT_EXTENSIONS.has(ext)) {
+  // By extension only: a browser calls many binaries text/* or nothing at all.
+  const dot = file.name.lastIndexOf(".");
+  const ext = dot > 0 ? file.name.slice(dot + 1).toLowerCase() : "";
+  if (TEXT_EXTENSIONS.has(ext)) {
+    if (file.size > MAX_TEXT_BYTES) return { kind: "unsupported", reason: `That file is too big (over ${mb(MAX_TEXT_BYTES)}).` };
     return { kind: "text" };
   }
   return {
     kind: "unsupported",
-    reason: "That file type isn't supported yet -- images and text/code files only for now.",
+    reason: "Only pictures (PNG, JPEG, WebP, GIF) and text or code files can be shared.",
   };
 }
 
@@ -97,14 +119,19 @@ export async function resizeImageToBase64Jpeg(
   type: "image/jpeg" | "image/png" = "image/jpeg",
   maxSide: number = MAX_IMAGE_DIMENSION,
 ): Promise<string> {
+  const problem = pictureProblem(file);
+  if (problem) throw new UploadProblem(problem);
   const objectUrl = URL.createObjectURL(file);
   try {
     const img = await new Promise<HTMLImageElement>((resolve, reject) => {
       const el = new Image();
       el.onload = () => resolve(el);
-      el.onerror = () => reject(new Error("Couldn't decode that image."));
+      el.onerror = () => reject(new UploadProblem("That file is not a picture Kōkyū can read. Use a PNG, JPEG, WebP or GIF."));
       el.src = objectUrl;
     });
+    if (img.naturalWidth * img.naturalHeight > MAX_PICTURE_PIXELS) {
+      throw new UploadProblem("That picture is too large. Use one under about 6000 x 6000 pixels.");
+    }
 
     const scale = Math.min(1, maxSide / Math.max(img.naturalWidth, img.naturalHeight));
     const width = Math.max(1, Math.round(img.naturalWidth * scale));
@@ -133,6 +160,7 @@ export async function resizeImageToBase64Jpeg(
  * partial file as if it were the whole thing. */
 export async function readTextFile(file: File): Promise<string> {
   const text = await file.text();
+  if (text.includes("\u0000")) throw new UploadProblem("That is not a text file.");   // a binary with a text name
   if (text.length <= MAX_TEXT_CHARS) return text;
   return `${text.slice(0, MAX_TEXT_CHARS)}\n\n[... truncated, file continues beyond this point ...]`;
 }

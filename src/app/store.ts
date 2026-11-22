@@ -21,7 +21,7 @@ import {
   type ConfirmAsk,
   type SettingsSection,
 } from "./chat-state";
-import { resizeImageToBase64Jpeg } from "./file-upload";
+import { UploadProblem, resizeImageToBase64Jpeg } from "./file-upload";
 import { PET_PREFS_KEY, parsePetPrefs, type PetPrefs } from "./pet-brain";
 import { VoicePlayer } from "./voice";
 
@@ -374,8 +374,8 @@ export const actions = {
     let image: string;
     try {
       image = await resizeImageToBase64Jpeg(file, "image/png");
-    } catch {
-      dispatch({ kind: "problem", reason: "That file is not a picture Kōkyū can read. Try a PNG or JPEG." });
+    } catch (e) {
+      dispatch({ kind: "problem", reason: e instanceof UploadProblem ? e.message : "That file is not a picture Kōkyū can read. Try a PNG or JPEG." });
       return;
     }
     socket.send("set_portrait", { waifu_id: id, image_b64: image });
@@ -387,8 +387,8 @@ export const actions = {
     let image: string;
     try {
       image = await resizeImageToBase64Jpeg(file, "image/png", 2048);   // a sheet's 12 cells need more pixels than a photo
-    } catch {
-      dispatch({ kind: "problem", reason: "That file is not a picture Kōkyū can read. Use a PNG of the pose sheet." });
+    } catch (e) {
+      dispatch({ kind: "problem", reason: e instanceof UploadProblem ? e.message : "That file is not a picture Kōkyū can read. Use a PNG of the pose sheet." });
       return;
     }
     socket.send("pet_sheet", { waifu_id: id, image_b64: image });

@@ -77,7 +77,9 @@ def test_saved_poses_share_one_scale_and_show_in_the_roster(registry):
     idle = Image.open(pet.pose_file(alpha, "idle"))
     sit = Image.open(pet.pose_file(alpha, "sit"))
     assert idle.height == pet.HEIGHT
-    assert sit.height == round(49 * pet.HEIGHT / 40)    # cell 3 is 49 px tall, idle 40
+    # cell 3 (sit) is 49 px tall, idle 40: drawn too big for sitting, it is shrunk to its box
+    assert sit.height == round(0.74 * pet.HEIGHT)
+    assert Image.open(pet.pose_file(alpha, "walk_1")).height == pet.HEIGHT   # 43 px: taller than idle, so fitted
     assert pet.pose_file(alpha, "surprised") is None
     assert not pet.draft_dir("alpha").exists()
     row = next(w for w in registry.describe() if w["id"] == "alpha")
@@ -121,3 +123,11 @@ def test_the_routes_serve_poses_and_draft_cells(registry):
     assert client.get("/waifus/alpha/pet/walk_1").status_code == 404
     assert client.get("/waifus/alpha/pet/..%2Fsecret").status_code == 404
     assert client.get("/waifus/nobody/pet/idle").status_code == 404
+
+
+def test_the_size_checker_only_shrinks_a_pose_drawn_too_big():
+    assert pet.fit("idle", 200, 320) == 1.0
+    assert pet.fit("think", 200, 300) == 1.0                 # smaller is left as drawn
+    assert pet.fit("sit", 206, 269) == pytest.approx(0.74 * 320 / 269)
+    assert pet.fit("sleep", 270, 192) == pytest.approx(0.5 * 320 / 192)    # too big lying down
+    assert pet.fit("happy", 240, 350) == 1.0                 # arms up may stand taller

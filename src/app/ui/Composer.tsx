@@ -20,7 +20,7 @@ import {
   type KeyboardEvent,
 } from "react";
 
-import { classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
+import { UploadProblem, classifyFile, readTextFile, resizeImageToBase64Jpeg } from "../file-upload";
 import { canSend, canStartThread, currentMode } from "../chat-state";
 import { MAX_DICTATION_S, insertDictation, isDictationKey, micProblem, recordingTime } from "../dictation";
 import { useDictationKey } from "../dictation-key";
@@ -38,8 +38,8 @@ async function readAttachment(file: File): Promise<Attachment | string> {
     const content = kind.kind === "image" ? await resizeImageToBase64Jpeg(file) : await readTextFile(file);
     if (!content.trim()) return "That file is empty.";
     return { filename: file.name || "pasted image", kind: kind.kind, content };
-  } catch {
-    return "Couldn't read that file. Try a different one?";
+  } catch (e) {
+    return e instanceof UploadProblem ? e.message : "Couldn't read that file. Try a different one?";
   }
 }
 

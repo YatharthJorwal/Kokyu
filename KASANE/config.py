@@ -307,6 +307,7 @@ class LLMConfig:
     context_by_model: Mapping[str, int] = field(default_factory=dict)
     vision_model: str | None = None
     warm_up_on_start: bool = True
+    start_ollama: bool = True   # D-105: picking an Ollama model starts `ollama serve` if it is down
     top_p: float | None = 0.95
     top_k: int | None = 20
     presence_penalty: float | None = 1.5
@@ -798,6 +799,7 @@ def _derive_llm(
         },
         "vision_model": llm_raw.get("vision_model", models.local.get("vision")),
         "warm_up_on_start": llm_raw.get("warm_up_on_start", defaults.warm_up_on_start),
+        "start_ollama": llm_raw.get("start_ollama", defaults.start_ollama),
         "top_p": llm_raw.get("top_p", defaults.top_p),
         "top_k": llm_raw.get("top_k", defaults.top_k),
         "presence_penalty": llm_raw.get("presence_penalty", defaults.presence_penalty),

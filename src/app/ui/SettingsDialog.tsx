@@ -9,11 +9,12 @@
 // behaviour and size (the page's) and Create pet (D-103). Waifus, Scenes and Advanced
 // arrive with their phases.
 
-import { Suspense, lazy, useCallback, useEffect, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, ServerData, SettingsChange, SettingsData } from "../../net/protocol";
-import { modelLabel, type SettingsSection } from "../chat-state";
+import { modelLabel, type Companion, type SettingsSection } from "../chat-state";
 import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
+import { PICTURE_ACCEPT } from "../file-upload";
 import { setDictationKey, useDictationKey } from "../dictation-key";
 import { VOICE_START_S } from "../read-aloud";
 import { formatSize, formatUsd } from "../models";
@@ -23,6 +24,7 @@ import { ACCENTS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type T
 import { version } from "../../../package.json";
 import { Icon, type IconName } from "./Icon";
 import { petDraftUrl, petPoseUrl } from "./Pet";
+import { Portrait } from "./Portrait";
 
 const SECTIONS: { id: SettingsSection; label: string; icon: IconName }[] = [
   { id: "models", label: "Models", icon: "models" },
@@ -670,9 +672,20 @@ const POSE_LABELS: Record<Pose, string> = {
 function PetSection() {
   const prefs = usePetPrefs();
   const companion = useChat((s) => s.companion);
+  const roster = useChat((s) => s.roster);
   const online = useChat((s) => s.connection === "online");
-  const draft = useChat((s) => (s.petDraft && s.petDraft.waifu_id === s.companion?.id ? s.petDraft : null));
+  const draft = useChat((s) => s.petDraft);
   const name = companion?.name ?? "her";
+  // Make a new pet: pick whose (any character), then the same steps as Create.
+  const [picking, setPicking] = useState(false);
+  const [making, setMaking] = useState<string | null>(null);
+  const hadDraft = useRef(false);
+  useEffect(() => {
+    if (hadDraft.current && !draft) setMaking(null);   // saved or cancelled: back to her pet
+    hadDraft.current = draft !== null;
+  }, [draft]);
+  const targetId = draft?.waifu_id ?? making;
+  const target = targetId ? (roster.find((c) => c.id === targetId) ?? null) : null;
   return (
     <>
       <h3>Pet</h3>
@@ -711,8 +724,54 @@ function PetSection() {
         </Row>
       </div>
 
-      <h4>{draft ? `Check ${name}'s new pet` : companion?.pet ? `${name}'s pet` : `Create ${name}'s pet`}</h4>
-      {companion?.pet && !draft ? (
+      {target ? (
+        <>
+          <h4>{draft ? `Check ${target.name}'s new pet` : `Make ${target.name}'s pet`}</h4>
+          {draft ? null : (
+            <button type="button" className="ghost pet-back" onClick={() => setMaking(null)}>
+              Back
+            </button>
+          )}
+          <CreatePet id={target.id} name={target.name} online={online} draft={draft} own={target.petOwn ?? false} has={!!target.pet} />
+        </>
+      ) : picking ? (
+        <>
+          <h4>Make a new pet</h4>
+          <p className="muted">Whose pet? Each character has one; making a new one replaces theirs.</p>
+          <ul className="pet-pick">
+            {roster.map((c) => (
+              <li key={c.id}>
+                <button
+                  type="button"
+                  onClick={() => {
+                    setMaking(c.id);
+                    setPicking(false);
+                  }}
+                >
+                  <Portrait id={c.id} name={c.name} portrait={c.portrait ?? null} className="pet-pick-face" />
+                  <span>{c.name}</span>
+                  <span className="muted">{c.pet ? "Has a pet" : "No pet yet"}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+          <p className="settings-hint">Want a different pet entirely, not one of these characters? Make a new character first, then make its pet here.</p>
+          <button type="button" className="ghost pet-back" onClick={() => setPicking(false)}>
+            Cancel
+          </button>
+        </>
+      ) : (
+        <ActivePet companion={companion} name={name} online={online} onNew={() => setPicking(true)} />
+      )}
+    </>
+  );
+}
+
+function ActivePet({ companion, name, online, onNew }: { companion: Companion | null; name: string; online: boolean; onNew: () => void }) {
+  return (
+    <>
+      <h4>{companion?.pet ? `${name}'s pet` : `Create ${name}'s pet`}</h4>
+      {companion?.pet ? (
         <div className="pet-poses">
           {(companion.petPoses ?? []).map((pose) => (
             <figure key={pose}>
@@ -722,7 +781,10 @@ function PetSection() {
           ))}
         </div>
       ) : null}
-      {companion ? <CreatePet id={companion.id} name={name} online={online} draft={draft} own={companion.petOwn ?? false} has={!!companion.pet} /> : null}
+      {companion ? <CreatePet id={companion.id} name={name} online={online} draft={null} own={companion.petOwn ?? false} has={!!companion.pet} /> : null}
+      <button type="button" className="pet-new" onClick={onNew}>
+        Make a new pet
+      </button>
     </>
   );
 }
@@ -818,7 +880,7 @@ function CreatePet({ id, name, online, draft, own, has }: {
             Upload the sheet
             <input
               type="file"
-              accept="image/png,image/webp,image/jpeg"
+              accept={PICTURE_ACCEPT}
               disabled={!online}
               hidden
               onChange={(e) => {

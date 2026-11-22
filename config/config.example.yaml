@@ -200,6 +200,9 @@ llm:
   top_k: 20
   presence_penalty: 1.5
   warm_up_on_start: true
+  # D-105: picking an Ollama model (or the warm-up of one) starts `ollama serve`
+  # when nothing answers at base_url and it is a local address.
+  start_ollama: true
 
 # ─────────────────────────────────────────────────────────────────────────────
 # Voice. Entirely local (D-006). Details in PHASE-2-FAST-PATH.md.

@@ -35,6 +35,7 @@ import router
 import settings_file
 import story
 import turns
+import uploads
 import vram
 import waifus
 from audio import read_aloud, stt
@@ -528,6 +529,12 @@ class Session:
             # Capped in the window too (file-upload.ts); capped again rather than trusted.
             shared = f'(shared a file, "{filename}") {data.content[:6000]}'
         else:
+            try:   # D-106: only an allowed picture reaches the vision model
+                await asyncio.to_thread(uploads.check_b64, data.content)
+            except ValueError:
+                await self.refuse("picture_unreadable", "That file is not a picture Kōkyū can read. Use a PNG, JPEG, WebP or GIF.")
+                await self.ws.send_json(protocol.frame("turn_done", {"text": "", "stopped": False}, thread=self.thread_id))
+                return
             prompt = "Describe what's in this image in a few sentences -- focus on what's actually visible, not a generic guess."
             try:
                 description = await router.describe_image("vision", prompt, data.content)

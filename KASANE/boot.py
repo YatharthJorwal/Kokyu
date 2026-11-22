@@ -21,6 +21,7 @@ import conversation
 import hub
 import llm
 import model_loader
+import ollama_service
 import protocol
 import router
 import tools
@@ -128,6 +129,8 @@ async def load_chat_model(ref_text: str) -> None:
     # D-072: only the picked model (and the embedding model) stays in memory.
     keep = helper_models()
     if ref.provider == "local_ollama":
+        if CONFIG.llm.start_ollama:
+            await ollama_service.ensure(CONFIG.llm.base_url)   # D-105: a failure shows as the load's own error
         if await rt.stop_llamacpp():
             log.info("stopped llama-server: an Ollama chat model was picked")
         llm.ACTIVE_MODEL = ref.model

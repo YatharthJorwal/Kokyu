@@ -403,10 +403,10 @@ Planned for 1.1 (D-034, D-085): the 3D apartment in K5 (pets moved into UI-2 by 
 
 | ID | Requirement |
 |---|---|
-| FR-P-1 | A companion can have a **pet**: chibi her, walking along the bottom of the conversation in chat and roleplay while that companion is active (D-103). The cat button beside the companion chip shows or hides it; with no pet yet it opens Settings → Pet. |
-| FR-P-2 | A pet is a skin: up to 12 labelled poses (idle, walk 1, walk 2, sit, sleep, eat, wave, think, talk, happy, sad, surprised). **Create pet** takes one 4×3 pose sheet made with the prompt the app gives; the engine cuts it, keys out a flat background, trims each pose on a shared scale; the user checks and relabels the poses before saving. A premade pet ships in her pack's `pet/`. |
-| FR-P-3 | Behaviour: Roam (idle, walk left and right, sit, eat, sleep after a long quiet), Stay put, or Sleep; Size. While she thinks she shows *think*, while she replies *talk*, after a reply *happy* briefly, after a failure *sad*. A click makes her wave. A missing pose falls back to *idle*. |
-| FR-P-4 | The pet never leaves the window and never covers the input box; it costs no GPU beyond the page's own drawing. |
+| FR-P-1 | A companion can have a **pet**: chibi her, walking along the bottom of the window, in front of the input box, in chat and roleplay while that companion is active (D-103, D-107). The cat button beside the companion chip shows or hides it; with no pet yet it opens Settings → Pet. |
+| FR-P-2 | A pet is a skin: up to 12 labelled poses (idle, walk 1, walk 2, sit, sleep, eat, wave, think, talk, happy, sad, surprised). **Create pet** takes one 4×3 pose sheet made with the prompt the app gives; the engine cuts it, keys out a flat background, trims each pose on a shared scale; the user checks and relabels the poses before saving; saving shrinks any pose drawn too big for its kind (D-107). **Make a new pet** lists the characters and makes the pet of the one picked. A premade pet ships in her pack's `pet/`. |
+| FR-P-3 | Behaviour: Roam (idle, walk left and right, sit, eat, sleep after a long quiet), Stay put, or Sleep; Size. While she thinks she shows *think*, while she replies *talk*, after a reply *happy* briefly, after a failure *sad*. A click makes her wave. Dragged she is held in *surprised*; let go she falls and lands sitting (D-107). A missing pose falls back to *idle*. |
+| FR-P-4 | The pet never leaves the window and never covers the input box's menus or a dialog; it costs no GPU beyond the page's own drawing. |
 | FR-3D-1 | The room is a prebuilt GLB apartment supplied as a **user asset**, with a collision mesh she and the user share. |
 | FR-3D-2 | Two cameras: a spectator free-fly camera and a first-person **visitor** camera (WASD, pointer lock, about 1.5 m eye height, walk and run), clamped to the walkable area. |
 | FR-3D-3 | She wanders the walkable area with walk start, loop and stop clips sized to her hip height. |

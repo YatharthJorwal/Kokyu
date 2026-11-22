@@ -22,6 +22,21 @@ def _no_real_unload(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_real_ollama_start(monkeypatch):
+    """D-105: a test never starts the user's Ollama."""
+    import ollama_service
+
+    def spawn(exe):
+        raise AssertionError("a test tried to start Ollama")
+
+    async def ensure(base_url, **kwargs):
+        return False
+
+    monkeypatch.setattr(ollama_service, "spawn", spawn)
+    monkeypatch.setattr(ollama_service, "ensure", ensure)
+
+
+@pytest.fixture(autouse=True)
 def _quiet_story_memory(monkeypatch):
     """FR-MODE-5: a fresh story keeper per test that always finds the model busy, so a
     roleplay thread in a test never reaches a real model through story memory. Tests
