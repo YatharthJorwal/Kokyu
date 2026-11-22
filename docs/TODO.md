@@ -62,6 +62,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [ ] UI2-00e Pet, round two (D-107): she walks on the window's bottom, a step-synced walk, carried and dropped (held, fall, land); saved poses fit a box per kind; Make a new pet for any character. Upload limits and formats in the window and the kernel (D-106). Picking an Ollama model starts Ollama (D-105)
 - [ ] UI2-00f Pet sizes (D-108): each pose drawn at its own size; the size checker matches her head to idle's; the picture viewer's note on the picture and Save as
 - [ ] UI2-00g The cat button (D-109): blue while the pet is shown, greyed on the Stage, Pet settings on hover
+- [ ] UI2-00h Pet settings (D-110): the hover menu closes when used and is absent on the Stage; Switch character in Settings → Pet
 - [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
 - [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code

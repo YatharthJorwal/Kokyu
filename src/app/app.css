@@ -3574,6 +3574,10 @@ button:disabled {
   display: block;
 }
 
+.pet-button.menu-gone .pet-menu {
+  display: none;
+}
+
 .pet-menu button {
   padding: 6px 12px;
   border: 1px solid var(--line);
@@ -4044,4 +4048,13 @@ button:disabled {
   text-overflow: ellipsis;
   transform: translateX(-50%);
   pointer-events: none;
+}
+
+.pet-more {
+  justify-content: flex-start;
+}
+
+.pet-pick button:disabled {
+  border-color: var(--accent);
+  cursor: default;
 }

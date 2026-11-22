@@ -12,7 +12,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, ServerData, SettingsChange, SettingsData } from "../../net/protocol";
-import { modelLabel, type Companion, type SettingsSection } from "../chat-state";
+import { currentMode, modelLabel, type Companion, type SettingsSection } from "../chat-state";
 import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
 import { PICTURE_ACCEPT } from "../file-upload";
 import { setDictationKey, useDictationKey } from "../dictation-key";
@@ -676,8 +676,9 @@ function PetSection() {
   const online = useChat((s) => s.connection === "online");
   const draft = useChat((s) => s.petDraft);
   const name = companion?.name ?? "her";
-  // Make a new pet: pick whose (any character), then the same steps as Create.
-  const [picking, setPicking] = useState(false);
+  // A list of the characters: whose new pet to make, or whom to switch to (D-110).
+  const [picking, setPicking] = useState<"new" | "switch" | null>(null);
+  const roleplay = useChat((s) => currentMode(s) === "roleplay");
   const [making, setMaking] = useState<string | null>(null);
   const hadDraft = useRef(false);
   useEffect(() => {
@@ -736,38 +737,60 @@ function PetSection() {
         </>
       ) : picking ? (
         <>
-          <h4>Make a new pet</h4>
-          <p className="muted">Whose pet? Each character has one; making a new one replaces theirs.</p>
+          <h4>{picking === "new" ? "Make a new pet" : "Switch character"}</h4>
+          <p className="muted">
+            {picking === "new" ? "Whose pet? Each character has one; making a new one replaces theirs." : "Talk to someone else; their pet comes with them."}
+          </p>
           <ul className="pet-pick">
-            {roster.map((c) => (
-              <li key={c.id}>
-                <button
-                  type="button"
-                  onClick={() => {
-                    setMaking(c.id);
-                    setPicking(false);
-                  }}
-                >
-                  <Portrait id={c.id} name={c.name} portrait={c.portrait ?? null} className="pet-pick-face" />
-                  <span>{c.name}</span>
-                  <span className="muted">{c.pet ? "Has a pet" : "No pet yet"}</span>
-                </button>
-              </li>
-            ))}
+            {roster.map((c) => {
+              const current = picking === "switch" && c.id === companion?.id;
+              return (
+                <li key={c.id}>
+                  <button
+                    type="button"
+                    disabled={current}
+                    onClick={() => {
+                      if (picking === "new") setMaking(c.id);
+                      else actions.switchWaifu(c.id);
+                      setPicking(null);
+                    }}
+                  >
+                    <Portrait id={c.id} name={c.name} portrait={c.portrait ?? null} className="pet-pick-face" />
+                    <span>{c.name}</span>
+                    <span className="muted">{current ? "Talking now" : c.pet ? "Has a pet" : "No pet yet"}</span>
+                  </button>
+                </li>
+              );
+            })}
           </ul>
-          <p className="settings-hint">Want a different pet entirely, not one of these characters? Make a new character first, then make its pet here.</p>
-          <button type="button" className="ghost pet-back" onClick={() => setPicking(false)}>
+          {picking === "new" ? (
+            <p className="settings-hint">Want a different pet entirely, not one of these characters? Make a new character first, then make its pet here.</p>
+          ) : null}
+          <button type="button" className="ghost pet-back" onClick={() => setPicking(null)}>
             Cancel
           </button>
         </>
       ) : (
-        <ActivePet companion={companion} name={name} online={online} onNew={() => setPicking(true)} />
+        <ActivePet
+          companion={companion}
+          name={name}
+          online={online}
+          onNew={() => setPicking("new")}
+          onSwitch={roleplay || roster.length < 2 ? null : () => setPicking("switch")}
+        />
       )}
     </>
   );
 }
 
-function ActivePet({ companion, name, online, onNew }: { companion: Companion | null; name: string; online: boolean; onNew: () => void }) {
+function ActivePet({ companion, name, online, onNew, onSwitch }: {
+  companion: Companion | null;
+  name: string;
+  online: boolean;
+  onNew: () => void;
+  /** null in a roleplay (she stays for the story, D-101) or with no one else to switch to. */
+  onSwitch: (() => void) | null;
+}) {
   return (
     <>
       <h4>{companion?.pet ? `${name}'s pet` : `Create ${name}'s pet`}</h4>
@@ -782,9 +805,16 @@ function ActivePet({ companion, name, online, onNew }: { companion: Companion | 
         </div>
       ) : null}
       {companion ? <CreatePet id={companion.id} name={name} online={online} draft={null} own={companion.petOwn ?? false} has={!!companion.pet} /> : null}
-      <button type="button" className="pet-new" onClick={onNew}>
-        Make a new pet
-      </button>
+      <div className="pet-actions pet-more">
+        {onSwitch ? (
+          <button type="button" className="pet-new" onClick={onSwitch}>
+            Switch character
+          </button>
+        ) : null}
+        <button type="button" className="pet-new" onClick={onNew}>
+          Make a new pet
+        </button>
+      </div>
     </>
   );
 }

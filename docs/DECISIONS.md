@@ -336,6 +336,10 @@ The user, with screenshots after D-107: sit and sleep "are still distinct". Two 
 "on pet icon in chat, hover must show an option to show settings. and it must turn bluish when pet is shown. make it grey/muted where pet is disabled by default (stage)". Hovering or focusing the cat button shows a Pet settings button under it (Settings → Pet); the cat is blue while her pet is shown, muted otherwise; on the Stage, where the pet never walks (D-104), it is greyed and does nothing, and still offers Pet settings. Amends FR-P-1.
 
 
+**D-110 Pet settings: the hover menu closes when used, none on the Stage; Switch character** · Accepted · User · 2026-11-22
+"the pet settings on hover must disappear when it is clicked. and dont show it on hover at stage. also in pet settings card, add an option to switch character (same list thing)". Clicking Pet settings hides the menu until the pointer leaves the cat; on the Stage the cat offers no menu. Settings → Pet gains Switch character beside Make a new pet: the same list of characters, the current one marked; picking one switches to her as the companion chip does. Not in a roleplay (she stays for the story, D-101) or with no one else. Amends D-109.
+
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)

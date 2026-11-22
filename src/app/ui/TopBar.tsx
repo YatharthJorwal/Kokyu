@@ -6,6 +6,7 @@
 
 import { isTauri } from "@tauri-apps/api/core";
 import { getCurrentWindow } from "@tauri-apps/api/window";
+import { useState } from "react";
 
 import { actions, setPetPrefs, useChat, usePetPrefs } from "../store";
 import { CompanionChip } from "./CompanionChip";
@@ -40,6 +41,8 @@ function PetButton() {
   const has = useChat((s) => Boolean(s.companion?.pet));
   const stage = useChat((s) => s.view === "stage");
   const show = usePetPrefs((p) => p.show);
+  // Clicking Pet settings hides the menu until the pointer leaves the button.
+  const [menuGone, setMenuGone] = useState(false);
   if (name === null) return null;
   const on = has && show && !stage;
   // D-109: blue while she is out; grey on the Stage, where the pet never walks.
@@ -51,7 +54,7 @@ function PetButton() {
         : `Show ${name}'s pet`
       : `Create ${name}'s pet`;
   return (
-    <span className="pet-button">
+    <span className={menuGone ? "pet-button menu-gone" : "pet-button"} onMouseLeave={() => setMenuGone(false)}>
       <button
         type="button"
         className={on ? "pet-toggle on" : stage ? "pet-toggle off" : "pet-toggle"}
@@ -63,11 +66,20 @@ function PetButton() {
       >
         <Icon name="cat" size={17} />
       </button>
-      <span className="pet-menu">
-        <button type="button" onClick={() => actions.openSettings("pet")}>
-          Pet settings
-        </button>
-      </span>
+      {stage ? null : (
+        <span className="pet-menu">
+          <button
+            type="button"
+            onClick={(e) => {
+              setMenuGone(true);
+              e.currentTarget.blur();
+              actions.openSettings("pet");
+            }}
+          >
+            Pet settings
+          </button>
+        </span>
+      )}
     </span>
   );
 }
