@@ -3292,8 +3292,13 @@ button:disabled {
 }
 
 .settings-body .settings-choices .swatch {
+  display: block;
+  flex: none;
+  box-sizing: border-box;
   width: 28px;
   height: 28px;
+  min-width: 0;
+  min-height: 0;   /* the settings button rule's 32 px made them ovals */
   padding: 0;
   border-radius: 50%;
 }

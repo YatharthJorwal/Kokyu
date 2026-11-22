@@ -26,3 +26,11 @@ test("the caption's glow is a stored color, checked like the accent", () => {
   assert.equal(themeVars(parseTheme(null))["--caption-glow"], DEFAULT_GLOW);
   assert.equal(themeVars(parseTheme('{"glow":"#a0b0c0"}'))["--caption-glow"], "#a0b0c0");
 });
+
+test("without her voice a reply becomes sentence lines, paced like speech (D-113)", async () => {
+  const { sentences, silentDuration } = await import("../src/app/caption.ts");
+  assert.deepEqual(sentences("*smiles* Hi there! How are you?\n\nI'm fine… ok"), ["Hi there!", "How are you?", "I'm fine…", "ok"]);
+  assert.deepEqual(sentences("  ...  "), []);
+  assert.equal(silentDuration("Hi"), 1.6);
+  assert.ok(silentDuration("x".repeat(100)) > 6);
+});

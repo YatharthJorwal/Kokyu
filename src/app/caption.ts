@@ -33,6 +33,21 @@ export function activeWord(starts: readonly number[], fraction: number): number 
   return index;
 }
 
+/** Her reply as caption lines, one sentence each, without *actions* or markdown marks (D-113). */
+export function sentences(text: string): string[] {
+  return text
+    .replace(/\*[^*]*\*/g, " ")   // *actions* are not said, as her voice skips them
+    .replace(/[*_`#>~]/g, "")
+    .split(/(?<=[.!?…])\s+|\n+/)
+    .map((line) => line.trim())
+    .filter((line) => /[\p{L}\p{N}]/u.test(line));
+}
+
+/** How long a line stays when her voice does not say it, in seconds: about speaking pace. */
+export function silentDuration(line: string): number {
+  return Math.max(1.6, line.length * 0.07);
+}
+
 export function wordState(index: number, active: number): WordState {
   if (index === active) return "active";
   if (index > active) return "hidden";

@@ -45,3 +45,12 @@ test("her name and lit icons stay readable whatever the accent (D-112)", async (
   const vars = themeVars({ preset: "light", accent: "#fafafa", messages: "open", size: "normal" });
   assert.equal(vars["--accent-text"], PRESETS.light.vars["--text"]);
 });
+
+test("every preset reads: text 7:1 and accent 3:1 on its background (D-113)", async () => {
+  const { contrast } = await import("../src/app/theme.ts");
+  for (const [id, p] of Object.entries(PRESETS)) {
+    assert.ok(contrast(p.vars["--text"], p.vars["--bg"]) >= 7, `${id} text`);
+    assert.ok(contrast(p.vars["--accent"], p.vars["--bg"]) >= 3, `${id} accent`);
+    assert.ok(contrast(p.vars["--muted"], p.vars["--bg"]) >= 3, `${id} muted`);
+  }
+});

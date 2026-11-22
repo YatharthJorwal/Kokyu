@@ -8,9 +8,8 @@ import { useEffect, useRef, useState } from "react";
 import { getSpeechProgress } from "../../engine/lipsync";
 import { createStage, type Stage as StageApi } from "../../engine/stage";
 import { KERNEL_HTTP_URL } from "../../net/kernel";
-import { activeWord, splitWords, wordStarts, wordState } from "../caption";
-import { visibleStream } from "../chat-state";
-import { speakingLine, useChat } from "../store";
+import { activeWord, sentences, silentDuration, splitWords, wordStarts, wordState } from "../caption";
+import { actions, speakingLine, useChat } from "../store";
 
 export function Stage() {
   const id = useChat((s) => s.companion?.id ?? null);
@@ -72,35 +71,56 @@ function StageScene({ id, name }: { id: string; name: string }) {
   );
 }
 
-/** The end of a long reply, cut at a word: the caption shows what she is saying now. */
-function tail(text: string): string {
-  return text.length <= 240 ? text : "…" + text.slice(-240).replace(/^\S*\s/, "");
+const HOLD_MS = 900;   // a finished line stays this long before it fades
+const GAP_MS = 450;    // and the next waits for the fade
+
+type Reply = { key: string; text: string } | null;
+
+function lastReply(messages: readonly { key: string; role: string; text: string }[]): Reply {
+  const m = messages[messages.length - 1];
+  return m && m.role === "assistant" ? { key: m.key, text: m.text } : null;
 }
 
-/** Her latest words: the reply being written, else her last reply. */
-function Caption() {
-  const text = useChat((s) => {
-    if (s.turn === "replying") return visibleStream(s);
-    for (let i = s.messages.length - 1; i >= 0; i -= 1) {
-      const m = s.messages[i];
-      if (m.role === "assistant") return m.text;
-      if (m.role === "user") return "";
+/** On the Stage she speaks: Read aloud goes on when it opens, and back off when it closes
+ *  if the Stage turned it on (D-113). */
+function useStageVoice() {
+  const known = useChat((s) => s.readAloud !== null);
+  const turnedOn = useRef(false);
+  useEffect(() => {
+    const status = useChat.getState().readAloud;
+    if (status && !status.on && !turnedOn.current) {
+      turnedOn.current = true;
+      actions.setReadAloud(true);
     }
-    return "";
-  });
-  const thinking = useChat((s) => s.turn === "thinking");
+  }, [known]);
+  useEffect(
+    () => () => {
+      if (turnedOn.current && useChat.getState().readAloud?.on) actions.setReadAloud(false);
+    },
+    [],
+  );
+}
+
+/** Her words, Yuri's way (D-111, D-113): one line at a time, word by word at speaking
+ *  pace, then gone. With her voice the line is the clip playing; without it (Read aloud
+ *  off, or her voice failed) the finished reply is paced out sentence by sentence. */
+function Caption() {
+  useStageVoice();
+  const busy = useChat((s) => s.turn !== "idle");
   const box = useRef<HTMLDivElement>(null);
   const [speaking, setSpeaking] = useState(false);
 
-  // Yuri's caption (D-111): while her voice plays, its words pop in one at a time
-  // with the clip, the one being said glowing. Drawn straight into the DOM from one
-  // rAF loop, as in Yuri: no React render per word.
+  // Drawn straight into the DOM from one rAF loop, as in Yuri: no React render per word.
   useEffect(() => {
     let frame = 0;
     let line: string | null = null;
     let spans: HTMLSpanElement[] = [];
     let starts: number[] = [];
     let active = -1;
+    let seen = lastReply(useChat.getState().messages)?.key ?? null;   // never replay an old reply
+    let wasBusy = false;
+    let queue: string[] = [];
+    let started = 0;
     const show = (index: number) => {
       if (index === active) return;
       active = index;
@@ -114,15 +134,47 @@ function Caption() {
         }
       });
     };
-    const tick = () => {
+    const tick = (now: number) => {
       frame = requestAnimationFrame(tick);
-      const now = speakingLine();
-      if (now !== line) {
-        line = now;
-        setSpeaking(now !== null);
+      const s = useChat.getState();
+      if (s.turn !== "idle") {
+        wasBusy = true;
+        queue = [];
+      } else if (wasBusy) {
+        wasBusy = false;
+        const reply = lastReply(s.messages);
+        if (reply && reply.key !== seen) {
+          seen = reply.key;
+          const voiced = s.readAloud?.on === true && s.readAloud.state !== "failed";
+          queue = voiced ? [] : sentences(reply.text);
+          started = now;
+        }
+      }
+      const voiceLine = speakingLine();
+      let text: string | null = voiceLine;
+      let fraction = 0;
+      if (voiceLine !== null) {
+        queue = [];
+        const progress = getSpeechProgress();
+        if (progress && progress.duration > 0) fraction = Math.min(1, progress.elapsed / progress.duration);
+      } else if (queue.length > 0) {
+        const ms = silentDuration(queue[0]) * 1000;
+        const at = now - started;
+        if (at >= ms + HOLD_MS + GAP_MS) {
+          queue.shift();
+          started = now;
+        } else if (at < ms + HOLD_MS) {
+          text = queue[0];
+          fraction = Math.min(1, at / ms);
+        }
+      }
+      if (text !== line) {
+        line = text;
+        setSpeaking(text !== null);
         const el = box.current;
         if (!el) return;
-        const words = now ? splitWords(now) : [];
+        if (text === null) return;   // the old words fade out with the box, then are replaced
+        const words = splitWords(text);
         starts = wordStarts(words);
         spans = words.map((word) => {
           const span = document.createElement("span");
@@ -132,10 +184,9 @@ function Caption() {
         });
         el.replaceChildren(...spans);
         active = -1;
-        if (spans.length > 0) show(0);   // at once: the clip's length is not known for a frame or two
+        show(0);   // at once: a clip's length is not known for a frame or two
       }
-      const progress = line ? getSpeechProgress() : null;
-      if (progress && progress.duration > 0) show(activeWord(starts, Math.min(1, progress.elapsed / progress.duration)));
+      if (line !== null) show(activeWord(starts, fraction));
     };
     frame = requestAnimationFrame(tick);
     return () => cancelAnimationFrame(frame);
@@ -144,8 +195,7 @@ function Caption() {
   return (
     <>
       <div ref={box} className={speaking ? "stage-caption visible" : "stage-caption"} aria-live="polite" />
-      {/* Read aloud off, or before her voice starts: the latest words, in the same lettering. */}
-      {!speaking && (text || thinking) ? <p className="stage-caption-text">{thinking && !text ? "…" : tail(text)}</p> : null}
+      {busy && !speaking ? <p className="stage-caption-text">…</p> : null}
     </>
   );
 }

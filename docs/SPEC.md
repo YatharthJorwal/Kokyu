@@ -122,7 +122,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-ST-1 | The stage MUST show the active companion's VRM **in front of the user**, bust-up, centered, dark neutral backdrop (reference: xAI's Ani). | K2 |
 | FR-ST-2 | Framing MUST be computed from the VRM's head and chest bones and bounding box. No per-model camera constants. | K2 |
 | FR-ST-3 | The avatar MUST have spring-bone physics (hair, ears, accessories), procedural breathing, blinking, glances, eye contact toward the camera with subtle drift, and audio-driven lip-sync (`aa`). | K2 |
-| FR-ST-4 | Overlay: live **captions** of her speech, the same input box docked at the bottom, and a chat log that slides in from the side. | K2 |
+| FR-ST-4 | Overlay: live **captions** of her speech (one line at a time at speaking pace, fading after each; Read aloud on while the Stage is open, D-113), the same input box docked at the bottom, and a chat log that slides in from the side. | K2 |
 | FR-ST-5 | If the VRM is missing or invalid, the stage MUST show an instruction panel instead of a blank canvas. | K2 |
 | FR-ST-6 | TARGET: 60 fps at 1080p with one companion while the LLM is idle; no worse than 30 fps while generating. Calibrate in K2. | K2 |
 | FR-ST-7 | Expression hooks MUST exist on the avatar API. The existing emotion tags (`happy`, `angry`, `sad`, `teasing`, `surprised`, `neutral`) and expression life are kept; new emotion detection is out of scope. | K2 |

@@ -2,7 +2,7 @@
 // localStorage, not settings.json: it is the client's own look and the kernel never
 // needs it. Pure logic here; `applyTheme` is the one function that touches the page.
 
-export type Preset = "kokyu" | "midnight" | "light";
+export type Preset = "kokyu" | "midnight" | "light" | "sakura" | "paper" | "ocean" | "forest" | "mocha";
 export type MessageStyle = "open" | "bubbles";
 export type TextSize = "small" | "normal" | "large";
 
@@ -69,6 +69,87 @@ export const PRESETS: Record<Preset, { label: string; scheme: "dark" | "light"; 
       "--user": "#ebe3f3",
       "--reply": "#f1edf5",
       "--danger": "#c23b4a",
+    },
+  },
+  // D-113: more presets, two light and three dark.
+  sakura: {
+    label: "Sakura",
+    scheme: "light",
+    vars: {
+      "--bg": "#fff6f9",
+      "--panel": "#fdecf2",
+      "--panel-2": "#f8dce7",
+      "--line": "#efc9d8",
+      "--text": "#2b1720",
+      "--muted": "#7d5b69",
+      "--accent": "#d6487f",
+      "--user": "#f9e1ea",
+      "--reply": "#fdecf2",
+      "--danger": "#c23b4a",
+    },
+  },
+  paper: {
+    label: "Paper",
+    scheme: "light",
+    vars: {
+      "--bg": "#faf7f0",
+      "--panel": "#f2ede2",
+      "--panel-2": "#e8e1d2",
+      "--line": "#dbd2c0",
+      "--text": "#2a251c",
+      "--muted": "#6e6555",
+      "--accent": "#b5651d",
+      "--user": "#efe7d6",
+      "--reply": "#f2ede2",
+      "--danger": "#b83a3a",
+    },
+  },
+  ocean: {
+    label: "Ocean",
+    scheme: "dark",
+    vars: {
+      "--bg": "#0f1720",
+      "--panel": "#16212c",
+      "--panel-2": "#1f2d3b",
+      "--line": "#2a3b4c",
+      "--text": "#e6eef6",
+      "--muted": "#93a6b8",
+      "--accent": "#5cc8e6",
+      "--user": "#1d3042",
+      "--reply": "#152330",
+      "--danger": "#e5707a",
+    },
+  },
+  forest: {
+    label: "Forest",
+    scheme: "dark",
+    vars: {
+      "--bg": "#121a15",
+      "--panel": "#18231c",
+      "--panel-2": "#213026",
+      "--line": "#2c3e31",
+      "--text": "#e7f0e9",
+      "--muted": "#99ad9e",
+      "--accent": "#7fcf8f",
+      "--user": "#22352a",
+      "--reply": "#18241d",
+      "--danger": "#e5707a",
+    },
+  },
+  mocha: {
+    label: "Mocha",
+    scheme: "dark",
+    vars: {
+      "--bg": "#1b1613",
+      "--panel": "#241d19",
+      "--panel-2": "#2f2621",
+      "--line": "#3d322b",
+      "--text": "#f3ebe4",
+      "--muted": "#b3a397",
+      "--accent": "#e8a26b",
+      "--user": "#33291f",
+      "--reply": "#261f1a",
+      "--danger": "#e5707a",
     },
   },
 };
