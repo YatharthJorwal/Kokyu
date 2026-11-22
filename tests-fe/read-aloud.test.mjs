@@ -53,3 +53,11 @@ test("the message being read on request is the window's own state, gone on disco
   s = reduce(reduce(s, { kind: "reading", key: "m8" }), { kind: "status", status: "offline" });
   assert.equal(s.reading, null);
 });
+
+test("a message read on request with Read aloud off: starting and failed are said, ready is not (D-112)", () => {
+  assert.match(readAloudLine(st("loading", false), "Luna", 3, true), /Starting Luna's voice/);
+  assert.match(readAloudLine(st("failed", false, "GPT-SoVITS is not set up."), "Luna", 0, true), /couldn't start\. GPT-SoVITS/);
+  assert.equal(readAloudLine(st("ready", false), "Luna", 0, true), null);
+  assert.equal(voiceStarting(st("loading", false), true), true);
+  assert.equal(voiceStarting(st("loading", false)), false);
+});

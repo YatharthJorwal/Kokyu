@@ -445,6 +445,12 @@ export const actions = {
 
   /** D-099: read one of her messages aloud now, in her voice, Read aloud on or off.
    * The same message again stops it. */
+  /** Stops a message being read on request, if one is (D-099). */
+  stopReading(): void {
+    const reading = useChat.getState().reading;
+    if (reading !== null) actions.readMessage(reading, "", null);
+  },
+
   readMessage(key: string, text: string, speakerId: string | null): void {
     const reading = useChat.getState().reading;
     voice.stop();

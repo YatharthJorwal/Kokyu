@@ -36,3 +36,12 @@ test("a theme sets its preset's colors, the accent, its ink and the chat text si
   assert.equal(names("kokyu"), names("midnight"));
   assert.equal(names("kokyu"), names("light"));
 });
+
+test("her name and lit icons stay readable whatever the accent (D-112)", async () => {
+  const { accentText, contrast } = await import("../src/app/theme.ts");
+  assert.ok(contrast("#ffffff", "#000000") > 20);
+  assert.equal(accentText("#ffffff", PRESETS.light.vars["--bg"], PRESETS.light.vars["--text"]), PRESETS.light.vars["--text"]);
+  assert.equal(accentText("#d3477e", PRESETS.light.vars["--bg"], PRESETS.light.vars["--text"]), "#d3477e");
+  const vars = themeVars({ preset: "light", accent: "#fafafa", messages: "open", size: "normal" });
+  assert.equal(vars["--accent-text"], PRESETS.light.vars["--text"]);
+});

@@ -99,14 +99,30 @@ export function parseTheme(raw: string | null): Theme {
   };
 }
 
-/** Dark or light text on the accent, whichever reads better (WCAG relative luminance). */
-export function inkFor(hex: string): string {
+function luminance(hex: string): number {
   const channel = (i: number) => {
     const c = parseInt(hex.slice(i, i + 2), 16) / 255;
     return c <= 0.03928 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4;
   };
-  const lum = 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
-  return lum > 0.35 ? "#1a1320" : "#ffffff";
+  return 0.2126 * channel(1) + 0.7152 * channel(3) + 0.0722 * channel(5);
+}
+
+/** Dark or light text on the accent, whichever reads better (WCAG relative luminance). */
+export function inkFor(hex: string): string {
+  return luminance(hex) > 0.35 ? "#1a1320" : "#ffffff";
+}
+
+/** WCAG contrast ratio of two colors, 1 to 21. */
+export function contrast(a: string, b: string): number {
+  const [hi, lo] = [luminance(a), luminance(b)].sort((x, y) => y - x);
+  return (hi + 0.05) / (lo + 0.05);
+}
+
+/** The accent for text and icons on the page: the accent itself when it can be read
+ * on the background (3:1, WCAG's floor for large text and icons), else the text color,
+ * so a white accent on the light theme never hides her name (D-112). */
+export function accentText(accent: string, bg: string, text: string): string {
+  return contrast(accent, bg) >= 3 ? accent : text;
 }
 
 /** Every CSS variable and data attribute a theme sets on <html>. */
@@ -117,6 +133,7 @@ export function themeVars(theme: Theme): Record<string, string> {
     ...preset.vars,
     "--accent": accent,
     "--on-accent": inkFor(accent),
+    "--accent-text": accentText(accent, preset.vars["--bg"], preset.vars["--text"]),
     "--chat-size": TEXT_SIZES[theme.size],
     "--caption-glow": theme.glow ?? DEFAULT_GLOW,
   };

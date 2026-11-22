@@ -328,7 +328,7 @@ function MicButton({ dictation }: { dictation: Dictation }) {
 
 /** The status line's quiet state: Temp Chat, else how to send. Silent while a chip speaks. */
 function StatusHint() {
-  const busy = useChat((s) => (s.readAloud?.on ?? false) || (s.screen?.task_guide.on ?? false) || (s.screen?.ocr_watch.on ?? false));
+  const busy = useChat((s) => (s.readAloud?.on ?? false) || s.reading !== null || (s.screen?.task_guide.on ?? false) || (s.screen?.ocr_watch.on ?? false));
   const temp = useChat((s) => s.thread?.temp ?? false);
   const observer = useChat((s) => s.role === "observer");
   if (busy || observer) return null;
@@ -340,12 +340,23 @@ function StatusHint() {
 }
 
 /** D-097: Read aloud on: her voice starting (counting to about 47 s), reading, or
- * failed with Try again; × turns it off. */
+ * failed with Try again and Set up; × turns it off. D-112: also while her voice starts
+ * for one message read on request, and if that fails. */
 function ReadAloudChip() {
   const status = useChat((s) => s.readAloud);
   const name = useChat((s) => s.companion?.name ?? "Her");
   const canAct = useChat((s) => s.role === "driver" && s.connection === "online");
-  const starting = voiceStarting(status);
+  const reading = useChat((s) => s.reading);
+  // A message's speaker asked for her voice: kept after the reading ends, so a failure stays said.
+  const [asked, setAsked] = useState(false);
+  useEffect(() => {
+    if (reading !== null) setAsked(true);
+  }, [reading]);
+  useEffect(() => {
+    if (status?.state === "ready" && reading === null) setAsked(false);
+  }, [status, reading]);
+  const wanted = asked && !status?.on;
+  const starting = voiceStarting(status, wanted);
   // When the start began, from the engine's count at this frame; the chip counts on.
   const since = useMemo(() => Date.now() - (status?.elapsed_s ?? 0) * 1000, [status]);
   const [now, setNow] = useState(() => Date.now());
@@ -354,23 +365,32 @@ function ReadAloudChip() {
     const t = window.setInterval(() => setNow(Date.now()), 1000);
     return () => window.clearInterval(t);
   }, [starting]);
-  const line = readAloudLine(status, name, starting ? (now - since) / 1000 : 0);
+  const line = readAloudLine(status, name, starting ? (now - since) / 1000 : 0, wanted);
   if (line === null) return null;
   return (
     <div className="screen-chips" role="status" aria-label="Read aloud">
       <span className={starting ? "screen-chip voice-chip starting" : "screen-chip voice-chip"}>
         <Icon name="speaker" size={14} /> {line}
-        {status?.state === "failed" ? (
+        {status?.state === "failed" && status.on ? (
           <button type="button" className="chip-retry" disabled={!canAct} onClick={() => actions.setReadAloud(true)}>
             Try again
           </button>
         ) : null}
+        {status?.state === "failed" ? (
+          <button type="button" className="chip-retry" onClick={() => actions.openSettings("voice")}>
+            Set up
+          </button>
+        ) : null}
         <button
           type="button"
-          aria-label="Turn off Read aloud"
-          title="Turn off Read aloud"
-          disabled={!canAct}
-          onClick={() => actions.setReadAloud(false)}
+          aria-label={wanted ? "Dismiss" : "Turn off Read aloud"}
+          title={wanted ? "Dismiss" : "Turn off Read aloud"}
+          disabled={!canAct && !wanted}
+          onClick={() => {
+            if (!wanted) return actions.setReadAloud(false);
+            actions.stopReading();
+            setAsked(false);
+          }}
         >
           ×
         </button>

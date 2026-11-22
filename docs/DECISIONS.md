@@ -344,6 +344,10 @@ The user, with screenshots after D-107: sit and sleep "are still distinct". Two 
 "take the caption style from the yuri repo for stage. and the glow color must be changable". Yuri's caption (`src/style.css` `#caption`, `src/main.ts` `applyCaptionProgress`): no box; while her voice plays, the clip's words pop in one at a time, each given a share of the clip's length by its letters (no word timings from the voice engine); the word being said glows; the four behind it dim; older ones fold away. Settings → Appearance gains Caption glow: six swatches and any color, Yuri's pink by default, kept with the theme in this window. Claude's: without her voice (Read aloud off, or before the first clip) the caption shows her latest words still, in the same lettering and glow; the colors follow the theme's text color so the light theme stays readable. Amends D-104.
 
 
+**D-112 Accent text stays readable; her voice's start and failure are always said** · Accepted · User, with Claude's parts · 2026-11-22
+The user, with a screenshot (light theme, a near-white accent): "her name text goes invisible when white. i want it to be visible no matter what theme is chosen. and for some reason, the sound icon vanished too", and "add a note about fetching voice model when it is cold started and a fail note when it fails, with the option to set up which opens settings". Text and icons drawn in the accent (her name, a lit speaker, links) use `--accent-text`: the accent when it reaches 3:1 contrast on the theme's background, else the theme's text color; fills keep the accent. The Read aloud chip now also shows while her voice starts for one message read on request (D-099) with Read aloud off, counting as before, and stays if that fails; a failed voice offers Set up (Settings → Voice) beside Try again. Amends D-097, D-099.
+
+
 ## Superseded
 
 - D-007 TTS backend built by a separate agent → superseded by D-080 (the app sets it up)

@@ -8,6 +8,7 @@
   --text: #f1ecf7;
   --muted: #a39bb4;
   --accent: #f27aa6;
+  --accent-text: var(--accent);   /* the accent for text and icons; theme.ts swaps it when unreadable (D-112) */
   --accent-ink: #2a0d1a;
   --user: #2f2840;
   --reply: #241e2c;
@@ -913,7 +914,7 @@ button:disabled {
 }
 
 .md li::marker {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .md blockquote {
@@ -928,7 +929,7 @@ button:disabled {
 }
 
 .md a {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .md code {
@@ -1142,7 +1143,7 @@ button:disabled {
   place-items: center;
   height: 28px;
   margin-top: 2px;
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 /* her name, then the speaker that reads this message aloud (D-099, D-100) */
@@ -1270,7 +1271,7 @@ button:disabled {
 }
 
 .story-pin-who {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1522,7 +1523,7 @@ button:disabled {
 }
 
 .speaker {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 13px;
   font-weight: 600;
 }
@@ -1978,7 +1979,7 @@ button:disabled {
 }
 
 .screen-chip .chip-retry {
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
 }
 
@@ -2045,7 +2046,7 @@ button:disabled {
 }
 
 .heart.idle {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .heart.idle .heart-arc,
@@ -2072,7 +2073,7 @@ button:disabled {
 }
 
 .heart.replying {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .heart.replying .heart-fill {
@@ -2201,7 +2202,7 @@ button:disabled {
 }
 
 .effort-label {
-  color: var(--accent);
+  color: var(--accent-text);
   white-space: nowrap;
 }
 
@@ -2432,7 +2433,7 @@ button:disabled {
 }
 
 .model-row .check {
-  color: var(--accent);
+  color: var(--accent-text);
   font-weight: 700;
 }
 
@@ -2449,7 +2450,7 @@ button:disabled {
 }
 
 .model-row.current .row-label {
-  color: var(--accent);
+  color: var(--accent-text);
 }
 
 .row-meta,
@@ -2772,7 +2773,7 @@ button:disabled {
 }
 
 .waking.awake {
-  color: var(--accent);
+  color: var(--accent-text);
   animation: fade-out 2.6s ease forwards;
 }
 
@@ -3140,7 +3141,7 @@ button:disabled {
 }
 
 .key-capture {
-  color: var(--accent);
+  color: var(--accent-text);
   font-size: 13px;
   white-space: nowrap;
 }
@@ -3500,7 +3501,7 @@ button:disabled {
 
 /* D-099: the message being read aloud on request: its speaker stays lit until it ends */
 .read-message.reading {
-  color: var(--accent);
+  color: var(--accent-text);
   animation: read-message 1.4s ease-in-out infinite;
 }
 
