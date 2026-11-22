@@ -259,6 +259,8 @@ def test_switching_companion_adds_a_divider_and_reopening_restores_her(kernel):
         ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "beta"}})
         divider, _ = _until(ws, "thread_message")
         assert divider["data"]["message"]["role"] == "divider" and divider["data"]["message"]["content"] == "Switched to Beta"
+        listed, _ = _until(ws, "thread_list")   # the sidebar's badge follows her at once
+        assert [t["active_waifu_id"] for t in listed["data"]["threads"] if t["id"] == tid] == ["beta"]
         ws.send_json({"v": 1, "type": "thread_new", "data": {}})
         _until(ws, "thread_opened")
         ws.send_json({"v": 1, "type": "switch_waifu", "data": {"id": "alpha"}})
@@ -287,6 +289,7 @@ def test_a_switch_mid_reply_waits_for_the_reply(kernel, monkeypatch):
         _until(ws, "turn_done")
         divider, _ = _until(ws, "thread_message")             # as the reply ends, not at the next message
         assert divider["data"]["message"]["content"] == "Switched to Beta"
+        _until(ws, "thread_list")   # the switch ends with the sidebar's list; the turn is over then
         _chat(ws, "second")
     stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
     assert [(m.role, m.speaker_name) for m in stored] == [

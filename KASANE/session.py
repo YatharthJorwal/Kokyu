@@ -366,6 +366,7 @@ class Session:
         try:
             divider = await self.manager.record_companion_change(self.thread.id, companions.speaker_record(self.ws))
             await self.ws.send_json(protocol.frame("thread_message", {"message": divider.to_dict()}, thread=self.thread.id))
+            await self.send_thread_list()   # the sidebar's badge shows her now
         except Exception as exc:  # noqa: BLE001 -- the switch itself already happened
             log.warning(f"could not record the companion change: {exc}")
 
