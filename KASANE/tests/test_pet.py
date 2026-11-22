@@ -131,3 +131,24 @@ def test_the_size_checker_only_shrinks_a_pose_drawn_too_big():
     assert pet.fit("sit", 206, 269) == pytest.approx(0.74 * 320 / 269)
     assert pet.fit("sleep", 270, 192) == pytest.approx(0.5 * 320 / 192)    # too big lying down
     assert pet.fit("happy", 240, 350) == 1.0                 # arms up may stand taller
+
+
+def _figure(scale: float, body: int) -> Image.Image:
+    """A face (eyes, mouth, fringe) on a body `body` px tall, everything times `scale`."""
+    s = lambda v: round(v * scale)
+    img = Image.new("RGBA", (s(120), s(100 + body)), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.ellipse((s(10), s(5), s(110), s(100)), fill=(60, 40, 30, 255))            # hair
+    d.ellipse((s(25), s(30), s(95), s(100)), fill=(250, 220, 200, 255))         # face
+    for x in (40, 70):
+        d.ellipse((s(x), s(55), s(x + 12), s(70)), fill=(90, 70, 160, 255))     # eyes
+    d.rectangle((s(50), s(82), s(70), s(86)), fill=(200, 80, 90, 255))          # mouth
+    d.rectangle((s(35), s(100), s(85), s(100 + body)), fill=(30, 30, 30, 255))  # body
+    return img
+
+
+def test_her_head_is_matched_across_poses_drawn_at_another_scale():
+    idle = _figure(1.0, 130)
+    assert pet.head_scale(idle, _figure(1.2, 40)) == pytest.approx(1.2, abs=0.05)   # sitting: a short body, a bigger head
+    assert pet.head_scale(idle, _figure(0.9, 130)) == pytest.approx(0.9, abs=0.05)
+    assert pet.head_scale(idle, Image.new("RGBA", (120, 200), (200, 0, 0, 255))) is None   # no head to be found

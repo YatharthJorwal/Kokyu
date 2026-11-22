@@ -48,8 +48,15 @@ function PetWalker({ id, name, stamp, poses }: { id: string; name: string; stamp
   const size = usePetPrefs((p) => p.size);
   const height = Math.round((SAVED_HEIGHT * size) / 100);
 
+  // Each pose keeps its own saved size: a sitting or lying pose is shorter than idle,
+  // so drawing every pose at idle's height would blow those up.
+  const [natural, setNatural] = useState<Record<string, number>>({});
   useEffect(() => {
-    for (const pose of posesKey.split(",")) new Image().src = petPoseUrl(id, pose, stamp);   // no flicker on the first switch
+    for (const pose of posesKey.split(",")) {
+      const img = new Image();   // also preloads, so the first switch does not flicker
+      img.onload = () => setNatural((old) => ({ ...old, [pose]: img.naturalHeight }));
+      img.src = petPoseUrl(id, pose, stamp);
+    }
   }, [id, stamp, posesKey]);
 
   useEffect(() => {
@@ -147,7 +154,7 @@ function PetWalker({ id, name, stamp, poses }: { id: string; name: string; stamp
             src={petPoseUrl(id, look.pose, stamp)}
             alt=""
             draggable={false}
-            style={{ height }}
+            style={{ height: Math.round(((natural[look.pose] ?? SAVED_HEIGHT) * size) / 100) }}
             title={name}
             onPointerDown={down}
             onPointerMove={move}

@@ -38,21 +38,37 @@ export function TopBar({ onShowSidebar }: { onShowSidebar?: () => void }) {
 function PetButton() {
   const name = useChat((s) => s.companion?.name ?? null);
   const has = useChat((s) => Boolean(s.companion?.pet));
+  const stage = useChat((s) => s.view === "stage");
   const show = usePetPrefs((p) => p.show);
   if (name === null) return null;
-  const on = has && show;
-  const label = has ? (show ? `Hide ${name}'s pet` : `Show ${name}'s pet`) : `Create ${name}'s pet`;
+  const on = has && show && !stage;
+  // D-109: blue while she is out; grey on the Stage, where the pet never walks.
+  const label = stage
+    ? `${name}'s pet stays off on the Stage`
+    : has
+      ? show
+        ? `Hide ${name}'s pet`
+        : `Show ${name}'s pet`
+      : `Create ${name}'s pet`;
   return (
-    <button
-      type="button"
-      className={on ? "pet-toggle on" : "pet-toggle"}
-      aria-label={label}
-      aria-pressed={has ? on : undefined}
-      title={label}
-      onClick={() => (has ? setPetPrefs({ show: !show }) : actions.openSettings("pet"))}
-    >
-      <Icon name="cat" size={17} />
-    </button>
+    <span className="pet-button">
+      <button
+        type="button"
+        className={on ? "pet-toggle on" : stage ? "pet-toggle off" : "pet-toggle"}
+        aria-label={label}
+        aria-pressed={has && !stage ? on : undefined}
+        title={label}
+        disabled={stage}
+        onClick={() => (has ? setPetPrefs({ show: !show }) : actions.openSettings("pet"))}
+      >
+        <Icon name="cat" size={17} />
+      </button>
+      <span className="pet-menu">
+        <button type="button" onClick={() => actions.openSettings("pet")}>
+          Pet settings
+        </button>
+      </span>
+    </span>
   );
 }
 

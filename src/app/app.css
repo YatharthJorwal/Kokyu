@@ -3539,7 +3539,57 @@ button:disabled {
 }
 
 .pet-toggle.on {
-  color: var(--accent);
+  color: #5fa8ff;
+}
+
+.pet-toggle.off {
+  opacity: 0.45;
+  cursor: default;
+}
+
+.pet-toggle.off:hover {
+  background: transparent;
+  color: var(--muted);
+}
+
+/* D-109: hovering the cat offers Pet settings just below it. */
+.pet-button {
+  position: relative;
+  display: flex;
+  flex: none;
+}
+
+.pet-menu {
+  position: absolute;
+  top: 100%;
+  left: 50%;
+  z-index: 30;
+  display: none;
+  padding-top: 6px;
+  transform: translateX(-50%);
+}
+
+.pet-button:hover .pet-menu,
+.pet-button:focus-within .pet-menu {
+  display: block;
+}
+
+.pet-menu button {
+  padding: 6px 12px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--panel);
+  color: var(--text);
+  font: inherit;
+  font-size: 13px;
+  white-space: nowrap;
+  box-shadow: 0 8px 24px rgb(0 0 0 / 35%);
+  cursor: pointer;
+}
+
+.pet-menu button:hover,
+.pet-menu button:focus-visible {
+  border-color: var(--accent);
 }
 
 /* D-107: the whole chat column: she walks on its bottom edge, the window's, in front of
@@ -3974,4 +4024,24 @@ button:disabled {
   border-color: transparent;
   background: transparent;
   color: var(--muted);
+}
+
+/* A short note on the picture: copied, or where it was saved (D-104) */
+.picture-note {
+  position: absolute;
+  left: 50%;
+  bottom: 12px;
+  z-index: 2;
+  max-width: calc(100% - 24px);
+  margin: 0;
+  padding: 6px 12px;
+  overflow: hidden;
+  border-radius: 999px;
+  background: rgb(0 0 0 / 70%);
+  color: #fff;
+  font-size: 13px;
+  white-space: nowrap;
+  text-overflow: ellipsis;
+  transform: translateX(-50%);
+  pointer-events: none;
 }

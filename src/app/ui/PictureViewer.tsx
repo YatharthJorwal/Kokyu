@@ -8,13 +8,29 @@ import { KERNEL_HTTP_URL } from "../../net/kernel";
 import { actions } from "../store";
 import { Icon } from "./Icon";
 
+/** The File System Access API's Save As (Chromium, so WebView2), not yet in TypeScript's DOM types. */
+type SaveAsWindow = Window & {
+  showSaveFilePicker?: (options: {
+    suggestedName: string;
+    types: { description: string; accept: Record<string, string[]> }[];
+  }) => Promise<{ name: string; createWritable: () => Promise<{ write: (data: Blob) => Promise<void>; close: () => Promise<void> }> }>;
+};
+
 export function PictureViewer({ id, name, onClose }: { id: string; name: string; onClose: () => void }) {
   const box = useRef<HTMLDivElement>(null);
   const stage = useRef<Stage | null>(null);
   const [state, setState] = useState<"loading" | "ready" | "failed">("loading");
   const [framing, setFraming] = useState<Framing>("full");
   const [shot, setShot] = useState<{ blob: Blob; url: string } | null>(null);
-  const [copied, setCopied] = useState(false);
+  // A short note on the picture itself: copied, or where it was saved.
+  const [note, setNote] = useState<string | null>(null);
+  const timer = useRef(0);
+  const tell = (text: string) => {
+    setNote(text);
+    window.clearTimeout(timer.current);
+    timer.current = window.setTimeout(() => setNote(null), 2500);
+  };
+  useEffect(() => () => window.clearTimeout(timer.current), []);
 
   useEffect(() => {
     let gone = false;
@@ -52,18 +68,32 @@ export function PictureViewer({ id, name, onClose }: { id: string; name: string;
     if (!shot) return;
     try {
       await navigator.clipboard.write([new ClipboardItem({ "image/png": shot.blob })]);
-      setCopied(true);
-      window.setTimeout(() => setCopied(false), 1500);
+      tell("Copied. Paste it into the image model.");
     } catch {
       actions.toast("The picture could not be copied. Use Save instead.");
     }
   };
-  const save = () => {
+  // Asks where to save (the window's Save As); a webview without it saves to Downloads.
+  const save = async () => {
     if (!shot) return;
-    const a = document.createElement("a");
-    a.href = shot.url;
-    a.download = `${name}.png`;
-    a.click();
+    const ask = (window as SaveAsWindow).showSaveFilePicker;
+    if (!ask) {
+      const a = document.createElement("a");
+      a.href = shot.url;
+      a.download = `${name}.png`;
+      a.click();
+      tell(`Saved to Downloads as ${name}.png`);
+      return;
+    }
+    try {
+      const file = await ask({ suggestedName: `${name}.png`, types: [{ description: "PNG picture", accept: { "image/png": [".png"] } }] });
+      const out = await file.createWritable();
+      await out.write(shot.blob);
+      await out.close();
+      tell(`Saved as ${file.name}`);
+    } catch (e) {
+      if ((e as Error).name !== "AbortError") actions.toast("The picture could not be saved there. Try another folder.");
+    }
   };
 
   return (
@@ -78,6 +108,11 @@ export function PictureViewer({ id, name, onClose }: { id: string; name: string;
         <div className="picture-view">
           <div ref={box} className={shot ? "stage-box hidden" : "stage-box"} />
           {shot ? <img src={shot.url} alt={`${name}, as taken`} /> : null}
+          {note ? (
+            <p className="picture-note" role="status">
+              {note}
+            </p>
+          ) : null}
           {state === "loading" ? <p className="stage-note">Bringing {name} in…</p> : null}
           {state === "failed" ? <p className="stage-note">{name}'s model could not be loaded.</p> : null}
         </div>
@@ -86,11 +121,11 @@ export function PictureViewer({ id, name, onClose }: { id: string; name: string;
             <button type="button" className="ghost" onClick={() => setShot(null)}>
               Take another
             </button>
-            <button type="button" onClick={save}>
-              Save
+            <button type="button" onClick={() => void save()}>
+              Save as…
             </button>
             <button type="button" className="primary" onClick={() => void copy()}>
-              {copied ? "Copied" : "Copy"}
+              Copy
             </button>
           </div>
         ) : (

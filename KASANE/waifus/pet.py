@@ -26,16 +26,20 @@ POSES: tuple[str, ...] = (
 )
 HEIGHT = 320                    # idle's height in px once saved; the window scales it by Size
 MAX_SIDE = 4096                 # a bigger sheet is scaled down before cutting
-# The size checker (D-107): the box each pose must fit, as (width, height) in HEIGHTs.
-# The image model often draws some cells larger than others (her head bigger when
-# sitting or lying), so a pose drawn too big for its box is shrunk to fit. Never grown:
-# an arm raised or a hand on the chin may legitimately make a pose shorter or taller.
+# The size checker (D-107). The image model draws some cells larger than others (her
+# head bigger when sitting or lying), so each pose is scaled until her head is the size
+# it is in idle (`head_scale`). When her head cannot be found with confidence (a side
+# view, say), the pose's box decides instead: a pose drawn too big for its box, as
+# (width, height) in HEIGHTs, is shrunk to fit, never grown.
 _BOX: dict[str, tuple[float, float]] = {
     **{pose: (1.0, 1.0) for pose in POSES},
     "happy": (1.0, 1.12),     # arms up
     "sit": (0.75, 0.74),
     "sleep": (0.72, 0.5),     # curled up on the floor
 }
+_HEAD = 0.42        # the top of idle that is her head and hair
+_MATCH = 0.75       # a weaker head match is not trusted
+_MATCH_PX = 80      # idle's height while matching: fast, and the same for any sheet size
 _KEY = (255, 0, 255)            # the fill colour that marks background while keying
 _THRESH = 40                    # how far from the background colour still counts as background
 
@@ -157,8 +161,10 @@ def save(waifu_id: str, labels: list[str | None]) -> None:
     tmp = _dir(waifu_id) / "live.tmp"
     shutil.rmtree(tmp, ignore_errors=True)
     tmp.mkdir(parents=True)
+    idle = images.get("idle")
     for label, img in images.items():
-        k = scale * fit(label, img.width * scale, img.height * scale)
+        head = head_scale(idle, img, lying=label == "sleep") if idle is not None and label != "idle" else None
+        k = scale / head if head is not None else scale * fit(label, img.width * scale, img.height * scale)
         size = (max(1, round(img.width * k)), max(1, round(img.height * k)))
         img.resize(size, Image.Resampling.LANCZOS).save(tmp / f"{label}.png", format="PNG", optimize=True)
     live = _dir(waifu_id) / "live"
@@ -171,6 +177,85 @@ def fit(pose: str, width: float, height: float) -> float:
     """How much to shrink a pose drawn at `width` x `height` px so it fits its box: 1 if it already does."""
     bw, bh = _BOX.get(pose, (1.0, 1.0))
     return min(1.0, bw * HEIGHT / width, bh * HEIGHT / height)
+
+
+def _gray(img):
+    import numpy as np
+    from PIL import Image
+
+    flat = Image.new("RGBA", img.size, (128, 128, 128, 255))
+    flat.alpha_composite(img)
+    return np.asarray(flat.convert("L"), dtype=np.float32)
+
+
+def _resized(img, f: float):
+    from PIL import Image
+
+    return img.resize((max(1, round(img.width * f)), max(1, round(img.height * f))), Image.Resampling.LANCZOS)
+
+
+def _best_match(field, tpl) -> float:
+    """The best normalized cross-correlation of `tpl` anywhere inside `field` (by FFT)."""
+    import numpy as np
+
+    th, tw = tpl.shape
+    fh, fw = field.shape
+    if fh < th or fw < tw:
+        return -1.0
+    n = th * tw
+    t = tpl - tpl.mean()
+    tn = float(np.sqrt((t * t).sum()))
+    if tn == 0:
+        return -1.0
+    shape = (fh + th, fw + tw)
+    corr = np.fft.irfft2(np.fft.rfft2(field, shape) * np.conj(np.fft.rfft2(t, shape)), shape)[: fh - th + 1, : fw - tw + 1]
+    c1 = np.pad(field, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+    c2 = np.pad(field * field, ((1, 0), (1, 0))).cumsum(0).cumsum(1)
+
+    def box(c):
+        return c[th:, tw:] - c[:-th, tw:] - c[th:, :-tw] + c[:-th, :-tw]
+
+    s1, s2 = box(c1), box(c2)
+    var = np.maximum(s2 - s1 * s1 / n, 0)
+    ok = var > n * 25.0      # a window flatter than std 5 is background, never her head
+    return float((corr[ok] / (np.sqrt(var[ok]) * tn)).max()) if ok.any() else -1.0
+
+
+def _match_scale(head, field, angles) -> tuple[float, float]:
+    import numpy as np
+
+    best = (-1.0, 1.0)
+    for angle in angles:
+        turned = head.rotate(angle, expand=True) if angle else head
+        for s in np.arange(0.6, 1.66, 0.025):
+            score = _best_match(field, _gray(_resized(turned, float(s))))
+            if score > best[0]:
+                best = (score, float(s))
+    return best
+
+
+def head_scale(idle, pose, *, lying: bool = False) -> float | None:
+    """How much bigger her head is drawn in `pose` than in `idle` (both at the sheet's
+    scale), or None when it cannot be found with confidence. Blocking: a few hundred ms,
+    two seconds lying down (her head is looked for turned up to 90 degrees)."""
+    from PIL import Image
+
+    f = _MATCH_PX / idle.height
+    small_idle = _resized(idle, f)
+    head = small_idle.crop((0, 0, small_idle.width, max(1, round(small_idle.height * _HEAD))))
+
+    def field_of(img):
+        small = _resized(img, f)
+        pad = Image.new("RGBA", (small.width + 2 * head.width, small.height + 2 * head.height), (0, 0, 0, 0))
+        pad.alpha_composite(small, (head.width, head.height))
+        return _gray(pad)
+
+    _, itself = _match_scale(head, field_of(idle), (0,))   # the method's own bias, removed below
+    angles = range(-90, 91, 15) if lying else (-10, 0, 10)
+    score, s = _match_scale(head, field_of(pose), angles)
+    if score < _MATCH:
+        return None
+    return min(1.4, max(0.7, s / itself))
 
 
 def remove(waifu_id: str) -> None:
