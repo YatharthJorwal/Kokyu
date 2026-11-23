@@ -59,9 +59,6 @@ __all__ = [
     "summarize",
 ]
 
-_MODEL_FALLBACKS = {"reflex": "qwen3.5:9b"}
-
-
 BLOCKED_MESSAGES = {
     decide_mod.MODEL_UNSUPPORTED: "This model can't be used yet. Switch to another model.",
     decide_mod.ROLE_PINNED_LOCAL: "Chat is set to local models only in the config. Switch to a local model.",

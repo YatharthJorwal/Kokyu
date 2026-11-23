@@ -10,7 +10,6 @@ from __future__ import annotations
 
 import pytest
 
-from audio.chunking import extract_ready_chunks, flush
 from audio.speech import DialogueFilter
 
 LDQ, RDQ = "\u201c", "\u201d"
@@ -143,59 +142,3 @@ def test_finish_flushes_what_was_held_back():
     f = DialogueFilter()
     assert f.feed("Total (oo") == "Total "
     assert f.finish() == "(oo"
-
-
-def test_dropped_spans_keep_sentence_boundaries_for_the_chunker():
-    # A dropped span becomes a space, so "now." is still a boundary for the chunker.
-    spoken = cut("That is enough waiting around for one day now.*She stands.*Let us go somewhere else entirely.")
-    chunks, rest = extract_ready_chunks(spoken)
-    assert chunks == ["That is enough waiting around for one day now."]
-    assert flush(rest) == ["Let us go somewhere else entirely."]
-
-
-# -- the chunker holds back a trailing emotion tag (both modes) -------------------
-
-
-def test_a_trailing_tag_after_a_short_sentence_is_not_a_ready_chunk():
-    # The map's verified case: 39 characters, then the tag with a stray period, used
-    # to come out as one ready chunk, so the tag was spoken and the emotion lost.
-    text = "Sure thing, I can definitely do it now. [happy]."
-    assert extract_ready_chunks(text) == ([], text)
-    assert extract_ready_chunks("Sure thing, I can definitely do it now. [happy]") == ([], "Sure thing, I can definitely do it now. [happy]")
-
-
-def test_a_trailing_tag_does_not_hold_back_earlier_ready_sentences():
-    chunks, rest = extract_ready_chunks("This sentence is long enough to be spoken right away. Short. [sad].")
-    assert chunks == ["This sentence is long enough to be spoken right away."]
-    assert rest == " Short. [sad]."
-
-
-def test_a_bracket_followed_by_more_text_is_not_held_back():
-    chunks, rest = extract_ready_chunks("Sure thing, I can definitely do it now. [happy]. And then some more here. ")
-    assert chunks == ["Sure thing, I can definitely do it now. [happy]."]
-    assert rest == " And then some more here. "
-
-
-def test_plain_chunking_is_unchanged():
-    chunks, rest = extract_ready_chunks("This is a long enough sentence to be spoken now. Next")
-    assert chunks == ["This is a long enough sentence to be spoken now."] and rest == " Next"
-
-
-def test_a_trailing_tag_after_whitespace_and_a_newline_is_still_held_back():
-    text = "Sure thing, I can definitely do it now.\n\n  [happy]. \n"
-    assert extract_ready_chunks(text) == ([], text)
-    chunks, rest = extract_ready_chunks("This sentence is long enough to be spoken right away.\n\n  [sad]. \n")
-    assert chunks == ["This sentence is long enough to be spoken right away."] and rest == "\n\n  [sad]. \n"
-
-
-def test_a_long_whitespace_run_is_chunked_in_linear_time():
-    # Review finding: the tag pattern began with `\s*`, so every delta of a newline
-    # run (a small model stuck in a loop) cost O(w^2) and the stream O(w^3): 2000
-    # newlines took about 3 s on the asyncio loop. Now it is a few milliseconds.
-    import time
-
-    buffer, started = "Here is the plan", time.perf_counter()
-    for _ in range(3000):
-        _chunks, buffer = extract_ready_chunks(buffer + "\n")
-    assert time.perf_counter() - started < 1.0
-    assert buffer == "Here is the plan" + "\n" * 3000

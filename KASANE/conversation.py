@@ -381,11 +381,6 @@ def pin_lines(pins: list[Message]) -> list[str]:
     return [f"{'The user' if m.role == 'user' else (m.speaker_name or 'You')}: {m.content}" for m in pins if m.content]
 
 
-def thread_summary(thread: Thread) -> dict[str, Any]:
-    """What the sidebar needs for one history row."""
-    return thread.to_dict()
-
-
 _manager: ConversationManager | None = None
 
 
