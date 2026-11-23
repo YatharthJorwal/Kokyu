@@ -671,3 +671,26 @@ test("a roleplay's pages open only in a roleplay, and Memory closes when another
   s = reduce(s, frame("thread_opened", { thread: thread("t4", { mode: "roleplay" }), messages: [] }, "t4"));
   assert.equal(s.story, "history"); // History closes itself when a story is picked
 });
+
+test("an error about something else does not end a started turn or bring back the old reply (audit)", () => {
+  let s = run(
+    online,
+    frame("thread_opened", { thread: thread("t1"), messages: [stored(1, "user", "hi"), stored(2, "assistant", "old")] }),
+    { kind: "regenerating" },
+    frame("turn_start", { user_text: "hi" }),
+  );
+  s = reduce(s, frame("error", { code: "unknown_thread", message: "That conversation no longer exists.", reply_to: null }, null));
+  assert.equal(s.turn, "thinking");
+  assert.ok(!s.messages.some((m) => m.text === "old"));
+});
+
+test("Regenerate skips a screen remark after the exchange, as the kernel does (audit)", () => {
+  const s = run(
+    online,
+    frame("thread_opened", {
+      thread: thread("t1"),
+      messages: [stored(1, "user", "hi"), stored(2, "assistant", "hello"), stored(3, "assistant", "You have a typo.", { ambient: true })],
+    }),
+  );
+  assert.deepEqual(lastExchange(s.messages), [0, 1]);
+});

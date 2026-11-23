@@ -118,6 +118,21 @@ async fn delete_api_key(
 }
 
 /// The tray shows the camera icon while a camera stream is open.
+/// A link in a reply opens in the user's own browser, never inside the app's webview.
+/// Only plain http(s) addresses; the window's Markdown already allows nothing else.
+#[tauri::command]
+fn open_link(url: String) -> bool {
+    let plain = (url.starts_with("https://") || url.starts_with("http://"))
+        && url.len() <= 2048
+        && !url.chars().any(|c| c.is_control() || c.is_whitespace() || c == '"');
+    plain
+        && Command::new("rundll32")
+            .args(["url.dll,FileProtocolHandler", &url])
+            .creation_flags(0x0800_0000) // CREATE_NO_WINDOW
+            .spawn()
+            .is_ok()
+}
+
 /// The disconnect banner's Reconnect (D-082): starts the kernel again when it has
 /// exited or never started. One still running is left alone; the window's socket
 /// keeps retrying it. Returns whether a start was begun.
@@ -181,7 +196,7 @@ pub fn run() {
     install_kill_on_close_job();
 
     tauri::Builder::default()
-        .invoke_handler(tauri::generate_handler![set_camera_indicator, set_api_key, delete_api_key, restart_kernel])
+        .invoke_handler(tauri::generate_handler![set_camera_indicator, set_api_key, delete_api_key, restart_kernel, open_link])
         .setup(|app| {
             let window = app
                 .get_webview_window("main")
@@ -258,6 +273,8 @@ fn spawn_kernel_now(kernel: &Arc<Mutex<Option<Child>>>, pipe: &KernelPipe) {
         }
         cmd.env("KOKYU_KEY_PIPE", "1").stdin(Stdio::piped());
 
+        // The last run's log survives one restart: Reconnect after a crash must not wipe its traceback.
+        let _ = std::fs::rename(logs_dir.join("kasane.log"), logs_dir.join("kasane.prev.log"));
         let log = match std::fs::File::create(logs_dir.join("kasane.log")) {
             Ok(file) => file,
             Err(e) => {

@@ -4,11 +4,19 @@
 // (UI1-08, D-093); tables scroll sideways when wide. In a roleplay thread (FR-MODE-7)
 // actions are italic and softer and out-of-character asides small and muted (app.css).
 
-import { useMemo, type ReactNode } from "react";
+import { invoke, isTauri } from "@tauri-apps/api/core";
+import { useMemo, type MouseEvent, type ReactNode } from "react";
 
 import { highlight, languageLabel } from "../highlight";
 import { parseMarkdown, type Block, type Inline } from "../markdown";
 import { CopyButton } from "./CopyButton";
+
+/** In the desktop app a link opens in the user's browser (the shell's open_link). */
+function openLink(e: MouseEvent, href: string): void {
+  if (!isTauri()) return;
+  e.preventDefault();
+  void invoke<boolean>("open_link", { url: href }).catch(() => undefined);
+}
 
 function Code({ lang, v, open }: { lang: string; v: string; open: boolean }) {
   const tokens = useMemo(() => highlight(v, lang), [v, lang]);
@@ -37,9 +45,10 @@ function inline(nodes: Inline[]): ReactNode[] {
       case "em":
         return <em key={i}>{inline(n.c)}</em>;
       case "link":
-        // A new window: the chat itself must never navigate away.
+        // The user's browser in the desktop app (a webview popup would be an app-looking
+        // window on a remote page); a new tab in a plain browser. The chat never navigates away.
         return (
-          <a key={i} href={n.href} target="_blank" rel="noopener noreferrer">
+          <a key={i} href={n.href} target="_blank" rel="noopener noreferrer" onClick={(e) => openLink(e, n.href)}>
             {inline(n.c)}
           </a>
         );

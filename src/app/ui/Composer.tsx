@@ -27,6 +27,7 @@ import { useDictationKey } from "../dictation-key";
 import { anyModal } from "../keys";
 import { readAloudLine, voiceStarting } from "../read-aloud";
 import { MicRecorder, blobToBase64 } from "../recorder";
+import { TEXT_MAX } from "../../net/protocol";
 import { actions, useChat, type Attachment } from "../store";
 import { Icon } from "./Icon";
 import { ModelChip } from "./ModelChip";
@@ -145,6 +146,7 @@ export function Composer() {
           <textarea
             ref={box}
             value={text}
+            maxLength={TEXT_MAX}
             onChange={(e) => {
               setText(e.target.value);
               actions.typing();
@@ -317,7 +319,7 @@ function MicButton({ dictation }: { dictation: Dictation }) {
         aria-label={label}
         aria-pressed={recording}
         title={label}
-        disabled={!usable || phase === "opening" || phase === "writing"}
+        disabled={(!usable && !recording) || phase === "opening" || phase === "writing"}   // a recording can always be stopped
         onClick={toggle}
       >
         {phase === "writing" ? <span className="spinner" aria-hidden="true" /> : <Icon name="mic" size={18} />}

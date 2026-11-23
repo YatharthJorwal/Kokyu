@@ -41,6 +41,7 @@ export class KernelSocket {
   private attempts = 0;
   private timer: number | undefined;
   private closed = false;
+  private toldOffline = false;
 
   constructor(
     private readonly handlers: KernelHandlers,
@@ -54,6 +55,7 @@ export class KernelSocket {
     this.socket = socket;
     socket.addEventListener("open", () => {
       this.attempts = 0;
+      this.toldOffline = false;
       this.handlers.onStatus("online");
       this.send("hello", { client: "main", protocol: 1 });
     });
@@ -82,7 +84,12 @@ export class KernelSocket {
 
   /** A v1 frame. Returns false when the socket is not open (nothing is queued). */
   send<T extends ClientType>(type: T, data: ClientData[T], thread: string | null = null): boolean {
-    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) return false;
+    if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
+      // A click that silently did nothing reads as a dead control (D-082): say it once.
+      if (!this.toldOffline) this.handlers.onProblem("Kōkyū's engine is not connected right now. It reconnects on its own.");
+      this.toldOffline = true;
+      return false;
+    }
     this.socket.send(JSON.stringify(clientFrame(type, data, thread)));
     return true;
   }

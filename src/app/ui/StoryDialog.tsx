@@ -3,7 +3,7 @@
 // that she keeps in mind every turn of this story, with the story's pinned messages
 // (FR-MODE-11). Both belong to roleplay only; a chat has neither.
 
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 import { canActOnMessages, canStartThread } from "../chat-state";
 import { messageTime } from "../history";
@@ -15,22 +15,23 @@ export const NOTE_MAX = 1000;
 
 export function StoryDialog() {
   const panel = useChat((s) => s.story);
+  const dirty = useRef(false);   // an unsaved Memory note: Esc and the backdrop leave it open
   useEffect(() => {
     if (!panel) return;
     const onKey = (e: globalThis.KeyboardEvent) => {
-      if (e.key === "Escape") actions.closeStory();
+      if (e.key === "Escape" && !dirty.current) actions.closeStory();
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
   }, [panel]);
   if (!panel) return null;
   return (
-    <div className="settings-backdrop" onMouseDown={(e) => e.target === e.currentTarget && actions.closeStory()}>
+    <div className="settings-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !dirty.current && actions.closeStory()}>
       <div className="story-dialog" role="dialog" aria-modal="true" aria-labelledby="story-title">
         <button type="button" className="settings-close ghost" aria-label="Close" onClick={() => actions.closeStory()}>
           ✕
         </button>
-        {panel === "history" ? <History /> : <Memory />}
+        {panel === "history" ? <History /> : <Memory dirty={dirty} />}
       </div>
     </div>
   );
@@ -73,7 +74,7 @@ function History() {
   );
 }
 
-function Memory() {
+function Memory({ dirty }: { dirty: { current: boolean } }) {
   const saved = useChat((s) => s.thread?.note ?? "");
   const name = useChat((s) => s.companion?.name ?? "She");
   const messages = useChat((s) => s.messages);
@@ -82,6 +83,8 @@ function Memory() {
   const [draft, setDraft] = useState(saved);
   useEffect(() => setDraft(saved), [saved]);
   const changed = draft.trim() !== saved.trim();
+  dirty.current = changed;
+  useEffect(() => () => void (dirty.current = false), [dirty]);   // History has no draft
   return (
     <>
       <h2 id="story-title">Memory</h2>

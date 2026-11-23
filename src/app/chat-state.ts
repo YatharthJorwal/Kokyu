@@ -52,6 +52,8 @@ export interface ChatMessage {
   model?: string | null;
   /** The line came from a file: the engine words it, so it cannot be edited. */
   file?: boolean;
+  /** A screen remark or a roleplay's opening: no exchange's part, as the kernel's _aside. */
+  aside?: boolean;
   /** Its id in the thread store (D-100): what Rewind, Pin, Swipe and New chat from here name. */
   id?: number;
   /** D-100: pinned in a roleplay, so she always keeps it in mind. */
@@ -130,6 +132,9 @@ export interface ChatState {
   /** The thread as it was before a Regenerate; it comes back if no new reply does
    * (the kernel keeps the old exchange then). */
   beforeRegenerate: ChatMessage[] | null;
+  /** The kernel has started the turn (turn_start): it always ends it with turn_done, so
+   * an error about something else (a refused rename, say) does not end it here. */
+  started: boolean;
   /** D-100: the turn's stored line and reply (`exchange_saved`), until turn_done uses them. */
   saved: ServerData["exchange_saved"] | null;
   /** A switch asked for mid-reply; she takes over from the next turn (FR-S-2). */
@@ -232,6 +237,7 @@ export const initialState: ChatState = {
   companion: null,
   pendingCompanion: null,
   beforeRegenerate: null,
+  started: false,
   saved: null,
   roster: [],
   search: null,
@@ -284,6 +290,7 @@ export function fromStored(m: ThreadMessage): ChatMessage {
     ts: m.ts,
     model: m.role === "assistant" ? m.model_ref : null,
     file: m.meta?.attachment ? true : undefined,
+    aside: m.meta?.ambient || m.meta?.opening ? true : undefined,
   };
 }
 
@@ -416,10 +423,10 @@ function forCurrentThread(state: ChatState, frame: Frame): boolean {
   return frame.thread === null || state.thread === null || frame.thread === state.thread.id;
 }
 
-/** The last exchange as the kernel's last_exchange finds it, dividers skipped: the
- * indices of a user line and its reply, or of a failed turn's lone line. */
+/** The last exchange as the kernel's last_exchange finds it, dividers and asides
+ * skipped: the indices of a user line and its reply, or of a failed turn's lone line. */
 export function lastExchange(messages: ChatMessage[]): number[] | null {
-  const said = messages.flatMap((m, i) => (m.role === "divider" ? [] : [i]));
+  const said = messages.flatMap((m, i) => (m.role === "divider" || m.aside ? [] : [i]));
   const last = said[said.length - 1];
   if (last === undefined) return null;
   if (messages[last].role === "user") return [last];
@@ -501,7 +508,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         last && last.role === "user" && last.pending && last.text === user_text
           ? [...state.messages.slice(0, -1), { ...last, pending: false, ...line }]
           : [...state.messages, { key: localKey(), role: "user" as const, text: user_text, speaker: null, ts: nowS(), ...line }];
-      return { ...state, messages, turn: "thinking", streamRaw: "" };
+      return { ...state, messages, turn: "thinking", streamRaw: "", started: true };
     }
     case "token": {
       if (!forCurrentThread(state, frame)) return state;
@@ -550,7 +557,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
             },
           ]
         : withLine;
-      return { ...state, messages, beforeRegenerate: null, saved: null, turn: "idle", streamRaw: "", mood: { emotion: emotion ?? null } };
+      return { ...state, messages, beforeRegenerate: null, saved: null, started: false, turn: "idle", streamRaw: "", mood: { emotion: emotion ?? null } };
     }
     case "model_list":
       return { ...state, models: frame.data as ModelListData };
@@ -600,6 +607,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
       // and the unpriced-model notice (D-083) do not stop the turn. Anything else refused the send.
       const keepsTurn =
         failedTurn ||
+        state.started ||
         data.code === "turn_running" ||
         data.code === "vision_unavailable" ||
         data.code === "price_unknown" ||
@@ -639,7 +647,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       // get no answer: the dialog stops waiting (FR-MODE-6).
       const scenarioSave = state.scenarioSave === "pending" ? "lost" : state.scenarioSave;
       const roleplayStart = state.roleplayStart === "pending" ? { failed: "The connection to Kōkyū's engine dropped." } : state.roleplayStart;
-      return { ...next, turn: "idle", streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, reading: null, pendingCompanion: null, beforeRegenerate: null, saved: null, scenarioSave, roleplayStart };
+      return { ...next, turn: "idle", started: false, streamRaw: "", modelStatus: null, pickerOpen: false, models: null, defaults: null, screen: null, readAloud: null, reading: null, pendingCompanion: null, beforeRegenerate: null, saved: null, scenarioSave, roleplayStart };
     }
     case "problem":
       return { ...state, notice: { code: "client", text: event.reason, actions: [] } };
@@ -651,6 +659,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
             ? state.messages
             : [...state.messages, { key: localKey(), role: "user", text: event.text, speaker: null, pending: true, ts: nowS() }],
         turn: "thinking",
+        started: false,
         notice: null,
         pickerOpen: false,
       };
@@ -663,7 +672,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       const old = state.messages[drop[0]];
       const line = { ...old, key: localKey(), pending: true, failed: false, text: event.text ?? old.text, ts: event.text ? nowS() : old.ts };
       const messages = [...state.messages.filter((_, i) => !drop.includes(i)), line];
-      return { ...state, messages, beforeRegenerate: state.messages, notice: null, turn: "thinking", streamRaw: "" };
+      return { ...state, messages, beforeRegenerate: state.messages, notice: null, turn: "thinking", started: false, streamRaw: "" };
     }
     case "dismiss_notice":
       return { ...state, notice: null };

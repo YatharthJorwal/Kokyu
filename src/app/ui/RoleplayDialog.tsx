@@ -12,16 +12,17 @@ import { actions, useChat } from "../store";
 
 export function RoleplayDialog() {
   const open = useChat((s) => s.roleplayOpen);
+  const dirty = useRef(false);
   if (!open) return null;
   return (
-    <div className="settings-backdrop" onMouseDown={(e) => e.target === e.currentTarget && actions.closeRoleplay()}>
-      <RoleplayBody />
+    <div className="settings-backdrop" onMouseDown={(e) => e.target === e.currentTarget && !dirty.current && actions.closeRoleplay()}>
+      <RoleplayBody dirty={dirty} />
     </div>
   );
 }
 
 /** Mounted while the dialog is open, so each opening starts from an empty form. */
-function RoleplayBody() {
+function RoleplayBody({ dirty }: { dirty: { current: boolean } }) {
   const scenarios = useChat((s) => s.scenarios);
   const saveState = useChat((s) => s.scenarioSave);
   const startState = useChat((s) => s.roleplayStart);
@@ -46,7 +47,7 @@ function RoleplayBody() {
     const onKey = (e: globalThis.KeyboardEvent) => {
       if (e.key !== "Escape") return;
       if (confirmingNow.current !== null) setConfirming(null);
-      else actions.closeRoleplay();
+      else if (!dirty.current) actions.closeRoleplay();   // with typed text, Cancel or ✕ closes
     };
     document.addEventListener("keydown", onKey);
     return () => document.removeEventListener("keydown", onKey);
@@ -55,6 +56,7 @@ function RoleplayBody() {
   const loaded = scenarios?.find((c) => c.id === loadedId) ?? null;
   const card = cardFromForm(form);
   const blank = isBlankCard(card);
+  dirty.current = !blank && !(loaded && sameCard(loaded, card));
 
   useEffect(() => {
     firstField.current?.focus();

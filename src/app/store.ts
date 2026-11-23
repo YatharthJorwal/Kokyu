@@ -87,6 +87,9 @@ function dictationDone(d: Dictated): void {
   wait?.(d);
 }
 
+/** Stop was pressed: `speak` frames sent before the kernel heard it are not played. */
+let muted = false;
+
 /** The open in-app confirm's answer (UI1-09); one question at a time. */
 let answer: ((yes: boolean) => void) | null = null;
 
@@ -98,7 +101,8 @@ function researchThreads(): void {
 
 const socket = new KernelSocket({
   onFrame: (frame) => {
-    if (frame.type === "speak") voice.enqueue(frame.data as ServerData["speak"]);
+    // After Stop, clips already on their way are dropped until the next thing she is asked to say.
+    if (frame.type === "speak" && !muted) voice.enqueue(frame.data as ServerData["speak"]);
     if (frame.type === "spoken" && (frame.data as ServerData["spoken"]).ref === useChat.getState().reading) {
       readingSent = true;
       if (voice.idle) readingOver(); // nothing to hear (code only, or her voice did not start)
@@ -114,6 +118,9 @@ const socket = new KernelSocket({
     dispatch({ kind: "status", status });
     // The New roleplay dialog stayed open across a reconnect: its card list may be stale.
     if (status === "online" && useChat.getState().roleplayOpen) socket.send("scenario_list", {});
+    // Settings stayed open across it too: its section asks again (models were cleared).
+    const section = useChat.getState().settings;
+    if (status === "online" && section) actions.openSettings(section);
   },
   onProblem: (reason) => dispatch({ kind: "problem", reason }),
 });
@@ -141,6 +148,7 @@ export const actions = {
     const line = text.trim();
     if (!line || !canSend(useChat.getState())) return false;
     if (!socket.send("send", { text: line })) return false;
+    muted = false;
     voice.stop();
     dispatch({ kind: "sent", text: line });
     return true;
@@ -151,6 +159,7 @@ export const actions = {
   sendFile(file: Attachment, caption: string): boolean {
     if (!canSend(useChat.getState())) return false;
     if (!socket.send("send_file", { ...file, caption: caption.trim() })) return false;
+    muted = false;
     voice.stop();
     dispatch({ kind: "sent", text: null });
     return true;
@@ -158,6 +167,7 @@ export const actions = {
 
   /** Stop: halts generation and the voice; the partial reply is kept (FR-C-2). */
   stop(): void {
+    muted = true;
     voice.stop();
     socket.send("stop", {});
   },
@@ -167,6 +177,7 @@ export const actions = {
   regenerate(): void {
     const state = useChat.getState();
     if (!canRegenerate(state) || !socket.send("regenerate", {})) return;
+    muted = false;
     voice.stop();
     dispatch({ kind: "regenerating" });
   },
@@ -176,6 +187,7 @@ export const actions = {
   resend(text: string): boolean {
     const line = text.trim();
     if (!line || !canRegenerate(useChat.getState()) || !socket.send("regenerate", { text: line })) return false;
+    muted = false;
     voice.stop();
     dispatch({ kind: "regenerating", text: line });
     return true;
@@ -461,6 +473,7 @@ export const actions = {
       return;
     }
     if (!socket.send("speak_message", { ref: key, text, speaker_id: speakerId })) return;
+    muted = false;
     readingSent = false;
     dispatch({ kind: "reading", key });
   },

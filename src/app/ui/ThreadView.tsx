@@ -27,6 +27,7 @@ import {
   visibleStream,
   type ChatMessage,
 } from "../chat-state";
+import { TEXT_MAX } from "../../net/protocol";
 import { messageTime } from "../history";
 import { THINKING_STEP_S, thinkingOrder } from "../models";
 import { actions, useChat } from "../store";
@@ -200,6 +201,7 @@ function EditBox({ text, onDone }: { text: string; onDone: () => void }) {
       <textarea
         ref={box}
         value={draft}
+        maxLength={TEXT_MAX}
         aria-label="Edit your message"
         rows={Math.min(8, draft.split("\n").length + 1)}
         onChange={(e) => setDraft(e.target.value)}
@@ -504,10 +506,13 @@ export function ThreadView() {
 
   return (
     <div className="thread-wrap">
+      {/* Her reply is said once it is finished, not letter by letter as it types out. */}
+      <p className="sr-only" aria-live="polite">
+        {turn === "idle" && messages[messages.length - 1]?.role === "assistant" ? messages[messages.length - 1].text : ""}
+      </p>
       <div
         ref={box}
         className="thread"
-        aria-live="polite"
         onScroll={(e) => {
           const el = e.currentTarget;
           const bottom = el.scrollHeight - el.scrollTop - el.clientHeight < 48;

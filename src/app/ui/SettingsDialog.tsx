@@ -11,7 +11,7 @@
 
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
-import type { BudgetCaps, DoctorCheck, MemoryFact, ModelRow, ServerData, SettingsChange, SettingsData } from "../../net/protocol";
+import { FACT_MAX, URL_MAX, type BudgetCaps, type DoctorCheck, type MemoryFact, type ModelRow, type ServerData, type SettingsChange, type SettingsData } from "../../net/protocol";
 import { currentMode, modelLabel, type Companion, type SettingsSection } from "../chat-state";
 import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
 import { PICTURE_ACCEPT } from "../file-upload";
@@ -52,6 +52,17 @@ function Row({ title, about, children }: { title: string; about?: ReactNode; chi
 
 export function SettingsDialog() {
   const section = useChat((s) => s.settings);
+  const dialog = useRef<HTMLDivElement>(null);
+  const open = section !== null;
+
+  // Focus moves into the dialog, so keys no longer type into (or Enter send) the
+  // message box behind it; it goes back where it was on close.
+  useEffect(() => {
+    if (!open) return;
+    const before = document.activeElement instanceof HTMLElement ? document.activeElement : null;
+    dialog.current?.focus();
+    return () => before?.focus();
+  }, [open]);
 
   useEffect(() => {
     if (!section) return;
@@ -65,7 +76,7 @@ export function SettingsDialog() {
   if (!section) return null;
   return (
     <div className="settings-backdrop" onMouseDown={(e) => e.target === e.currentTarget && actions.closeSettings()}>
-      <div className="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
+      <div ref={dialog} tabIndex={-1} className="settings-dialog" role="dialog" aria-modal="true" aria-label="Settings">
         <nav className="settings-nav" aria-label="Settings sections">
           <h2>Settings</h2>
           {SECTIONS.map((s) => (
@@ -273,7 +284,7 @@ function OllamaForm({ prefs, saving }: { prefs: SettingsData; saving: Saving }) 
     <form className="settings-form" onSubmit={submit}>
       <label className="settings-field">
         <span>Ollama address</span>
-        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:11434" inputMode="url" spellCheck={false} />
+        <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="http://127.0.0.1:11434" inputMode="url" spellCheck={false} maxLength={URL_MAX} />
       </label>
       <div className="settings-actions">
         <button type="submit" disabled={!url.trim() || url.trim() === prefs.ollama_url}>
@@ -309,7 +320,7 @@ function CustomApiForm({ prefs, saving }: { prefs: SettingsData; saving: Saving 
         </label>
         <label className="settings-field">
           <span>Address</span>
-          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/v1" inputMode="url" spellCheck={false} />
+          <input value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://example.com/v1" inputMode="url" spellCheck={false} maxLength={URL_MAX} />
         </label>
       </div>
       <div className="settings-actions">
@@ -431,6 +442,7 @@ function VoiceSection() {
               role="switch"
               checked={readAloud?.on ?? false}
               disabled={!canToggle || !readAloud}
+              aria-label="Read aloud"
               onChange={(e) => actions.setReadAloud(e.target.checked)}
             />
             <span className="switch-track" aria-hidden="true" />
@@ -497,6 +509,7 @@ function ScreenSection() {
                 role="switch"
                 checked={screen?.[m.mode].on ?? false}
                 disabled={!canToggle || !screen}
+                aria-label={`${m.label} on now`}
                 onChange={(e) => actions.setScreenCompanion(m.mode, e.target.checked)}
               />
               <span className="switch-track" aria-hidden="true" />
@@ -508,6 +521,7 @@ function ScreenSection() {
                 role="switch"
                 checked={prefs?.screen[m.mode] ?? false}
                 disabled={!prefs}
+                aria-label={`${m.label} on at start`}
                 onChange={(e) => saving.save("screen", { screen: { [m.mode]: e.target.checked } })}
               />
               <span className="switch-track" aria-hidden="true" />
@@ -577,7 +591,7 @@ function Fact({ fact }: { fact: MemoryFact }) {
   if (draft !== null) {
     return (
       <li className="editing">
-        <textarea aria-label="Correct this fact" value={draft} autoFocus onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} />
+        <textarea aria-label="Correct this fact" value={draft} maxLength={FACT_MAX} autoFocus onChange={(e) => setDraft(e.target.value)} onKeyDown={onKey} />
         <button type="button" onClick={save}>
           Save
         </button>
@@ -694,7 +708,7 @@ function PetSection() {
       <div className="setting-group">
         <Row title="Show the pet" about="In chats and roleplays, while this companion is active.">
           <label className="switch">
-            <input type="checkbox" role="switch" checked={prefs.show} onChange={(e) => setPetPrefs({ show: e.target.checked })} />
+            <input type="checkbox" role="switch" aria-label="Show the pet" checked={prefs.show} onChange={(e) => setPetPrefs({ show: e.target.checked })} />
             <span className="switch-track" aria-hidden="true" />
           </label>
         </Row>

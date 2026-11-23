@@ -45,11 +45,16 @@ export function PictureViewer({ id, name, onClose }: { id: string; name: string;
         setState("ready");
       })
       .catch(() => !gone && setState("failed"));
-    const esc = (e: KeyboardEvent) => e.key === "Escape" && onClose();
-    window.addEventListener("keydown", esc);
+    // First, and no further: Esc closes the viewer, not the Settings dialog under it.
+    const esc = (e: KeyboardEvent) => {
+      if (e.key !== "Escape") return;
+      e.stopPropagation();
+      onClose();
+    };
+    document.addEventListener("keydown", esc, true);
     return () => {
       gone = true;
-      window.removeEventListener("keydown", esc);
+      document.removeEventListener("keydown", esc, true);
       stage.current?.dispose();
       stage.current = null;
       canvas.remove();

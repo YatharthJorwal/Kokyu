@@ -278,6 +278,9 @@ export function parseInline(text: string, options: ParseOptions = {}, depth = 0)
     if (buf) out.push({ t: "text", v: buf });
     buf = "";
   };
+  // Per marker, the end of the line already found to hold no closer for it: a long line
+  // of unclosed `*` was scanned to its end once per marker (quadratic, every frame).
+  const unclosed = new Map<string, number>();
   let i = 0;
   while (i < text.length) {
     const ch = text[i];
@@ -322,8 +325,10 @@ export function parseInline(text: string, options: ParseOptions = {}, depth = 0)
         continue;
       }
     }
-    if (ch === "*" || (ch === "_" && (i === 0 || !/\w/.test(text[i - 1])))) {
+    if ((ch === "*" || (ch === "_" && (i === 0 || !/\w/.test(text[i - 1])))) && (unclosed.get(ch) ?? -1) < i) {
       const end = findEmphasisEnd(text, i + 1, ch);
+      // No closer up to the line's end: later markers on this line have none either.
+      if (end === NO_CLOSER) unclosed.set(ch, lineEnd(text, i));
       if (end > i + 1) {
         flush();
         const c = parseInline(text.slice(i + 1, end), options, depth + 1);
@@ -391,10 +396,18 @@ function asideEnd(text: string, from: number, double: boolean): number {
   return -1;
 }
 
+function lineEnd(text: string, from: number): number {
+  const n = text.indexOf("\n", from);
+  return n === -1 ? text.length : n;
+}
+
+/** findEmphasisEnd found no closer before the line ends (not just none for this marker). */
+const NO_CLOSER = -2;
+
 function findEmphasisEnd(text: string, from: number, ch: string): number {
   // A closing marker not followed by a word character (for "_") and not doubled.
   for (let j = from; j < text.length; j += 1) {
-    if (text[j] === "\n") return -1;
+    if (text[j] === "\n") return NO_CLOSER;
     if (text[j] === ch && text[j + 1] === ch) {
       j += 1; // a doubled marker (bold inside, FR-MODE-7) is one unit, never a closer
       continue;
@@ -403,5 +416,5 @@ function findEmphasisEnd(text: string, from: number, ch: string): number {
       return j > from ? j : -1;
     }
   }
-  return -1;
+  return NO_CLOSER;
 }

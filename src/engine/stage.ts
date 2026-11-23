@@ -86,6 +86,7 @@ export async function createStage(canvas: HTMLCanvasElement, url: string, hooks:
     vrm = gltf.userData.vrm as VRM;
     if (!vrm) throw new Error("not a VRM");
   } catch (err) {
+    renderer.forceContextLoss();   // the browser caps live WebGL contexts; release it now
     renderer.dispose();
     throw err;
   }
@@ -195,6 +196,7 @@ export async function createStage(canvas: HTMLCanvasElement, url: string, hooks:
       resize.disconnect();
       scene.remove(vrm.scene);
       VRMUtils.deepDispose(vrm.scene);
+      renderer.forceContextLoss();   // the browser caps live WebGL contexts; release it now
       renderer.dispose();
     },
   };

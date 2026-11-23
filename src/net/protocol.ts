@@ -507,3 +507,8 @@ export class ReplyAccumulator {
     return stripTrailingTag(this.raw);
   }
 }
+
+/** The kernel's caps (KASANE/protocol): a longer field is refused, so the window caps it first. */
+export const TEXT_MAX = 20_000;
+export const FACT_MAX = 2_000;
+export const URL_MAX = 300;
