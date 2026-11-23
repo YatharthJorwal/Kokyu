@@ -168,8 +168,12 @@ def save(waifu_id: str, labels: list[str | None]) -> None:
         size = (max(1, round(img.width * k)), max(1, round(img.height * k)))
         img.resize(size, Image.Resampling.LANCZOS).save(tmp / f"{label}.png", format="PNG", optimize=True)
     live = _dir(waifu_id) / "live"
-    shutil.rmtree(live, ignore_errors=True)
+    old = _dir(waifu_id) / "live.old"
+    shutil.rmtree(old, ignore_errors=True)
+    if live.exists():
+        live.replace(old)   # a locked file fails this rename and the old pet stays whole
     tmp.replace(live)
+    shutil.rmtree(old, ignore_errors=True)
     shutil.rmtree(draft_dir(waifu_id), ignore_errors=True)
 
 

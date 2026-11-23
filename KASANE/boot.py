@@ -298,7 +298,15 @@ def pid_is_alive(pid: int) -> bool:
     return True
 
 
-def take_over_stale_kernel(pid_file: Path) -> None:
+def _port_taken(port: int) -> bool:
+    import socket
+
+    with socket.socket(socket.AF_INET, socket.SOCK_STREAM) as probe:
+        probe.settimeout(0.5)
+        return probe.connect_ex(("127.0.0.1", port)) == 0
+
+
+def take_over_stale_kernel(pid_file: Path, port: int | None = None) -> None:
     """Makes sure this process ends up as the *only* kernel running,
     no matter what launched it or how the previous one died.
 
@@ -332,7 +340,10 @@ def take_over_stale_kernel(pid_file: Path) -> None:
             old_pid = int(pid_file.read_text().strip())
         except (ValueError, OSError):
             old_pid = None
-        if old_pid is not None and old_pid != our_pid and pid_is_alive(old_pid):
+        # Windows reuses PIDs: after a reboot the saved one can be Word or a game. A
+        # stale kernel holds its port, so with the port free there is nothing to kill.
+        port_free = port is not None and not _port_taken(port)
+        if old_pid is not None and old_pid != our_pid and not port_free and pid_is_alive(old_pid):
             log.warning(f"found a stale kernel still running (pid {old_pid}) -- taking over")
             if sys.platform == "win32":
                 subprocess.run(["taskkill", "/PID", str(old_pid), "/F"], capture_output=True)

@@ -19,6 +19,7 @@ module.
 
 from __future__ import annotations
 
+import asyncio
 import base64
 import io
 from typing import TYPE_CHECKING
@@ -111,7 +112,7 @@ async def describe_screen() -> str:
     the internal VLM call that turns it into text. Kept separate from
     capture_screen() itself precisely so that function can stay
     synchronously unit-testable without needing to stub the LLM too."""
-    image_b64 = capture_screen(CONFIG.vision.look_max_long_edge)
+    image_b64 = await asyncio.to_thread(capture_screen, CONFIG.vision.look_max_long_edge)
     prompt = (
         "Describe what's currently on this computer screen. Focus on: "
         "what application or website is open, any visible text that "

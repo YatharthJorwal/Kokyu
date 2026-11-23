@@ -21,6 +21,7 @@ import io
 import logging
 import threading
 import time
+from concurrent.futures import ThreadPoolExecutor
 from typing import Any
 
 from config import CONFIG
@@ -33,6 +34,10 @@ WhisperModel: Any = None
 
 _model: Any = None
 _model_lock = threading.Lock()
+# One thread of its own: a timed-out load cannot be stopped, and on the shared pool every
+# retry would pin another worker until the whole kernel's to_thread calls queued forever.
+_EXECUTOR = ThreadPoolExecutor(max_workers=1, thread_name_prefix="stt")
+_running: asyncio.Future[str] | None = None
 
 # Ceiling on how long a single transcription attempt (including a
 # first-ever model load, which downloads from Hugging Face) is allowed to
@@ -148,12 +153,12 @@ async def transcribe(audio_bytes: bytes) -> str:
     failing the same clean way. A native library that's already thrown
     once mid-inference is in an unknown state; nothing about it is worth
     trusting for a second call."""
-    global _model
+    global _model, _running
+    if _running is not None and not _running.done():
+        raise STTError("dictation is still busy with the last recording; try again in a moment")
+    _running = asyncio.get_running_loop().run_in_executor(_EXECUTOR, _transcribe_sync, audio_bytes)
     try:
-        return await asyncio.wait_for(
-            asyncio.to_thread(_transcribe_sync, audio_bytes),
-            timeout=_TIMEOUT_SECONDS,
-        )
+        return await asyncio.wait_for(asyncio.shield(_running), timeout=_TIMEOUT_SECONDS)
     except asyncio.TimeoutError as exc:
         _model = None
         raise STTError(

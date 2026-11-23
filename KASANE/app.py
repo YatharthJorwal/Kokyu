@@ -21,8 +21,9 @@ import os
 import sys
 from collections.abc import AsyncIterator
 
-from fastapi import FastAPI, HTTPException, WebSocket
+from fastapi import FastAPI, HTTPException, Request, WebSocket
 from fastapi.middleware.cors import CORSMiddleware
+from starlette.middleware.trustedhost import TrustedHostMiddleware
 from fastapi.responses import FileResponse
 
 import boot
@@ -93,6 +94,10 @@ app.add_middleware(
     allow_methods=["GET"],
     allow_headers=[],
 )
+# A page that points its own domain at 127.0.0.1 (DNS rebinding) sends its own Host and
+# is refused, so it can neither read her pictures nor post /shutdown. "testserver" is
+# the test client's name; no public domain resolves to it.
+app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
 
 
 @app.websocket("/ws")
@@ -167,7 +172,7 @@ async def apply_shell_key(provider_id: str, key: str | None) -> None:
 
 
 @app.post("/shutdown")
-async def shutdown_endpoint() -> dict:
+async def shutdown_endpoint(request: Request) -> dict:
     """The shell's tray Quit asks here first, and kills the process only if this
     does not finish in time (src-tauri/src/lib.rs).
 
@@ -176,6 +181,11 @@ async def shutdown_endpoint() -> dict:
     then exits the process itself. `os._exit` rather than uvicorn's graceful drain:
     a single-user desktop app needs a bounded, explicit teardown, not a drain.
     """
+    # The shell posts with no Origin. A browser always sends one: any other web page
+    # posting here (a plain form or no-cors fetch needs no CORS) must not quit the app.
+    origin = request.headers.get("origin")
+    if origin is not None and origin not in ALLOWED_ORIGINS:
+        raise HTTPException(status_code=403, detail="not allowed")
     hub.shutdown_event.set()
 
     # 50 x 100 ms = 5 s, the grace period the shell waits before its hard kill.
@@ -196,6 +206,8 @@ async def shutdown_endpoint() -> dict:
         await read_aloud.READ_ALOUD.shutdown()
         tts.stop_server()
 
+    with contextlib.suppress(OSError):
+        (paths.logs_dir() / "kernel.pid").unlink()   # a later PID reuse must not look like a stale kernel
     sys.stdout.flush()
     sys.stderr.flush()
     # Slightly after this returns, so uvicorn still sends the response.
@@ -211,7 +223,7 @@ if __name__ == "__main__":
 
     from memory import db as memory_db
 
-    boot.take_over_stale_kernel(paths.logs_dir() / "kernel.pid")
+    boot.take_over_stale_kernel(paths.logs_dir() / "kernel.pid", port=PORT)
     # Cheap, once per start: a changed embedding model is caught here, not mid-turn.
     memory_db.check_embedding_dimension_matches()
 

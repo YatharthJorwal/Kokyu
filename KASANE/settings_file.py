@@ -54,6 +54,7 @@ def read() -> dict[str, Any]:
         return {}
     except (OSError, ValueError) as exc:
         log.warning(f"settings: {file} could not be read and is ignored: {exc}")
+        _keep_broken(file)
         return {}
     if not isinstance(data, dict):
         log.warning(f"settings: {file} is not a JSON object and is ignored")
@@ -64,6 +65,19 @@ def read() -> dict[str, Any]:
         log.warning(f"settings: '{key}' in {file} is not a section and is ignored")
         data.pop(key)
     return data
+
+
+def _keep_broken(file: Path) -> None:
+    """The next change rewrites settings.json from scratch: the unreadable one is copied
+    to settings.json.broken first (once), so a typo never costs every saved setting."""
+    broken = file.with_name(file.name + ".broken")
+    if broken.exists():
+        return
+    try:
+        broken.write_bytes(file.read_bytes())
+        log.warning(f"settings: kept the unreadable file as {broken}")
+    except OSError as exc:
+        log.warning(f"settings: could not keep a copy of {file}: {exc}")
 
 
 def write(data: dict[str, Any]) -> None:

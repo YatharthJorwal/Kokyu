@@ -62,6 +62,8 @@ def test_the_file_round_trips_and_a_broken_one_is_ignored(data_dir):
 
     settings_file.path().write_text("{not json", encoding="utf-8")
     assert settings_file.read() == {}                      # the app still starts, on config.yaml alone
+    broken = settings_file.path().with_name("settings.json.broken")
+    assert broken.read_text(encoding="utf-8") == "{not json"   # kept before a change rewrites the file
     settings_file.path().write_text("[1, 2]", encoding="utf-8")
     assert settings_file.read() == {}
     settings_file.write({"budget": "off", "llm": {"base_url": "http://localhost:1"}})   # hand-edited

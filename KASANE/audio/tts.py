@@ -281,10 +281,13 @@ async def _start_server() -> bool:
         )
         return False
 
-    process = await asyncio.to_thread(_launch_gpt_sovits)
-    if process is None:
-        return False
-    _process = process
+    if _process is not None and _process.poll() is None:
+        process = _process   # the last start outlived its timeout and is still loading: wait on it
+    else:
+        process = await asyncio.to_thread(_launch_gpt_sovits)
+        if process is None:
+            return False
+        _process = process
 
     timeout = float(launch.get("startup_timeout_s", 120))
     deadline = asyncio.get_running_loop().time() + timeout

@@ -193,8 +193,15 @@ async def test_router_warm_is_a_one_token_chat_call(monkeypatch):
     assert req.tools == ({"type": "function"},)
 
 
+class _ShellRequest:
+    """The shell's POST /shutdown: no Origin header."""
+
+    headers: dict[str, str] = {}
+
+
 @pytest.mark.asyncio
-async def test_tray_quit_stops_the_model_server_before_exiting(monkeypatch):
+async def test_tray_quit_stops_the_model_server_before_exiting(monkeypatch, tmp_path):
+    monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path / "data"))   # the pid file it removes is this test's
     stopped, exits = [], []
 
     class Rt:
@@ -204,14 +211,15 @@ async def test_tray_quit_stops_the_model_server_before_exiting(monkeypatch):
     monkeypatch.setattr(router, "get_router", lambda: Rt())
     monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
     monkeypatch.setattr(os, "_exit", lambda code: exits.append(code))
-    assert (await app.shutdown_endpoint())["status"] == "shutting down"
+    assert (await app.shutdown_endpoint(_ShellRequest()))["status"] == "shutting down"
     assert stopped == [True]                      # before os._exit, which skips the lifespan teardown
     await asyncio.sleep(0.2)
     assert exits == [0]
 
 
 @pytest.mark.asyncio
-async def test_tray_quit_waits_for_a_closing_windows_memory_pass(monkeypatch):
+async def test_tray_quit_waits_for_a_closing_windows_memory_pass(monkeypatch, tmp_path):
+    monkeypatch.setenv("KOKYU_DATA_DIR", str(tmp_path / "data"))
     # The window has left (it no longer drives or hears news) but its memory pass is
     # still running: quitting must not cut it off.
     order = []
@@ -238,7 +246,7 @@ async def test_tray_quit_waits_for_a_closing_windows_memory_pass(monkeypatch):
     monkeypatch.setattr(os, "_exit", lambda code: order.append("exit"))
     closing = asyncio.create_task(session.Session(Ws())._close())
     await asyncio.sleep(0)   # the window has left; its memory pass is running
-    await app.shutdown_endpoint()
+    await app.shutdown_endpoint(_ShellRequest())
     await closing
     await asyncio.sleep(0.2)
     assert order == ["memory pass done", "router stopped", "exit"]
@@ -263,3 +271,30 @@ async def test_an_ollama_pick_unloads_every_other_model_but_embeddings(monkeypat
     kept.clear()
     await boot.load_chat_model("api:airouter/x")             # an API pick frees the local ones too
     assert kept == [frozenset({embed})] and llm.ACTIVE_MODEL == ""
+
+
+def test_a_web_page_cannot_quit_the_kernel_or_rebind_to_it(monkeypatch):
+    # audit 2: a cross-site form post to /shutdown, and a DNS-rebound Host, are refused.
+    from fastapi.testclient import TestClient
+
+    monkeypatch.setattr(hub, "shutdown_event", asyncio.Event())
+    client = TestClient(app.app)
+    assert client.post("/shutdown", headers={"origin": "https://evil.example"}).status_code == 403
+    assert not hub.shutdown_event.is_set()
+    assert client.get("/waifus/luna/portrait", headers={"host": "evil.example:8780"}).status_code == 400
+
+
+def test_a_reused_pid_is_not_killed_while_the_port_is_free(tmp_path, monkeypatch):
+    # audit 3: after a reboot the saved pid can be any program; a free port means no stale kernel.
+    import boot
+
+    killed = []
+    pid_file = tmp_path / "kernel.pid"
+    pid_file.write_text("4242")
+    monkeypatch.setattr(boot, "pid_is_alive", lambda pid: True)
+    monkeypatch.setattr(boot, "_port_taken", lambda port: False)
+    monkeypatch.setattr(boot.subprocess, "run", lambda *a, **k: killed.append(a))
+    monkeypatch.setattr(boot.os, "kill", lambda *a: killed.append(a))
+    boot.take_over_stale_kernel(pid_file, port=8780)
+    assert killed == []
+    assert pid_file.read_text() == str(boot.os.getpid())
