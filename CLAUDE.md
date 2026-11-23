@@ -70,6 +70,7 @@ KASANE/               Python kernel. Flat modules; the folder is on sys.path (`i
   conversation.py     threads and history for a window
   companions.py       the active companion's persona and voice, nothing more
   ambient.py          screen companions (Task Guide, OCR watch)
+  safety.py           the self-harm detector: patterns, a meaning check, the reply guard (D-121)
   boot.py  hub.py     start-up order (D-060, D-097); open windows and the driver
   model_loader.py  vram.py   loading the chat model; GPU memory and the check before a load (D-065, D-072)
   doctor.py           Settings → Doctor checks (D-067)

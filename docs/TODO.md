@@ -70,7 +70,10 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] AUD-01 The repo audit's bugs fixed (D-114): `781cd84` turns, sends, regenerate, delete, memory passes; `af5b98a` shutdown and Host checks, stale PID, settings.json, voice, dictation, pet saves; `62ec66f` the window's turn, asides, Markdown speed, offline notice, links, focus, Esc, caps, labels; `38768de` decay, the profile card, looks, speech, smaller races
 - [x] AUD-03 (`684eb1d`) The audit's lean items: `chunking.extract_ready_chunks` and its tests, `conversation.thread_summary`, `router._MODEL_FALLBACKS`, the duplicate `public/vrm-animations/vrma/` (608 KB per build). Kept on the user's word: `audio/voice.py`, `audio/vad.py`, `src/engine/mic-stream.ts` and the arbiter's barge-in states, groundwork for K2's push-to-talk and hands-free voice (FR-V-6)
 - [x] UI2-00l The AI note under the message box in every mode (D-119, FR-C-11)
-- [ ] SAFE-01 The self-harm detector and crisis card (D-121, once the user approves it)
+- [x] SAFE-01 The self-harm detector and crisis card (D-121, FR-C-12) `d730ee5`
+- [ ] SAFE-02 Calibrate the detector's meaning check (`safety.similarity_floor`, `similarity_margin`) against the real `nomic-embed-text` on a labelled set; needs the user's OK to use their Ollama (D-121)
+- [ ] SAFE-03 The detector in more languages than English, before selling outside English-speaking countries (D-121)
+- [ ] UI2-00m The Stage's top-bar title overlaps the Chat | Stage switch (seen 2026-11-24)
 - [x] AUD-02 The audit fixes checked in the desktop app on 2026-11-24, driven by Claude through WebView2's debugging port: a link opens the browser and `file:`, `javascript:` and spaced URLs are refused; Ctrl+, moves focus into Settings, typing stays out of the message box, Esc returns focus; a half-filled New roleplay card survives Esc; Esc in Take her picture closes only the viewer; with the engine stopped a send says it is not connected and keeps the text, Reconnect brings it back in about 2 s and the note goes
 - [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
@@ -174,6 +177,7 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 - [x] B-9 Research for D-088: age-rating norms, laws, payment-provider rules, age-gate options; report `docs/research-age-content-2026-11.md`; the user chose 18+ (D-090)
 - [ ] B-10 The premades are explicit (D-116); deferred until before K7: find a payment provider that accepts an explicit 18+ app in writing (all those checked ban sexual products; Lemon Squeezy is closing, Gumroad bans chatbots)
 - [ ] B-11 UK: ask Ofcom's checker whether a local-only app is in scope of the Online Safety Act; block UK sales until then
+- [ ] B-13 At launch (D-120): the crisis protocol on the website, UK sales blocked at checkout until Ofcom answers, the wording "runs on your PC, no account, no servers of ours" with the line on API models
 - [ ] B-12 A lawyer's read on California SB 243 (and New York's companion law) for a bring-your-own-model desktop app: AI disclosure, crisis referral
 - [ ] B-9 Marketing plan
 

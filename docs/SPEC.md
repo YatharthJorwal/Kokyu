@@ -9,6 +9,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 
 **Changelog v1.0 → v1.1**
 - Added (2026-11-24): FR-C-11 the AI note (D-119).
+- Added (2026-11-24): FR-C-12 the self-harm detector and help card (D-121).
 - Changed (2026-11-24): FR-VP-1, FR-VP-5 the voice a buyer hears (D-115); FR-WIZ-2, 3, FR-COMP-2, 3 setup cards and the required embedder (D-117).
 - Folded in: D-059 (one API endpoint), D-064 (effort data), D-065, D-071 (VRAM checks), D-066 (failure card), D-067, D-070, D-073 (Settings, settings.json, appearance), D-068 (window layout), D-072 (one chat model in memory).
 - Added: FR-MODE (D-074, D-075); FR-M-12 model names (D-084).
@@ -62,6 +63,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-C-9 | Each message SHOULD have a ⋯ beside its bubble (on the user's left) opening a card with its time (and a reply's model): *Copy*; *Edit* on the last user line, which replaces it and its reply (`regenerate {text}`; not a line sent with a file, D-092); *Rewind to here*, not on the newest message, which asks, then deletes every later message; *Pin* in a roleplay (FR-MODE-11); *New chat from here*, a new thread of the same mode (a roleplay keeps its card) with the messages up to it (D-100). Under her latest reply: *Regenerate* (run in the kernel, D-055) and arrows through the replies it has written (*swipes*): Regenerate keeps the old replies, the shown one is what the model sees next; an edited line starts over. No like, dislike or report (D-100). | K1, UI-1 |
 | FR-C-10 | Messages MUST record: speaker waifu id and name snapshot, model ref, effort, timestamps, token counts where known. | K1 |
 | FR-C-11 | Under the message box, in every mode and never hidden, a note MUST say the companion is an AI, not a real person; in a chat, that what she says can be wrong and is no basis for facts or advice; in a roleplay, that it is fiction (D-119). | UI-2 |
+| FR-C-12 | In every mode, a user line about suicide or self-harm MUST get no reply and never reach a model, memory or the story summary; a card under it MUST point to help (findahelpline.com, 988, 116 123, the local emergency number). A reply that encourages self-harm or gives a method MUST be stopped before it shows and dropped, with the same card. The check runs locally (D-121). | UI-2 |
 
 ### 2.3 Companion switcher (FR-S)
 
