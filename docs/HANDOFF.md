@@ -12,18 +12,18 @@ A solo developer who wants direct commands, no manual file shuffling, and honest
 ## 2. What happened in session 8
 
 1. The user's UI notes, one batch at a time, each pushed: the pet's second round, sizes by head matching, the cat button and Pet settings (D-105..D-110); the Stage caption from Yuri with a Caption glow (D-111); readable accent text and the voice's start and fail notes (D-112); round swatches, five theme presets, the Stage speaking by default with paced fading captions (D-113); the sidebar badge following a switch (`783e39b`). All pushed up to `783e39b`.
-2. `/ponytail-audit` of the whole repo (four read-only reviewers, findings checked against the code), then "check rest of the stuff and fix current bugs": two more reviewers read what the first pass had skipped, and every bug was fixed in four commits, `781cd84`, `af5b98a`, `62ec66f`, `38768de`, plus the offline note going away on reconnect (docs commit). D-114 lists what a user can notice. **Not pushed** (the user had not said to).
+2. `/ponytail-audit` of the whole repo (four read-only reviewers, findings checked against the code), then "check rest of the stuff and fix current bugs": two more reviewers read what the first pass had skipped, and every bug was fixed in four commits, `781cd84`, `af5b98a`, `62ec66f`, `38768de`, plus the offline note going away on reconnect (`80ed917`). D-114 lists what a user can notice. Pushed on the user's word.
+3. "do the todo cleanup" (AUD-03, `684eb1d`): unused helpers and the duplicate animation folder deleted. The user chose to **keep the voice input code** (voice.py, vad.py, mic-stream.ts) for K2. Not pushed.
 
 ## 3. Where we stopped
 
-`npm run check` green on this PC (tsc, frontend 219, build, cargo, pytest 1387). Browser pane, injected state: Settings takes and returns focus; the offline note; the Stage's silent pacing. **Nothing from the audit was run in the desktop app.** Untracked and staying so: `assets/premade/`, `.claude/`.
+`npm run check` green on this PC (tsc, frontend 219, build, cargo, pytest 1380). Browser pane, injected state: Settings takes and returns focus; the offline note; the Stage's silent pacing. **Nothing from the audit was run in the desktop app.** Untracked and staying so: `assets/premade/`, `.claude/`.
 
 ## 4. Next session: start here
 
-1. `git status`, `git log -8 --oneline`, `npm run check`. Ask whether to push the audit commits.
+1. `git status`, `git log -8 --oneline`, `npm run check`. Ask whether to push `684eb1d` and its docs commit if they are not on origin.
 2. With the user, in the desktop app: `STATE.md` §5's new D-114 and Stage lines, then the older unchecked ones.
-3. Ask about the lean items (TODO AUD-03): deleting the old voice-mode code and the duplicate animation files.
-4. Checkpoint UI-1 is still open; UI-2's references (UI2-01) come next on the user's word.
+3. Checkpoint UI-1 is still open; UI-2's references (UI2-01) come next on the user's word.
 
 ## 5. Traps
 

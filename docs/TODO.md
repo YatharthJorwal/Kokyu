@@ -67,6 +67,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] UI2-00j (`c653031`) Readable accent text on any theme; her voice's starting and failed notes with Set up (D-112)
 - [x] UI2-00k (`ff520be, 783e39b`) Round swatches, five more theme presets; the Stage speaks by default with paced, fading captions (D-113)
 - [x] AUD-01 The repo audit's bugs fixed (D-114): `781cd84` turns, sends, regenerate, delete, memory passes; `af5b98a` shutdown and Host checks, stale PID, settings.json, voice, dictation, pet saves; `62ec66f` the window's turn, asides, Markdown speed, offline notice, links, focus, Esc, caps, labels; `38768de` decay, the profile card, looks, speech, smaller races
+- [x] AUD-03 (`684eb1d`) The audit's lean items: `chunking.extract_ready_chunks` and its tests, `conversation.thread_summary`, `router._MODEL_FALLBACKS`, the duplicate `public/vrm-animations/vrma/` (608 KB per build). Kept on the user's word: `audio/voice.py`, `audio/vad.py`, `src/engine/mic-stream.ts` and the arbiter's barge-in states, groundwork for K2's push-to-talk and hands-free voice (FR-V-6)
 - [ ] AUD-02 Check the audit fixes in the desktop app (`STATE.md` §5): a link opens the browser; Esc and focus in Settings; the offline notice; a scenario card survives Esc
 - [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
@@ -175,7 +176,6 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 
 ## Backlog (parked, not approved)
 
-- AUD-03 Lean, from the audit (2026-11-23), not done because only bugs were asked for: delete `KASANE/audio/voice.py`, `audio/vad.py` and their tests and the arbiter's voice-mode states (~480 lines nothing runs since D-097); `conversation.thread_summary`, `router._MODEL_FALLBACKS`; the byte-identical `public/vrm-animations/vrma/` copies and two stale READMEs (1.2 MB in every build); `chunking.extract_ready_chunks` (tests only)
 - AUD-04 From the audit, not fixed: `context_budget.fit_messages` can drop a user line but keep the reply after it; `forget`'s trigger fires on "dont forget …"; the camera tool's `camera_request` is not wired in the window (K2-08)
 
 - K1c follow-ups (D-075), none blocking:
