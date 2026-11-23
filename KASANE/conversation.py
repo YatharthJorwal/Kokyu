@@ -68,7 +68,7 @@ def history_from(messages: list[Message], system_message: str, max_messages: int
     turns = [
         {"role": m.role, "content": m.content}
         for m in messages
-        if m.role in ("user", "assistant") and m.content and not _aside(m)
+        if m.role in ("user", "assistant") and m.content and not _aside(m) and not m.meta.get("safety")
     ]
     if max_messages >= 0 and len(turns) > max_messages:
         turns = turns[-max_messages:] if max_messages else []

@@ -27,6 +27,7 @@ import model_loader
 import prompting
 import protocol
 import router
+import safety
 import story as story_memory
 import tools
 from audio import arbiter, latency, read_aloud, speech, speech_stream, tts
@@ -384,6 +385,25 @@ async def run_turn(
         await websocket.send_json(
             protocol.frame("turn_start", {"user_text": user_text, "sent_to": sent_to, "file": bool(attachment)}, thread=thread_id)
         )
+    # D-121: a line about suicide or self-harm gets no reply, only the help card. It is
+    # kept in the thread (marked) but never sent to a model, memory or the story summary.
+    if await safety.needs_help(user_text, roleplay=roleplay):
+        history.pop()
+        if temp_turn_flags is not None:
+            temp_turn_flags.pop()
+        with contextlib.suppress(Exception):
+            await websocket.send_json(protocol.frame("safety", {"where": "user"}, thread=thread_id))
+        if on_finished is not None:
+            try:
+                await asyncio.shield(on_finished(user_text, "", False, {"safety": "user"}))
+            except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not hide the card
+                log.warning(f"could not save the line: {exc}")
+        with contextlib.suppress(Exception):
+            await websocket.send_json(
+                protocol.frame("turn_done", {"text": "", "stopped": False, "emotion": None}, thread=thread_id)
+            )
+        return ""
+
     timings = LATENCY.begin()
     arbiter.ARBITER.on_turn_started()
     writer.WRITER.preempt()  # a timer-driven memory pass must not hold the model during a reply
@@ -475,6 +495,8 @@ async def run_turn(
     detected_emotion: str | None = None
     tool_messages: list[dict[str, Any]] = []
     usage: dict[str, Any] = {}   # the reply round's token counts, where the backend reports them (FR-C-10)
+    guard = safety.ReplyGuard()
+    harmful = False   # D-121: her reply encouraged self-harm or gave a method: stopped, dropped
     if unprompted and not local_model:
         # Her Task Guide and OCR remarks were written from screen captures: ambient
         # content an API model never sees (FR-SC-3, FR-R-7). `unprompted` holds them by identity.
@@ -490,14 +512,15 @@ async def run_turn(
             # K1-00c (D-025): the conversation runs as the `chat` role on the
             # thread's chosen model and effort. A camera/screen capture this
             # turn is ambient content and may only go to a local model.
-            async for event in router.stream_with_tools(
+            stream = router.stream_with_tools(
                 "chat",
                 fit_for_llm(messages_for_llm, offered_tools, tool_messages, num_ctx=chat_memory) + tool_messages,
                 offered_tools,
                 model_ref=model_ref,
                 effort=effort,
                 ambient=bool(look_hint),
-            ):
+            )
+            async for event in stream:
                 if event["type"] == "tool_calls":
                     saw_tool_call = True
                     # Dispatched and appended one at a time, in order --
@@ -536,9 +559,19 @@ async def run_turn(
                     await websocket.send_json(protocol.frame("error", notice, thread=thread_id))
                     continue
                 raw_text += event["text"]
+                if guard.hit(raw_text):
+                    harmful = True   # checked before the token is shown
+                    break
                 if event["text"]:
                     await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
                 timings.mark("first_token")
+            if harmful:
+                with contextlib.suppress(Exception):
+                    await stream.aclose()   # the model stops writing now
+                raw_text = ""
+                with contextlib.suppress(Exception):
+                    await websocket.send_json(protocol.frame("safety", {"where": "reply"}, thread=thread_id))
+                break
             if not saw_tool_call:
                 # A normal reply, not another tool call -- stream's fully
                 # done now, not mid-flight, so this is the only safe point
@@ -627,7 +660,7 @@ async def run_turn(
         stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
 
         async def record() -> None:
-            log_id = None if roleplay else await log_transcript_turn(
+            log_id = None if roleplay or harmful else await log_transcript_turn(
                 user_text, apply_persona_pass(final_text) if final_text else "", temp_mode, speaker=companions.speaker_of(websocket)
             )
             # K1-00: the thread store records the exchange (user line, reply text, and
@@ -640,7 +673,8 @@ async def run_turn(
             if on_finished is not None:
                 try:
                     meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to,
-                            "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out")}
+                            "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out"),
+                            "safety": "reply" if harmful else None}
                     await on_finished(user_text, final_text, stopped, {k: v for k, v in meta.items() if v is not None})
                 except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                     log.warning(f"could not save the exchange to the thread: {exc}")

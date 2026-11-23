@@ -639,6 +639,30 @@ test("a finished turn takes the stored ids, pins and swipes the engine reports",
   assert.equal(s.saved, null);
 });
 
+// D-121: a line about self-harm gets the help card, never a reply.
+test("a flagged line is marked and gets no reply", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "sent", text: "a line" });
+  s = reduce(s, frame("turn_start", { user_text: "a line" }));
+  s = reduce(s, frame("safety", { where: "user" }));
+  s = reduce(s, frame("exchange_saved", { user: stored(3, "user", "a line", { safety: "user" }), reply: null }));
+  s = reduce(s, frame("turn_done", { text: "", stopped: false }));
+  assert.deepEqual(s.messages.map((m) => [m.key, m.role, m.safety]), [["m3", "user", "user"]]);
+  assert.equal(s.turn, "idle");
+});
+
+test("a harmful reply is dropped mid-stream and the line marked", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, frame("turn_start", { user_text: "hi" }));
+  s = reduce(s, frame("token", { text: "Some words" }));
+  s = reduce(s, frame("safety", { where: "reply" }));
+  assert.equal(visibleStream(s), "");
+  s = reduce(s, frame("turn_done", { text: "", stopped: false }));
+  assert.deepEqual(s.messages.map((m) => [m.role, m.safety]), [["user", "reply"]]);
+  assert.equal(fromStored(stored(4, "user", "hi", { safety: "reply" })).safety, "reply");
+  assert.equal(fromStored(stored(5, "user", "hi", { safety: "nope" })).safety, undefined);
+});
+
 test("a changed message (a pin, a swipe) replaces its row in place", () => {
   let s = run(
     online,

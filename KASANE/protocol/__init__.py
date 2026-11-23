@@ -381,6 +381,7 @@ SERVER_TYPES: tuple[str, ...] = (
     "settings",       # K1-13b (FR-SET-2): the editable settings in effect
     "scenarios",      # FR-MODE-6: the saved scenario cards, newest first
     "exchange_saved", # D-100: the stored line and reply of a turn, sent before turn_done
+    "safety",         # D-121: the user's line, or her reply, was about self-harm: show the help card
     "message_updated",  # D-100: one stored message changed (a pin, a swipe)
     "pet_draft",      # D-103: a cut sheet's cells, for this window's Create pet
 )

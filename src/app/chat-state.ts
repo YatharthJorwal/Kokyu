@@ -62,6 +62,8 @@ export interface ChatMessage {
   /** D-100: her reply's candidates (Regenerate adds one) and which is shown. */
   swipes?: number;
   swipe?: number;
+  /** D-121: this line ("user") or her reply to it ("reply") was about self-harm: the help card shows under it. */
+  safety?: "user" | "reply";
 }
 
 export interface Notice {
@@ -292,6 +294,7 @@ export function fromStored(m: ThreadMessage): ChatMessage {
     model: m.role === "assistant" ? m.model_ref : null,
     file: m.meta?.attachment ? true : undefined,
     aside: m.meta?.ambient || m.meta?.opening ? true : undefined,
+    safety: m.meta?.safety === "user" || m.meta?.safety === "reply" ? m.meta.safety : undefined,
   };
 }
 
@@ -519,6 +522,14 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
     case "exchange_saved": {
       if (!forCurrentThread(state, frame)) return state;
       return { ...state, saved: frame.data as ServerData["exchange_saved"] };
+    }
+    case "safety": {
+      if (!forCurrentThread(state, frame)) return state;
+      // D-121: no reply is kept; whatever she had written so far goes, the card shows under the line.
+      const { where } = frame.data as ServerData["safety"];
+      const at = state.messages.map((m) => m.role).lastIndexOf("user");
+      const messages = at >= 0 ? state.messages.map((m, i) => (i === at ? { ...m, safety: where } : m)) : state.messages;
+      return { ...state, messages, streamRaw: "" };
     }
     case "message_updated": {
       if (!forCurrentThread(state, frame)) return state;

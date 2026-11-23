@@ -81,7 +81,7 @@ def story_lines(messages: list[Message]) -> list[Message]:
     screen companion remarks are not part of it."""
     return [
         m for m in messages
-        if m.role in ("user", "assistant") and m.content.strip() and not m.meta.get("ambient")
+        if m.role in ("user", "assistant") and m.content.strip() and not m.meta.get("ambient") and not m.meta.get("safety")
     ]
 
 

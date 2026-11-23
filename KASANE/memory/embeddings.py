@@ -52,9 +52,15 @@ async def embed(text: str) -> list[float]:
     EmbeddingUnreachableError on any failure -- unreachable server, non-200
     response, or a response shape that doesn't match what's documented
     above."""
+    return (await embed_many([text]))[0]
+
+
+async def embed_many(texts: list[str]) -> list[list[float]]:
+    """One vector per text, in one request (the self-harm detector's examples, D-121).
+    Same failures as embed()."""
     cfg = CONFIG.memory.embedding
     url = f"{cfg.base_url.rstrip('/')}/api/embed"
-    payload = {"model": cfg.model, "input": [text]}
+    payload = {"model": cfg.model, "input": list(texts)}
 
     try:
         async with httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0)) as client:
@@ -68,17 +74,20 @@ async def embed(text: str) -> list[float]:
         raise EmbeddingUnreachableError(f"couldn't reach {url}: {exc}") from exc
 
     try:
-        vector = data["embeddings"][0]
+        vectors = list(data["embeddings"])
+        if len(vectors) != len(texts):
+            raise IndexError(f"{len(vectors)} vectors for {len(texts)} texts")
     except (KeyError, IndexError, TypeError) as exc:
         raise EmbeddingUnreachableError(
-            f"unexpected response shape from {url}: {data!r}"
+            f"unexpected response shape from {url}: {str(data)[:300]!r}"
         ) from exc
 
-    if len(vector) != cfg.dimension:
-        raise EmbeddingUnreachableError(
-            f"{cfg.model} returned a {len(vector)}-dim vector, but "
-            f"config.yaml's memory.embedding.dimension is {cfg.dimension} -- "
-            "update the config to match (see db.py's dimension-mismatch "
-            "check for what happens if this drifts silently instead)."
-        )
-    return vector
+    for vector in vectors:
+        if len(vector) != cfg.dimension:
+            raise EmbeddingUnreachableError(
+                f"{cfg.model} returned a {len(vector)}-dim vector, but "
+                f"config.yaml's memory.embedding.dimension is {cfg.dimension} -- "
+                "update the config to match (see db.py's dimension-mismatch "
+                "check for what happens if this drifts silently instead)."
+            )
+    return vectors

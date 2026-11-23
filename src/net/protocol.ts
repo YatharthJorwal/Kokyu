@@ -84,6 +84,7 @@ export const SERVER_TYPES = [
   "settings",
   "scenarios",
   "exchange_saved",
+  "safety",
   "message_updated",
   "pet_draft",
 ] as const;
@@ -321,6 +322,8 @@ export interface ServerData {
   scenarios: { cards: SavedScenario[]; saved_id?: string };
   /** D-100: the turn's stored line and reply, just before turn_done. */
   exchange_saved: { user: ThreadMessage; reply: ThreadMessage | null };
+  /** D-121: the user's line ("user") or her reply ("reply") was about self-harm; no reply is kept. */
+  safety: { where: "user" | "reply" };
   /** D-100: one stored message changed (a pin, a swipe). */
   message_updated: { message: ThreadMessage };
   /** D-103: a cut sheet; `cells[n]` says whether cell n holds a pose (`/waifus/<id>/pet-draft/<n>`). */

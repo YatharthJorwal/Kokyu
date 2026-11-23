@@ -12,7 +12,7 @@ import { parseMarkdown, type Block, type Inline } from "../markdown";
 import { CopyButton } from "./CopyButton";
 
 /** In the desktop app a link opens in the user's browser (the shell's open_link). */
-function openLink(e: MouseEvent, href: string): void {
+export function openLink(e: MouseEvent, href: string): void {
   if (!isTauri()) return;
   e.preventDefault();
   void invoke<boolean>("open_link", { url: href }).catch(() => undefined);

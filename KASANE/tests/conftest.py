@@ -11,6 +11,20 @@ def _no_picked_model(monkeypatch):
 
 
 @pytest.fixture(autouse=True)
+def _no_safety_embedder(monkeypatch):
+    """D-121: the detector's meaning check never reaches the user's Ollama from a test:
+    patterns only, unless a test gives it vectors."""
+    import safety
+    from memory import embeddings
+
+    async def offline(texts):
+        raise embeddings.EmbeddingUnreachableError("tests have no embedder")
+
+    monkeypatch.setattr(safety, "_embed_many", offline)
+    monkeypatch.setattr(safety, "_examples", None)
+
+
+@pytest.fixture(autouse=True)
 def _no_real_unload(monkeypatch):
     """A model pick unloads the rest of Ollama (D-072); never the real one from a test."""
     import boot

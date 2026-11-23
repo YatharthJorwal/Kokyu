@@ -398,6 +398,17 @@ story:
   max_pins: 10              # pinned messages per roleplay thread, always in her prompt (D-100)
 
 # ─────────────────────────────────────────────────────────────────────────────
+# The self-harm detector (D-121): a line about suicide or self-harm gets no reply,
+# only a card pointing to help. Not a user setting; off only for development.
+# ─────────────────────────────────────────────────────────────────────────────
+safety:
+  enabled: true
+  similarity_floor: 0.72    # the meaning check: how alike a help-needed example must be
+  similarity_margin: 0.04   # and how much closer than the nearest look-alike
+  embed_timeout_s: 3        # past it, the patterns decide alone
+  examples_timeout_s: 15
+
+# ─────────────────────────────────────────────────────────────────────────────
 # Conversation model (K1, D-051). Threads with no model chosen use this.
 # null = the Ollama model in `llm.model`. Examples:
 #   local:ollama/qwen3.5:9b

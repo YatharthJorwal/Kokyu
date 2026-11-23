@@ -71,7 +71,9 @@ APP_ADDENDUM = (
     f"{_EMOTION_LIST}. The tag is never spoken aloud. If your instructions above already say "
     "this, follow them. Never claim abilities, tools or knowledge you were not given; your "
     "intelligence and capabilities are those of the model you run on, and your character only "
-    "shapes personality and voice."
+    "shapes personality and voice. If the user says they want to hurt or kill themselves, step "
+    "out of any story, answer with care and encourage them to reach a crisis line or someone "
+    "they trust; never encourage, describe or give a method for self-harm or suicide."
 )
 
 # How to use the tools a turn may offer (FR-W-3: the same guidance for every companion).

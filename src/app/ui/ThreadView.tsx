@@ -11,7 +11,7 @@
 // and a changing word sit where her reply will appear; the reply then types out
 // letter by letter (D-096).
 
-import { useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
+import { Fragment, useEffect, useLayoutEffect, useRef, useState, type CSSProperties, type KeyboardEvent } from "react";
 
 import {
   canActOnMessages,
@@ -34,7 +34,7 @@ import { actions, useChat } from "../store";
 import { revealTo } from "../typewriter";
 import { Heart } from "./Heart";
 import { Icon } from "./Icon";
-import { Markdown } from "./Markdown";
+import { Markdown, openLink } from "./Markdown";
 import { Menu, type MenuItem } from "./Menu";
 import { Portrait } from "./Portrait";
 
@@ -292,6 +292,39 @@ function Message({
 
 /** FR-R-5 (K1-12): a failed turn says why on the turn itself, with Retry and
  * Switch model. Never a quiet answer from another model. */
+/** D-121: under a line about suicide or self-harm, in place of a reply: where to find help. */
+function HelpCard({ where, name }: { where: "user" | "reply"; name: string | null }) {
+  const link = (href: string, label: string) => (
+    <a href={href} target="_blank" rel="noopener noreferrer" onClick={(e) => openLink(e, href)}>
+      {label}
+    </a>
+  );
+  return (
+    <div className="help-card" role="note">
+      <p className="help-card-title">Help is available</p>
+      <p>
+        If you're thinking about hurting yourself, you don't have to go through it alone. Someone can talk with you
+        right now, free and in confidence:
+      </p>
+      <ul>
+        <li>{link("https://findahelpline.com", "findahelpline.com")}: a helpline in your country</li>
+        <li>
+          US: call or text <strong>988</strong>
+        </li>
+        <li>
+          UK and Ireland: call <strong>116 123</strong> (Samaritans)
+        </li>
+      </ul>
+      <p>If you are in danger now, call your local emergency number.</p>
+      <p className="help-card-why">
+        {where === "reply"
+          ? `${name ? `${name}'s` : "Her"} reply was stopped: it could have encouraged self-harm.`
+          : `This message was not sent to ${name ?? "her"}.`}
+      </p>
+    </div>
+  );
+}
+
 function TurnFailure() {
   const failure = useChat(turnFailure);
   const canPick = useChat(canPickModel);
@@ -535,16 +568,18 @@ export function ThreadView() {
           <div className="thread-spacer" aria-hidden="true" />
         )}
         {messages.map((m, i) => (
-          <Message
-            key={m.key}
-            m={m.key === typingKey && typed !== null ? { ...m, text: typed } : m}
-            typing={m.key === typingKey}
-            first={startsGroup(messages, i)}
-            last={i === messages.length - 1}
-            lastReply={m.key === lastReplyKey}
-            editable={m.key === editable}
-            roleplay={roleplay}
-          />
+          <Fragment key={m.key}>
+            <Message
+              m={m.key === typingKey && typed !== null ? { ...m, text: typed } : m}
+              typing={m.key === typingKey}
+              first={startsGroup(messages, i)}
+              last={i === messages.length - 1}
+              lastReply={m.key === lastReplyKey}
+              editable={m.key === editable}
+              roleplay={roleplay}
+            />
+            {m.role === "user" && m.safety ? <HelpCard where={m.safety} name={companion} /> : null}
+          </Fragment>
         ))}
         <TurnFailure />
         {turn !== "idle" && !typed ? <ThinkingReply id={companionId} name={companion} /> : null}

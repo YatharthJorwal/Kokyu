@@ -387,6 +387,19 @@ class StoryConfig:
 
 
 @dataclass(frozen=True)
+class SafetyConfig:
+    """The self-harm detector (D-121). Not a user setting; `enabled` is for development
+    only. The meaning check flags a line whose nearest help-needed example is at least
+    `similarity_floor` alike and `similarity_margin` closer than the nearest look-alike."""
+
+    enabled: bool = True
+    similarity_floor: float = 0.72
+    similarity_margin: float = 0.04
+    embed_timeout_s: float = 3.0       # the line's vector; past it, patterns decide alone
+    examples_timeout_s: float = 15.0   # the examples' vectors, made once per run
+
+
+@dataclass(frozen=True)
 class EmbeddingConfig:
     base_url: str = "http://127.0.0.1:11434"
     model: str = "nomic-embed-text"
@@ -535,6 +548,7 @@ class Config:
     stt: STTConfig = field(default_factory=STTConfig)
     session: SessionConfig = field(default_factory=SessionConfig)
     story: StoryConfig = field(default_factory=StoryConfig)
+    safety: SafetyConfig = field(default_factory=SafetyConfig)
     memory: MemoryConfig = field(default_factory=MemoryConfig)
     task_guide: TaskGuideConfig = field(default_factory=TaskGuideConfig)
     ocr_watch: OCRWatchConfig = field(default_factory=OCRWatchConfig)
@@ -994,6 +1008,7 @@ def load_config(
         stt=_derive_stt(raw, voice),
         session=_build(SessionConfig, _section(raw, "session")),
         story=_build(StoryConfig, _section(raw, "story")),
+        safety=_build(SafetyConfig, _section(raw, "safety")),
         memory=_derive_memory(raw, providers, models),
         task_guide=_build(TaskGuideConfig, _section(raw, "task_guide")),
         ocr_watch=_build(OCRWatchConfig, _section(raw, "ocr_watch")),
