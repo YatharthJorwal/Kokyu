@@ -1,0 +1,6 @@
+# The premade packs' binaries, kept out of git (D-118). A build checks it has exactly these.
+# sha256  path (under assets/premade/)  bytes
+ef605a94b2033d730ca0a39d974fdff9e71a2bab212e6b327246230e3471e8bb  luna/model.vrm  15691904
+8dc03aef15892c15c5fba14e075d73f8f4247e6fad71e6cc983998e208bb9c44  luna/voice/ref.wav  751812
+2e55f7086b8d47d9f2fa0fa9085b3f7e321b2a43d88c45485824359be7babd66  yuri/model.vrm  18547992
+9cef991d73cd71e978f0c7f933bfe67713e2aa4bb685fd524c2aec4e7c5c6755  yuri/voice/ref.wav  716622

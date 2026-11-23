@@ -53,9 +53,8 @@ src-tauri/launcher.local.txt
 public/vrm/*
 !public/vrm/README.txt
 
-# --- premade companion assets ARE committed (D-041); everything else above stays ignored ---
-!assets/premade/
-!assets/premade/**
+# --- premade packs: their text is committed, their VRM and WAV are not (D-118); the
+# binaries are listed with checksums in assets/premade/ASSETS.sha256 ---
 
 # --- external backends live outside the repo ---
 tts-backend/
