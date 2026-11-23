@@ -88,6 +88,8 @@ def test_a_story_round_trips_and_goes_with_its_thread(tmp_path):
     store = ThreadStore(tmp_path / "threads.db")
     thread = store.create_thread(mode="roleplay")
     assert store.get_story(thread.id) is None
+    for n in range(10):
+        store.add_message(thread.id, "user", f"line {n}")   # ids 1..10: a summary reaches a real message
     assert store.set_story(thread.id, "They met at the station.", 6) is True
     kept = store.get_story(thread.id)
     assert (kept.summary, kept.through_message_id) == ("They met at the station.", 6) and kept.updated_at
@@ -448,3 +450,12 @@ def test_opening_a_roleplay_thread_that_is_behind_catches_it_up(kernel, story_ke
     assert manager.store.get_story(behind.id).summary == "They crossed the bridge."
     assert len(calls) == before == 1 and manager.store.get_story(temp.id).summary == "An old summary."
     assert "An old summary." not in notes[-1]
+
+
+def test_a_summary_reaching_a_rewound_message_is_not_written(tmp_path):
+    # audit: a fold finishing after a Rewind must not bring the deleted scenes back.
+    store = ThreadStore(tmp_path / "threads.db")
+    thread = store.create_thread(mode="roleplay")
+    store.add_message(thread.id, "user", "kept")
+    assert store.set_story(thread.id, "Scenes that were rewound.", 99) is False
+    assert store.get_story(thread.id) is None

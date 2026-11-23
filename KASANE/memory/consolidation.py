@@ -100,7 +100,7 @@ async def distill(transcript: str) -> Distilled | None:
 
 def _fact_from(item) -> FactCandidate | None:
     if isinstance(item, dict):
-        text = str(item.get("text", "")).strip()
+        text = str(item.get("text") or "").strip()
         subject = str(item.get("subject") or "").strip() or None
         return FactCandidate(text, subject, item.get("correction") is True) if text else None
     text = str(item).strip()
@@ -125,7 +125,7 @@ def parse_output(raw_output: str) -> Distilled:
             continue
         raw_facts = parsed.get("facts", [])
         facts = [f for f in (_fact_from(i) for i in (raw_facts if isinstance(raw_facts, list) else [])) if f]
-        return Distilled(facts, str(parsed.get("episode_summary", "")).strip())
+        return Distilled(facts, str(parsed.get("episode_summary") or "").strip())
 
     log.warning(
         f"writer: model output didn't parse as the expected JSON shape, falling back to "

@@ -316,11 +316,11 @@ async def stream_reply_with_tools(
                     if response.status_code >= 400:
                         body = await response.aread()
                         if attempt == 0 and "tools" in payload and _is_no_tools_error(body):
-                            _NO_TOOLS_MODELS.add(CONFIG.llm.model)
+                            _NO_TOOLS_MODELS.add(use_model)
                             payload.pop("tools", None)
                             tool_names = []
                             log.warning(
-                                f"'{CONFIG.llm.model}' doesn't support tool-calling "
+                                f"'{use_model}' doesn't support tool-calling "
                                 "(Ollama said so); retrying this turn without tools and not "
                                 "offering them again. Look/camera requests still work via the "
                                 "regex gate.",

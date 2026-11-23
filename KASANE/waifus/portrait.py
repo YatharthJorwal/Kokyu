@@ -9,11 +9,14 @@ gives a new face. Nothing here is written into a pack (premades are read-only, D
 """
 from __future__ import annotations
 
+import contextlib
 import io
 import json
 import logging
+import os
 import re
 import struct
+import threading
 from pathlib import Path
 
 import paths
@@ -131,9 +134,14 @@ def portrait_file(waifu: Waifu) -> Path | None:
     # her older copies only: "luna-…" must not match "luna-2-…"
     mine = re.compile(rf"{re.escape(waifu.id)}-[0-9a-f]+-[0-9a-f]+\.png")
     for old in cache_dir.glob("*.png"):
-        if mine.fullmatch(old.name):
-            old.unlink(missing_ok=True)
-    tmp = cached.with_suffix(".tmp")
-    tmp.write_bytes(png)
-    tmp.replace(cached)
+        if old.name != cached.name and mine.fullmatch(old.name):
+            with contextlib.suppress(OSError):   # another request may be serving it
+                old.unlink(missing_ok=True)
+    tmp = cached.with_name(f"{cached.stem}-{os.getpid()}-{threading.get_ident()}.tmp")   # one per request
+    try:
+        tmp.write_bytes(png)
+        tmp.replace(cached)
+    except OSError:
+        tmp.unlink(missing_ok=True)
+        return cached if cached.is_file() else None   # the other request's copy won
     return cached

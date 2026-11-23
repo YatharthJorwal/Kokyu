@@ -50,9 +50,11 @@ log = logging.getLogger(__name__)
 _SCREEN_RE = re.compile(
     r"""
       \b(?:look|see|check|read|show|watch)\b[^.?!]{0,30}\b(?:screen|monitor|display|desktop|wallpaper)\b
-    | \bwhat(?:['’]?s|\ is|\ am\ i|\ are\ we)\b[^.?!]{0,20}\b(?:on\ (?:my\ |the\ )?(?:screen|monitor|display)|playing|watching)\b
+    | \bwhat(?:['’]?s|\ is|\ am\ i|\ are\ we)\b[^.?!]{0,20}\bon\ (?:my\ |the\ )?(?:screen|monitor|display)\b
+    | \bwhat\ (?:am\ i|i['’]?m)\b[^.?!]{0,10}\b(?:playing|watching)\b
     | \bsee\b[^.?!]{0,10}\bi(?:['’]?m|\ am)\b[^.?!]{0,6}\b(?:playing|doing|watching|working)\b
-    | \buse\b[^.?!]{0,15}\b(?:ocr|tools?|eyes|vision)\b
+    | \buse\ (?:your\ )?(?:ocr|eyes|vision)\b
+    | \buse\ your\b[^.?!]{0,12}\btools?\b
     """,
     re.IGNORECASE | re.VERBOSE,
 )
@@ -62,7 +64,8 @@ _CAMERA_RE = re.compile(
     r"""
       \b(?:look|see|check|use|through)\b[^.?!]{0,15}\b(?:camera|webcam)\b
     | \b(?:look\ at|see|watch)\ me\b
-    | \b(?:what|see|tell\ me)\b[^.?!]{0,25}\b(?:holding|wearing)\b
+    | \b(?:what|see|tell\ me)\b[^.?!]{0,25}\b(?:am\ i|i['’]?m|i\ am)\b[^.?!]{0,10}\b(?:holding|wearing)\b
+    | \bwhat['’]?s\ in\ my\ hands?\b
     """,
     re.IGNORECASE | re.VERBOSE,
 )

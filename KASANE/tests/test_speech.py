@@ -160,3 +160,9 @@ def test_disabled_returns_text_unchanged():
     result = speech.prepare(raw, cfg)
     assert result.spoken == raw
     assert result.enabled is False
+
+
+def test_a_clock_time_is_not_an_emoticon():
+    # audit: "3:30" was spoken as "30"; a real :) still goes.
+    spoken, _ = speech.normalize_spoken("Meet me at 3:30, or at 10:35 :)")
+    assert "3:30" in spoken and "10:35" in spoken and ":)" not in spoken

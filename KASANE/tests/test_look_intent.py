@@ -299,3 +299,18 @@ def test_verify_followups_need_a_recent_look(monkeypatch):
     assert look_intent.detect_look_target("check its not a phone", now=outside) is None
     monkeypatch.setattr(look_intent, "_last_look_at", 0.0)
     assert look_intent.detect_look_target("check its not a phone") is None
+
+
+@pytest.mark.parametrize(
+    "text",
+    [
+        "Tell me a story about a knight holding a sword",
+        "What should I be wearing to the interview?",
+        "what was she wearing in that movie",
+        "I want to use the tools in Blender",
+        "What are we watching tonight",
+    ],
+)
+def test_ordinary_sentences_do_not_look(text):
+    # audit: these captured the camera or the screen though nobody asked her to look.
+    assert look_intent.detect_look_target(text) is None

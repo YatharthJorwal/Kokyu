@@ -1207,7 +1207,7 @@ class Session:
         """FR-MODE-9: the thread a screen check started in is still open and is not a
         story. A check takes seconds and the user may open a roleplay meanwhile
         (_change_thread does not wait for it); its remark is then dropped."""
-        return self.thread_id == thread_id and not self.in_roleplay()
+        return self.thread_id == thread_id and not self.in_roleplay() and not self.busy
 
     def _ambient_hooks(self) -> dict[str, Any]:
         """still_valid and on_remark for one screen check, bound to the open thread."""

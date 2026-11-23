@@ -62,7 +62,7 @@ def test_facts_lose_confidence_to_a_floor_but_never_disappear_and_pins_never_dec
     a = store.add_fact("old unpinned", confidence=0.7)
     b = store.add_fact("old pinned", confidence=0.7, pinned=True)
     long_ago = time.time() - 3650 * DAY
-    memory_db.execute("UPDATE facts SET last_seen_at = ?, created_ts = ?", (long_ago, long_ago))
+    memory_db.execute("UPDATE facts SET last_seen_at = ?, created_ts = ?, decayed_at = ?", (long_ago, long_ago, long_ago))
     memory_db.commit()
     decay.sweep()
     assert store.get_fact(a)["confidence"] == pytest.approx(0.1)
@@ -167,3 +167,32 @@ async def test_card_empties_when_every_fact_is_gone(memory_db, monkeypatch):
     profile.mark_dirty()
     await profile.rebuild_if_dirty()
     assert not store.get_profile_card()
+
+
+def test_repeated_sweeps_do_not_compound_a_facts_decay(memory_db, monkeypatch):
+    # audit: each writer pass sweeps; every sweep re-applied the decay since last_seen_at.
+    fid = store.add_fact("likes tea", confidence=0.8)
+    start = time.time()
+    once = decay.project(0.8, start, start + 7 * DAY, float(decay._setting("fact_half_life_days", 180)))
+    for hour in range(1, 7 * 24 + 1, 6):
+        decay.sweep(now=start + hour * 3600)
+    decay.sweep(now=start + 7 * DAY)
+    assert store.get_fact(fid)["confidence"] == pytest.approx(once, rel=1e-3)
+
+
+def test_forgetting_or_pinning_a_fact_marks_the_card_for_a_rebuild(memory_db):
+    # audit: only a writer pass that added a fact refreshed the card.
+    fid = store.add_fact("User's ex is Sam")
+    store.set_meta("profile_dirty", "0")
+    store.forget_facts([fid])
+    assert store.get_meta("profile_dirty") == "1"
+    store.set_meta("profile_dirty", "0")
+    assert store.restore_fact(fid)
+    assert store.get_meta("profile_dirty") == "1"
+
+
+def test_a_json_null_is_no_fact_and_no_episode():
+    from memory import consolidation
+
+    out = consolidation.parse_output('{"facts": [{"text": null}], "episode_summary": null}')
+    assert out.facts == [] and out.episode_summary == ""

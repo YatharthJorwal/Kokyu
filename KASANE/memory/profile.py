@@ -51,6 +51,8 @@ def _fallback(facts: list[dict]) -> str:
 
 def _ranked_facts() -> list[dict]:
     rows = store.get_fact_rows(limit=_MAX_FACTS * 2)
+    seen = {f["id"] for f in rows}
+    rows += [f for f in store.get_fact_rows() if f["pinned"] and f["id"] not in seen]
     rows.sort(key=lambda f: (not f["pinned"], -f["confidence"], -f["id"]))
     return rows[:_MAX_FACTS]
 

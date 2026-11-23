@@ -51,8 +51,8 @@ class Decision:
 
 def _tokens(text: str) -> list[str]:
     text = text.lower().replace("\u2019", "'")
+    text = text.replace("can't", "can not").replace("won't", "will not")   # before the general rule
     text = re.sub(r"n't\b", " not", text)
-    text = text.replace("can't", "can not").replace("won't", "will not")
     return re.findall(r"[a-z0-9]+", text)
 
 

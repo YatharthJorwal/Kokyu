@@ -140,7 +140,7 @@ def set_profile_card(text: str) -> None:
 # facts
 # ---------------------------------------------------------------------------
 
-_FACT_COLUMNS = "id, content, subject, source, confidence, pinned, created_ts, last_seen_at, superseded_by"
+_FACT_COLUMNS = "id, content, subject, source, confidence, pinned, created_ts, last_seen_at, superseded_by, decayed_at"
 
 
 def _fact_dict(row) -> dict[str, Any]:
@@ -154,6 +154,7 @@ def _fact_dict(row) -> dict[str, Any]:
         "created_ts": row[6],
         "last_seen_at": row[7],
         "superseded_by": row[8],
+        "decayed_at": row[9],
     }
 
 
@@ -250,7 +251,7 @@ def search_facts(query_embedding: list[float], k: int) -> list[dict[str, Any]]:
         """,
         (_prep(query_embedding), k),
     ).fetchall()
-    return [{**_fact_dict(r), "similarity": similarity(r[9])} for r in rows]
+    return [{**_fact_dict(r), "similarity": similarity(r[-1])} for r in rows]
 
 
 @_locked
@@ -269,6 +270,7 @@ def touch_fact(fact_id: int, *, bump: float = 0.05) -> None:
 def set_pinned(fact_id: int, pinned: bool) -> None:
     conn = db.get_connection()
     conn.execute("UPDATE facts SET pinned = ? WHERE id = ?", (int(pinned), fact_id))
+    _card_is_stale(conn)
     db.commit(conn)
 
 
@@ -277,7 +279,14 @@ def _retire_facts(fact_ids: list[int], marker: int) -> None:
     marks = ",".join("?" for _ in fact_ids)
     conn.execute(f"UPDATE facts SET superseded_by = ? WHERE id IN ({marks}) AND superseded_by IS NULL", [marker, *fact_ids])
     conn.execute(f"DELETE FROM facts_vec WHERE rowid IN ({marks})", fact_ids)
+    _card_is_stale(conn)
     db.commit(conn)
+
+
+def _card_is_stale(conn) -> None:
+    """The profile card quotes live facts: one leaving or coming back means a rebuild
+    (profile.mark_dirty, written here so the change and the flag commit together)."""
+    conn.execute("INSERT OR REPLACE INTO meta (key, value) VALUES ('profile_dirty', '1')")
 
 
 @_locked
@@ -298,6 +307,8 @@ def restore_fact(fact_id: int) -> bool:
     """Undo a supersede or forget. The vector comes back via the writer's backfill."""
     conn = db.get_connection()
     cursor = conn.execute("UPDATE facts SET superseded_by = NULL WHERE id = ? AND superseded_by IS NOT NULL", (fact_id,))
+    if cursor.rowcount > 0:
+        _card_is_stale(conn)
     db.commit(conn)
     return cursor.rowcount > 0
 

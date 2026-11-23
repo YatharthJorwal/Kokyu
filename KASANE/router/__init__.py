@@ -773,12 +773,19 @@ class Router:
         await self._ensure_started()
         decision = self.route(request)
         model = decide_mod.model_for("local_ollama", role, self.config.models)
-        trace_id = self.audit.start(
-            decision=dataclasses.replace(decision, executed="local_ollama:" + model),
-            privacy_class=SECRET,
-            trust=TRUSTED,
-            mode=self.config.routing.mode,
-        )
+        trace_id: str | None = None
+        try:
+            trace_id = await asyncio.to_thread(
+                partial(
+                    self.audit.start,
+                    decision=dataclasses.replace(decision, executed="local_ollama:" + model),
+                    privacy_class=SECRET,
+                    trust=TRUSTED,
+                    mode=self.config.routing.mode,
+                )
+            )
+        except Exception as exc:  # noqa: BLE001 -- the audit records calls, it does not gate them (D-058)
+            log.warning(f"audit: could not record a picture description: {exc}")
         started = time.monotonic()
         error = None
         try:
@@ -789,12 +796,19 @@ class Router:
             error = f"{type(exc).__name__}: {exc}"
             raise
         finally:
-            self.audit.finish(
-                trace_id,
-                role=role,
-                latency_ms=(time.monotonic() - started) * 1000.0,
-                error=error,
-            )
+            if trace_id is not None:
+                try:
+                    await asyncio.to_thread(
+                        partial(
+                            self.audit.finish,
+                            trace_id,
+                            role=role,
+                            latency_ms=(time.monotonic() - started) * 1000.0,
+                            error=error,
+                        )
+                    )
+                except Exception as exc:  # noqa: BLE001
+                    log.warning(f"audit: could not finish a picture description's row: {exc}")
 
 
 # -- module-level singleton + functions ---------------------------------------

@@ -576,9 +576,11 @@ class ThreadStore:
             cur = db.execute(
                 "INSERT INTO story_memory (thread_id, summary, through_message_id, updated_at)"
                 " SELECT ?, ?, ?, ? WHERE EXISTS (SELECT 1 FROM threads WHERE id = ?)"
+                # and the message it reaches to is still there (a Rewind may have deleted it meanwhile)
+                " AND (? = 0 OR EXISTS (SELECT 1 FROM messages WHERE id = ? AND thread_id = ?))"
                 " ON CONFLICT(thread_id) DO UPDATE SET summary = excluded.summary,"
                 " through_message_id = excluded.through_message_id, updated_at = excluded.updated_at",
-                (thread_id, summary, int(through_message_id), self._now(), thread_id),
+                (thread_id, summary, int(through_message_id), self._now(), thread_id, int(through_message_id), int(through_message_id), thread_id),
             )
         return cur.rowcount > 0
 

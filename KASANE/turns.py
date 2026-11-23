@@ -624,24 +624,30 @@ async def run_turn(
         # history.append() above.
         # FR-MODE-4: a roleplay exchange never reaches transcript_log, so the memory
         # writer never distils a story into facts about the real user.
-        log_id = None if roleplay else await log_transcript_turn(
-            user_text, apply_persona_pass(final_text) if final_text else "", temp_mode, speaker=companions.speaker_of(websocket)
-        )
-        # K1-00: the thread store records the exchange (user line, reply text, and
-        # whether Stop cut it off, FR-C-2). Same "never fail the turn" rule as the
-        # transcript log right above.
-        if final_text:
-            # K1-10: a model that just answered is not "failed to load" any more.
-            with contextlib.suppress(Exception):
-                await model_loader.LOADER.mark_ready(model_listing.effective_ref(model_ref, CONFIG))
-        if on_finished is not None:
-            stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
-            try:
-                meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to,
-                        "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out")}
-                await on_finished(user_text, final_text, stopped, {k: v for k, v in meta.items() if v is not None})
-            except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
-                log.warning(f"could not save the exchange to the thread: {exc}")
+        stopped = isinstance(sys.exc_info()[1], asyncio.CancelledError)
+
+        async def record() -> None:
+            log_id = None if roleplay else await log_transcript_turn(
+                user_text, apply_persona_pass(final_text) if final_text else "", temp_mode, speaker=companions.speaker_of(websocket)
+            )
+            # K1-00: the thread store records the exchange (user line, reply text, and
+            # whether Stop cut it off, FR-C-2). Same "never fail the turn" rule as the
+            # transcript log right above.
+            if final_text:
+                # K1-10: a model that just answered is not "failed to load" any more.
+                with contextlib.suppress(Exception):
+                    await model_loader.LOADER.mark_ready(model_listing.effective_ref(model_ref, CONFIG))
+            if on_finished is not None:
+                try:
+                    meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to,
+                            "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out")}
+                    await on_finished(user_text, final_text, stopped, {k: v for k, v in meta.items() if v is not None})
+                except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
+                    log.warning(f"could not save the exchange to the thread: {exc}")
+
+        # Shielded: a window closing or Quit cancels the turn; a save it already began
+        # still finishes, so the last reply is never half-stored.
+        await asyncio.shield(record())
         with contextlib.suppress(Exception):
             await websocket.send_json(
                 protocol.frame(

@@ -70,3 +70,8 @@ def test_cap_marks_truncation():
     assert redact.cap("one two three four", 7).endswith("...")
     assert redact.cap("short", 100) == "short"
     assert redact.cap("anything", 0) == "anything"
+
+
+def test_forward_slash_windows_paths_are_redacted_too():
+    text, _ = redact.redact("see C:/Users/name/taxes.pdf")
+    assert "taxes.pdf" not in text

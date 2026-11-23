@@ -103,19 +103,27 @@ class SpeechStream:
 
     async def _run(self) -> None:
         pending: tuple[str, asyncio.Task[bytes]] | None = None
-        while True:
-            item = await self._queue.get()
-            if item is None:
-                break
-            display, spoken = item
-            # Start the next synthesis before awaiting the previous delivery:
-            # that is the one-clause lookahead the old path did not have.
-            task = asyncio.create_task(self._synth(spoken))
+        task: asyncio.Task[bytes] | None = None
+        try:
+            while True:
+                item = await self._queue.get()
+                if item is None:
+                    break
+                display, spoken = item
+                # Start the next synthesis before awaiting the previous delivery:
+                # that is the one-clause lookahead the old path did not have.
+                task = asyncio.create_task(self._synth(spoken))
+                if pending is not None:
+                    await self._deliver(*pending)
+                pending = (display, task)
             if pending is not None:
                 await self._deliver(*pending)
-            pending = (display, task)
-        if pending is not None:
-            await self._deliver(*pending)
+        finally:
+            # Stop or a barge-in cancels this worker: a synthesis started for a clause
+            # that will never play must not keep the voice server busy.
+            for left in (task, pending[1] if pending else None):
+                if left is not None and not left.done():
+                    left.cancel()
 
     async def _deliver(self, display: str, task: asyncio.Task[bytes]) -> None:
         try:

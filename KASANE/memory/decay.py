@@ -96,9 +96,10 @@ def sweep(now: float | None = None) -> dict[str, int]:
 
 
 def _fact_decayed_at(fact: dict[str, Any]) -> float | None:
-    # last_seen_at is refreshed whenever the fact is restated, so decay runs from
-    # the last time the user actually told us this (or from creation).
-    return fact.get("last_seen_at") or fact.get("created_ts")
+    # From the last sweep that lowered it (each sweep stores its result), else from the
+    # last time the user said it, else creation. Projecting from last_seen_at on every
+    # sweep re-applied the whole decay to an already decayed value: 0.8 hit the floor in a week.
+    return fact.get("decayed_at") or fact.get("last_seen_at") or fact.get("created_ts")
 
 
 def compression_batch(now: float | None = None) -> list[dict[str, Any]]:

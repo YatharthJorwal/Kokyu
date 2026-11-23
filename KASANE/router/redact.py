@@ -19,7 +19,7 @@ _SECRET = re.compile(
     r"|(?i:bearer)\s+[A-Za-z0-9._\-]{16,}"
     r"|(?i:api[_-]?key)\s*[:=]\s*\S{8,}",
 )
-_WINDOWS_PATH = re.compile(r"[A-Za-z]:\\[^\s\"'<>|]+")
+_WINDOWS_PATH = re.compile(r"\b[A-Za-z]:[\\/][^\s\"'<>|]+")
 _UNC_PATH = re.compile(r"\\\\[^\s\"'<>|]+")
 _EMAIL = re.compile(r"\b[\w.+-]+@[\w-]+\.[\w.-]+\b")
 _DIGITS = re.compile(r"\b\d{12,}\b")

@@ -54,7 +54,7 @@ _EMOJI = re.compile(
     "\uFE0F\u200D"
     "]+"
 )
-_EMOTICON = re.compile(r"[:;]-?[)D(Pp3]")
+_EMOTICON = re.compile(r"(?<!\w)[:;]-?[)D(Pp3](?!\w)")
 # A stray [emotion] style tag. persona.extract_emotion_tag removes the real one
 # before this runs; this is the backstop, so a hallucinated tag is never read
 # aloud verbatim.

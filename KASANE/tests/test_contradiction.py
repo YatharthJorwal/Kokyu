@@ -119,3 +119,9 @@ async def test_equal_confidence_may_replace():
 def test_keyword_overlap_ignores_negation_and_filler():
     assert c.keyword_overlap("likes pizza", "doesn't like pizza") == 1.0
     assert c.keyword_overlap("likes pizza", "uses Windows") == 0.0
+
+
+def test_cant_and_wont_negate_like_doesnt():
+    # audit: "can't" became "ca not", so "can swim" vs "can't swim" was never caught here.
+    assert c.normalize("User can't swim") == c.normalize("User can not swim")
+    assert c.normalize("User won't fly") == c.normalize("User will not fly")

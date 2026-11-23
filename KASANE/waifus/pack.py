@@ -122,7 +122,7 @@ def load_pack(root: Path, *, premade: bool = False) -> Waifu:
         raise _fail(root, "waifu.yaml is missing")
     try:
         raw = yaml.safe_load(manifest_path.read_text(encoding="utf-8"))
-    except (OSError, yaml.YAMLError) as exc:
+    except (OSError, UnicodeDecodeError, yaml.YAMLError) as exc:
         raise _fail(root, f"waifu.yaml cannot be read ({exc})") from exc
     if not isinstance(raw, dict):
         raise _fail(root, "waifu.yaml must be a mapping")
@@ -138,7 +138,10 @@ def load_pack(root: Path, *, premade: bool = False) -> Waifu:
     prompt_path = _inside(root, manifest.prompt, "prompt")
     if not prompt_path.is_file():
         raise _fail(root, f"prompt file {manifest.prompt!r} is missing")
-    prompt = prompt_path.read_text(encoding="utf-8").strip()
+    try:
+        prompt = prompt_path.read_text(encoding="utf-8").strip()
+    except (OSError, UnicodeDecodeError) as exc:
+        raise _fail(root, f"prompt file {manifest.prompt!r} cannot be read as UTF-8 text ({exc})") from exc
     if len(prompt) < MIN_PROMPT_CHARS:
         raise _fail(root, "the system prompt is empty or far too short")
     if len(prompt) > MAX_PROMPT_CHARS:
