@@ -56,3 +56,14 @@ def test_snapshot_is_serializable():
     a = arbiter.Arbiter()
     a.on_turn_started()
     assert a.snapshot() == {"state": arbiter.THINKING, "blocked_reason": None}
+
+
+def test_a_line_spoken_during_a_reply_does_not_free_the_model():
+    # A speaker click mid-reply ends before the reply does: the model stays busy until both end.
+    a = arbiter.Arbiter()
+    a.on_turn_started()          # the reply
+    a.on_turn_started()          # a line read aloud on request
+    a.on_turn_finished()         # the line ends first
+    assert a.may_speak_ambient()[0] is False
+    a.on_turn_finished()
+    assert a.may_speak_ambient() == (True, None)

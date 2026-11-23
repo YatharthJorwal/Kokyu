@@ -234,7 +234,11 @@ class MemoryWriter:
             return False
 
         plan = await self._plan(distilled, live, transcript)
-        counts = await asyncio.to_thread(self._apply, plan, last_id)
+        counts = await asyncio.to_thread(self._apply, plan, last_id, [r["id"] for r in live])
+        if counts is None:
+            # a row it read was dropped meanwhile (Rewind, a swipe, Regenerate): read again without it
+            result.skipped = "transcript_changed"
+            return True
         result.turns += len(live)
         result.facts_added += counts["added"]
         result.duplicates += counts["duplicates"]
@@ -317,10 +321,13 @@ class MemoryWriter:
             store.set_meta("last_writer_at", str(time.time()))
 
     @staticmethod
-    def _apply(plan: _Plan, last_id: int) -> dict[str, int]:
-        """Everything this chunk decided, plus the checkpoint, in one transaction."""
+    def _apply(plan: _Plan, last_id: int, read_ids: list[int] | None = None) -> dict[str, int] | None:
+        """Everything this chunk decided, plus the checkpoint, in one transaction.
+        None, and nothing written, when a row it read has been dropped since."""
         counts = {"added": 0, "duplicates": 0, "superseded": 0, "blocked": 0, "episodes": 0}
         with db.transaction():
+            if read_ids is not None and not store.transcript_rows_exist(read_ids):
+                return None
             for pf in plan.facts:
                 d = pf.decision
                 if d.action == contradiction.DUPLICATE and d.target_id is not None:

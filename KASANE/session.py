@@ -41,6 +41,7 @@ import waifus
 from audio import read_aloud, stt
 from config import CONFIG
 from memory import viewer as memory_viewer
+from threads import ThreadNotFound
 from memory import writer
 from router import listing as model_listing
 from senses import camera, ocr_watch, task_guide
@@ -52,7 +53,8 @@ log = logging.getLogger(__name__)
 Saver = Callable[[str, str, bool, dict[str, Any]], Awaitable[None]]
 
 # Only the driving window may start a turn; another one is told why (D-062).
-DRIVER_ONLY = frozenset({"send", "send_file", "regenerate", "message_rewind", "message_swipe", "message_pin"})
+# thread_delete too: a second window must not delete the thread the driving one writes to.
+DRIVER_ONLY = frozenset({"send", "send_file", "regenerate", "message_rewind", "message_swipe", "message_pin", "thread_delete"})
 
 BUSY = "Wait for the reply to finish, or press Stop."
 NO_THREADS = "Conversation history is unavailable right now."
@@ -85,6 +87,7 @@ class Session:
         self.pins: list[str] = []
         # The turn in flight runs as its own task, so the receive loop still reads Stop.
         self.turn: asyncio.Task | None = None
+        self.finishing = False   # the turn's reply is done; only its companion switch runs
         # Read aloud (D-097): the finished reply being spoken, its own task so the user
         # can type and send meanwhile; a new turn, Stop or another thread cancels it.
         self.speech: asyncio.Task | None = None
@@ -219,7 +222,13 @@ class Session:
         if msg.type in DRIVER_ONLY and not hub.drives(self.ws):
             await self.refuse("observer", "Another Kōkyū window is in charge of this conversation right now.")
             return
-        await getattr(self, f"on_{msg.type}")(msg)
+        try:
+            await getattr(self, f"on_{msg.type}")(msg)
+        except ThreadNotFound:
+            await self.refuse("unknown_thread", GONE)
+        except Exception:  # noqa: BLE001 -- one failed action must not drop the window's socket
+            log.exception(f"{msg.type} failed")
+            await self.refuse("threads_unavailable", "That did not work. Try again.")
 
     # ── small helpers ───────────────────────────────────────────────────────
 
@@ -239,6 +248,13 @@ class Session:
     @property
     def thread_id(self) -> str | None:
         return self.thread.id if self.thread is not None else None
+
+    async def settled(self) -> bool:
+        """True when no reply is in flight. A turn that already sent turn_done and is
+        only switching companions (FR-S-2) is waited out: the window shows it over."""
+        if self.busy and self.finishing and self.turn is not None:
+            await asyncio.wait({self.turn})
+        return not self.busy
 
     async def refuse(self, code: str, message: str) -> None:
         await self.ws.send_json(protocol.error_frame(code, message))
@@ -450,10 +466,12 @@ class Session:
                 self.history[:] = await self.manager.history(thread, self.system_prompt(thread))
                 self.reset_history_flags()
                 return
+            await save(user_text, reply, stopped, meta)   # first: a failed save keeps the old exchange
             await self.manager.delete_messages(old_ids)
             if old_log_id is not None:
                 await turns.drop_transcript_turn(old_log_id)
-            await save(user_text, reply, stopped, meta)
+            if (line_meta or (reply_meta and reply_meta.get("pinned"))) and self.thread_id == thread.id:
+                await self.load_pins()   # saved while the old exchange was still there
 
         return replace
 
@@ -479,11 +497,13 @@ class Session:
             pins=self.pins if mode == "roleplay" else None,
             note=(self.thread.note or None) if mode == "roleplay" and self.thread is not None else None,
         )
+        self.finishing = False
         self.turn = asyncio.create_task(self._then_switch(turn, mode))
 
     async def _then_switch(self, turn: Coroutine[Any, Any, str], mode: str) -> None:
         try:
             reply = await turn
+            self.finishing = True   # turn_done is out: the window already shows the turn over
             if reply and read_aloud.READ_ALOUD.on:
                 # D-097: read aloud once it has finished, in the voice of who wrote it
                 # (taken now, before a switch asked for mid-reply applies below).
@@ -491,6 +511,7 @@ class Session:
                 await self.hush()   # a message read on request meanwhile gives way
                 self.speech = asyncio.create_task(turns.speak_reply(self.ws, reply, mode, voice), name="read-aloud")
         finally:
+            self.finishing = True
             try:
                 await self.apply_pending_switch()
             except Exception as exc:  # noqa: BLE001 -- a failed switch must not fail the turn or the teardown
@@ -514,15 +535,18 @@ class Session:
         )
 
     async def on_send(self, msg: Any) -> None:
-        if self.busy:
-            return   # the window disables input during a reply; two turns would share one history
+        if not await self.settled():
+            # the window disables input during a reply; two turns would share one history
+            await self.refuse("turn_running", BUSY)
+            return
         await self.start_turn(msg.data.text, on_finished=self.saver())
 
     async def on_send_file(self, msg: Any) -> None:
         """The tray's Upload file (src/app/file-upload.ts reads and resizes it), turned
         into a user line. The caption goes on its own line, so the user's own words read
         as theirs next to the file's description."""
-        if self.busy:
+        if not await self.settled():
+            await self.refuse("turn_running", BUSY)
             return
         data = msg.data
         filename = data.filename or "uploaded file"
@@ -552,7 +576,7 @@ class Session:
     async def on_regenerate(self, msg: Any) -> None:
         """K1-04 (FR-C-9): Regenerate the last reply, or Retry a failed turn. The new
         reply replaces the last exchange, so the user line is stored once."""
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         if self.thread is None:
@@ -606,7 +630,7 @@ class Session:
     async def on_message_rewind(self, msg: Any) -> None:
         """Rewind to here: every later message of the open thread is deleted. A chat
         exchange's transcript row goes too, so the memory writer never learns from it."""
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         target = await self.message_here(msg.data.id)
@@ -630,7 +654,7 @@ class Session:
 
     async def on_message_swipe(self, msg: Any) -> None:
         """Shows another candidate of her latest reply; the model's history follows."""
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         message = await self.message_here(msg.data.id)
@@ -671,7 +695,7 @@ class Session:
     async def on_message_pin(self, msg: Any) -> None:
         """Pins exist only in a roleplay (D-100): a story's own memory, never the app's.
         Not during a turn: a Regenerate would replace the message and lose the pin."""
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         if not self.in_roleplay():
@@ -924,7 +948,7 @@ class Session:
         await self._change_thread("thread_delete", delete)
 
     async def _change_thread(self, what: str, change: Callable[[], Awaitable[None]]) -> None:
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         try:
@@ -995,7 +1019,7 @@ class Session:
         # Try again after a failed load. Observers only watch; the driver never reloads mid-reply.
         if not hub.drives(self.ws):
             return
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         model_loader.LOADER.request(
@@ -1008,7 +1032,7 @@ class Session:
         the card offers; the driver only, never mid-reply."""
         if not hub.drives(self.ws):
             return
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         status = model_loader.LOADER.status()
@@ -1054,7 +1078,7 @@ class Session:
         loading strip shows); otherwise it takes effect at its next load."""
         if not hub.drives(self.ws):
             return
-        if self.busy:
+        if not await self.settled():
             await self.refuse("turn_running", BUSY)
             return
         ref = msg.data.ref

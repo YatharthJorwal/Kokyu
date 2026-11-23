@@ -24,6 +24,7 @@ class Arbiter:
     def __init__(self) -> None:
         self.state = IDLE
         self.blocked_reason: str | None = None
+        self.holders = 0   # turns and spoken lines running now; idle only when the last one ends
 
     # -- transitions ---------------------------------------------------------
 
@@ -42,6 +43,7 @@ class Arbiter:
         return self.state
 
     def on_turn_started(self) -> str:
+        self.holders += 1
         if self.state != INTERRUPTING:
             self.state = THINKING
         return self.state
@@ -52,7 +54,8 @@ class Arbiter:
         return self.state
 
     def on_turn_finished(self) -> str:
-        if self.state in (SPEAKING, THINKING, INTERRUPTING):
+        self.holders = max(0, self.holders - 1)
+        if self.holders == 0 and self.state in (SPEAKING, THINKING, INTERRUPTING):
             self.state = IDLE
         return self.state
 

@@ -194,8 +194,18 @@ async def log_transcript_turn(user_text: str, assistant_text: str, temp: bool = 
     same underlying DB."""
     try:
         return await asyncio.to_thread(partial(store.add_transcript_turn, user_text, assistant_text, temp=temp, speaker=speaker))
-    except MemoryUnavailableError as exc:
+    except Exception as exc:  # noqa: BLE001 -- sqlite errors on an open connection too, not only MemoryUnavailableError
         log.warning(f"transcript log: write failed, skipping: {exc}")
+        return None
+
+
+async def _optional(what: str, work: Awaitable[str | None]) -> str | None:
+    """Memory and the senses only add context to a turn: when one fails (memory.db
+    locked, a disk full), the turn goes on without it instead of being stranded."""
+    try:
+        return await work
+    except Exception:  # noqa: BLE001
+        log.exception(f"{what} failed; the turn goes on without it")
         return None
 
 
@@ -209,9 +219,10 @@ def is_local_ref(model_ref: str | None) -> bool:
 
 
 async def drop_transcript_turn(row_id: int) -> None:
+    writer.WRITER.preempt()   # a timer pass reading this row now would learn from the dropped reply
     try:
         await asyncio.to_thread(store.drop_transcript_turn, row_id)
-    except MemoryUnavailableError as exc:
+    except Exception as exc:  # noqa: BLE001 -- sqlite errors too, not only MemoryUnavailableError
         log.warning(f"transcript log: could not drop the replaced turn: {exc}")
 
 
@@ -419,19 +430,19 @@ async def run_turn(
         # card alone, framed as the real person and not their role in the story.
         forget_hint = None
         task_hint = None
-        memory_block = await recall.build_profile_context(prompting.ROLEPLAY_PROFILE_FRAMING)
+        memory_block = await _optional("profile recall", recall.build_profile_context(prompting.ROLEPLAY_PROFILE_FRAMING))
     else:
-        forget_hint = await forget.maybe_forget(user_text)
+        forget_hint = await _optional("forget", forget.maybe_forget(user_text))
         # Phase 4 Round 2 fix -- see task_guide.py's own comment on why this
         # is a dedicated classification call rather than left to the model's
         # own set_active_task tool call: real testing showed the latter
         # doesn't fire reliably for this model. Same ephemeral-hint treatment
         # as forget_hint right above.
         # FR-SC-1: only while the user has Task Guide on.
-        task_hint = await task_guide.maybe_update_task(user_text) if task_guide.enabled() else None
+        task_hint = await _optional("task guide", task_guide.maybe_update_task(user_text)) if task_guide.enabled() else None
         if task_hint:
             await hub.broadcast_screen_status()
-        memory_block = await recall.build_recall_context(user_text, CONFIG.memory.recall_top_k)
+        memory_block = await _optional("recall", recall.build_recall_context(user_text, CONFIG.memory.recall_top_k))
     # Explicit "look at my screen / camera" requests, handled here in Python
     # instead of trusting the model to call capture_screen/capture_camera
     # itself -- see look_intent.py for the real-log evidence (2 of ~9
@@ -439,7 +450,7 @@ async def run_turn(
     # temp_mode: this is live sensing that gets spliced in for this one
     # turn, not a read from or write to persistent memory. Never in a roleplay:
     # "look at me" in a story must not capture the camera (FR-MODE-4).
-    look_hint = None if roleplay else await look_intent.maybe_look(user_text, websocket)
+    look_hint = None if roleplay else await _optional("look", look_intent.maybe_look(user_text, websocket))
     # Read aloud never changes what she writes (D-097): speech.speakable cuts the
     # finished reply instead, so there is no spoken-delivery layer in the prompt.
     # FR-MODE-5: the story so far, for a roleplay only and never in Temp Chat (D-074).

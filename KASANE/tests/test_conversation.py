@@ -870,3 +870,25 @@ def test_a_scenario_store_failure_is_reported_not_fatal(kernel, monkeypatch):
         err, _ = _until(ws, "error")
         assert err["data"]["code"] == "threads_unavailable"
         assert _scenarios(ws, "scenario_list") == []                       # the connection is still fine
+
+
+def test_a_memory_error_before_the_reply_does_not_strand_the_turn(kernel, monkeypatch):
+    # memory.db locked or the disk full: the reply still comes, is saved, and the model is free after.
+    import sqlite3
+
+    from audio import arbiter
+    from memory import forget
+
+    async def locked(*_a, **_k):
+        raise sqlite3.OperationalError("database is locked")
+
+    monkeypatch.setattr(recall, "build_recall_context", locked)
+    monkeypatch.setattr(forget, "maybe_forget", locked)
+    with kernel.websocket_connect("/ws") as ws:
+        opened, _ = _until(ws, "thread_opened")
+        ws.send_json({"v": 1, "type": "send", "data": {"text": "hello"}})
+        done, _ = _until(ws, "turn_done")
+    assert done["data"]["text"].startswith("You said: hello")
+    assert arbiter.ARBITER.may_speak_ambient() == (True, None)
+    stored = conversation.get_manager().store.messages(opened["data"]["thread"]["id"])
+    assert [m.role for m in stored] == ["user", "assistant"]

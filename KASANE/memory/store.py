@@ -494,6 +494,18 @@ def drop_transcript_turn(row_id: int) -> None:
 
 
 @_locked
+def transcript_rows_exist(ids: list[int]) -> bool:
+    """Whether every one of these transcript rows is still there (none was rewound,
+    swiped or regenerated away while a writer pass read it)."""
+    if not ids:
+        return True
+    conn = db.get_connection()
+    marks = ",".join("?" * len(ids))
+    (count,) = conn.execute(f"SELECT COUNT(*) FROM transcript_log WHERE id IN ({marks})", ids).fetchone()
+    return count == len(set(ids))
+
+
+@_locked
 def clear_transcript_log() -> None:
     conn = db.get_connection()
     conn.execute("DELETE FROM transcript_log")

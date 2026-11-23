@@ -360,3 +360,23 @@ async def test_the_profile_card_is_rebuilt_after_facts_change(memory_db, monkeyp
     await w.run_pass("session_end")
     assert store.get_profile_card() == "Likes tea and builds desktop apps."
     assert store.get_meta("profile_dirty") == "0"
+
+
+@pytest.mark.asyncio
+async def test_a_turn_dropped_while_a_pass_reads_it_never_becomes_memory(memory_db, monkeypatch, w):
+    # Rewind, a swipe or Regenerate can drop a row while the distiller is still reading it.
+    stub_embed(monkeypatch)
+    log("keep this")
+    log("rewound line")
+    dropped = store.get_transcript_after(0)[-1]["id"]
+
+    def responder(messages):
+        text = json.dumps(messages)
+        if "rewound line" in text:
+            store.drop_transcript_turn(dropped)
+            return distilled(["from the rewound line"])
+        return distilled(["from the kept line"]) if "keep this" in text else distilled()
+
+    stub_model(monkeypatch, responder)
+    await w.run_pass("timer")
+    assert store.get_all_facts() == ["from the kept line"]
