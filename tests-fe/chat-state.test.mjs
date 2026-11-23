@@ -18,6 +18,7 @@ import {
   visibleStream,
 } from "../src/app/chat-state.ts";
 import { backoffMs, dispatchRaw } from "../src/net/kernel.ts";
+import { NOT_CONNECTED } from "../src/net/protocol.ts";
 
 // K1-02: the chat window's behaviour, driven by kernel frames as they arrive.
 
@@ -693,4 +694,11 @@ test("Regenerate skips a screen remark after the exchange, as the kernel does (a
     }),
   );
   assert.deepEqual(lastExchange(s.messages), [0, 1]);
+});
+
+test("the not-connected notice goes once the engine is back (audit)", () => {
+  let s = run({ kind: "status", status: "offline" }, { kind: "problem", reason: NOT_CONNECTED });
+  assert.equal(s.notice.text, NOT_CONNECTED);
+  s = reduce(s, online);
+  assert.equal(s.notice, null);
 });

@@ -512,3 +512,6 @@ export class ReplyAccumulator {
 export const TEXT_MAX = 20_000;
 export const FACT_MAX = 2_000;
 export const URL_MAX = 300;
+
+/** Said once when a click needs the engine and it is not connected; gone when it is again. */
+export const NOT_CONNECTED = "Kōkyū's engine is not connected right now. It reconnects on its own.";

@@ -5,6 +5,7 @@
 // what the kernel does.
 
 import {
+  NOT_CONNECTED,
   stripTrailingTag,
   type CompanionInfo,
   type DoctorCheck,
@@ -641,7 +642,7 @@ export function reduce(state: ChatState, event: ChatEvent): ChatState {
       return reduceFrame(state, event.frame);
     case "status": {
       const next = { ...state, connection: event.status };
-      if (event.status === "online") return next;
+      if (event.status === "online") return state.notice?.text === NOT_CONNECTED ? { ...next, notice: null } : next;
       // A dropped connection ends whatever was streaming; the kernel restarts clean
       // and re-sends its model status on reconnect. A save or start still waiting will
       // get no answer: the dialog stops waiting (FR-MODE-6).

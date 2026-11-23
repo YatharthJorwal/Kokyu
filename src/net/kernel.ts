@@ -2,7 +2,7 @@
 // with backoff, that speaks protocol v1 both ways (D-062). No state lives here;
 // the store does that.
 
-import { clientFrame, parseFrame, type ClientData, type ClientType, type Frame } from "./protocol";
+import { NOT_CONNECTED, clientFrame, parseFrame, type ClientData, type ClientType, type Frame } from "./protocol";
 
 export const KERNEL_WS_URL = "ws://127.0.0.1:8780/ws";
 /** The same engine over HTTP: files such as her portrait (D-091). */
@@ -86,7 +86,7 @@ export class KernelSocket {
   send<T extends ClientType>(type: T, data: ClientData[T], thread: string | null = null): boolean {
     if (!this.socket || this.socket.readyState !== WebSocket.OPEN) {
       // A click that silently did nothing reads as a dead control (D-082): say it once.
-      if (!this.toldOffline) this.handlers.onProblem("Kōkyū's engine is not connected right now. It reconnects on its own.");
+      if (!this.toldOffline) this.handlers.onProblem(NOT_CONNECTED);
       this.toldOffline = true;
       return false;
     }
