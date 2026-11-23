@@ -15,9 +15,9 @@ The compact decision reference: what holds now, what is open, what was replaced.
 | # | Question | Blocks |
 |---|---|---|
 | 1 | Design references: which apps and screens the look follows. The user gives them screen by screen (D-102); Settings and the top bar so far. | UI-2 |
-| 2 | The voice a buyer hears. The premades ship their clips and transcripts (D-087) and GPT-SoVITS is set up automatically (D-080). Open: buyers without an NVIDIA GPU (D-036); the ElevenLabs plan's commercial rights for the clips (D-041). | K2, W, K7 |
-| 3 | Premade personas: explicit or not? The audience is 18+ (D-090), but every payment provider checked bans sexual products whatever the age; the report recommends non-explicit premades. Also open: a written yes from a provider, UK sales (Ofcom), a lawyer's read on California SB 243. | K7, B-3 |
-| 4 | Premade packs in git. Claude's recommendation: track `persona.md`, `waifu.yaml` and the clip transcripts in the private repo; keep VRM and WAV out of git (size, invariant 5) with a separate backup. | Every commit |
+| 2 | Decided (D-115): GPT-SoVITS on the PC or ElevenLabs with the user's key. Open: where GPT-SoVITS runs (K2-03 spike); the rights of the premades' ElevenLabs-made clips (D-041). | K2, K7 |
+| 3 | Personas: explicit (D-116). Open, deferred: a payment provider that accepts an explicit 18+ app (all checked ban sexual products); UK sales (Ofcom, B-11); a lawyer's read on California SB 243 and New York Art. 47 (B-12). | K7, B-3 |
+| 4 | Closed (D-118): the packs' text in git, VRM and WAV beside it with checksums; the user backs up those files. | — |
 | 5 | An API key for testing the API path. | K1 checkpoint |
 | 6 | Closed: her face is the VRM's own thumbnail, changeable in her profile (D-091). | — |
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
@@ -56,7 +56,7 @@ One addendum, identical for every companion, carries the emotion-tag rule, speec
 **D-039 Premade companions are read-only packs with a rights record** · Accepted · Claude · 2026-11-11
 Users duplicate a premade to edit it. Every shipped asset gets a rights record in `docs/THIRD-PARTY.md`. "Conservative by default": open question 3. Amended by D-041.
 
-**D-041 The premades are Luna and Yuri, with the user's own assets** · Accepted · User · 2026-11-12
+**D-041 The premades are Luna and Yuri, with the user's own assets** · Accepted, amended by D-118 · User · 2026-11-12
 Packs in `assets/premade/<id>/`, built by `scripts/build_premade.py`. Before release, check the ElevenLabs plan behind the clips for commercial rights. Committing assets: open question 4.
 
 **D-087 Premade characters are paid content shipped inside the app** · Accepted · User · 2026-11-17
@@ -146,7 +146,7 @@ Memory facts can be corrected, forgotten, restored; nothing is hard-deleted. Doc
 **D-006 Zero-shot voice per companion** · Accepted · User · 2026-11-11
 One GPT-SoVITS base model; each request carries the companion's reference clip, transcript and language. No weight swapping in v1.
 
-**D-036 Voice providers** · Provisional · Claude · 2026-11-11
+**D-036 Voice providers** · Provisional, amended by D-115 · Claude · 2026-11-11
 Providers `gpt_sovits` (local), `builtin` (small local default, chosen in a K2 spike) and `elevenlabs` (cloud, opt-in, badged). None of the interface is built yet; see open question 2.
 
 **D-042 GPT-SoVITS install for development** · Accepted · User · 2026-11-12
@@ -353,6 +353,19 @@ The user: "color icons in settings are oval. fix / add more theme presets. and a
 
 **D-114 What the audit's bug fixes changed for the user** · Accepted · User ("check rest of the stuff and fix current bugs"), Claude's parts · 2026-11-24
 A whole-repo audit (four reviewers, then each finding checked against the code) found bugs; all were fixed except the lean items (TODO AUD-03, AUD-04). The ones a user can notice: only the window in charge may delete a conversation (another window's delete is refused); a request to quit from a web page, or any request whose Host is not 127.0.0.1 or localhost, is refused; a link in a reply opens in the user's browser through the shell (http and https only); a click that needs the engine while it is offline says so once, and the note goes when it is back; Esc or a click outside does not close the New roleplay or story Memory dialog while it holds unsaved text (Cancel and ✕ still do); the message box, Edit box, fact editor and address fields stop at the engine's limits; a look at the camera or screen needs a first-person ask ("what am I holding", "use your tools"); an unreadable settings.json is kept as settings.json.broken; the last run's log is kept as kasane.prev.log. Amends D-070, D-082, D-095, D-100, D-101; FR-SC look phrases. Commits `781cd84`, `af5b98a`, `62ec66f`, `38768de` and the window's offline-note fix.
+
+
+**D-115 The voice a buyer hears: GPT-SoVITS on their PC, or ElevenLabs with their own key** · Accepted · User ("their own api from eleven labs … also gpt sovits if it runs on other graphic cards"), Claude's parts Assumed · 2026-11-24
+Two voices, both the user's choice. **GPT-SoVITS** runs on the user's PC and is set up by the app (D-080); a K2 spike finds where it runs (NVIDIA, CPU only, AMD, Intel) and how fast. Wherever it is offered (first-run setup, the creator, Settings → Voice) a note says a local voice needs this PC's hardware. **ElevenLabs** with the user's own key (Credential Manager): an in-app picker lists the voices on their account with a preview to play, chosen per companion, with the cloud badge (FR-VP-3). With neither, she is text only and the chat never waits. Assumed: the `builtin` CPU voice is no longer planned (brought back only if the spike finds no usable local voice without a GPU). Open: the commercial rights of the premades' ElevenLabs-made reference clips (D-041). Amends D-036; FR-VP-1, FR-VP-5; TODO K2-03, K2-06.
+
+**D-116 The premade personas are explicit** · Accepted · User ("the personas can curse and get into sexual roleplay as well") · 2026-11-24
+Luna and Yuri curse and can take part in sexual roleplay. The app is 18+ with the age check as the first step of setup (D-090, FR-WIZ-8). The research report's recommendation C (non-explicit premades) is not taken. The payment provider is **deferred**: every provider the research checked bans sexual products (`docs/research-age-content-2026-11.md` §3), so a provider that accepts the app is found before K7 (TODO B-3, B-10). UK sales (Ofcom) and California SB 243 / New York Art. 47 stay open (B-11, B-12). Closes open question 3's persona part.
+
+**D-117 First-run setup: pick the parts on cards, no accounts** · Accepted · User, Claude's parts Assumed · 2026-11-24
+After the age check, setup works like ComfyUI's: cards to pick what is installed, then the app downloads and sets each up itself with progress, cancel and resume (FR-COMP-2). **Select the brain:** open-source models to run locally through Ollama, each with its size and fit on this PC, or an API key; optional, since an API key always works. **Select the voice:** GPT-SoVITS (local, the hardware note) or ElevenLabs (a key), or none (D-115). **Speech to text:** faster-whisper, optional. **Memory:** `nomic-embed-text`, required, shown but not a choice. No login, no account, no server of ours: everything stays on the PC, and the data folder stays after uninstall unless the user chooses to delete it (FR-DIST-4). Assumed: memory's embedder runs through Ollama today, so every install sets up Ollama, even API-only ones; W may swap it for a smaller in-app embedder. Amends FR-WIZ-2, FR-WIZ-3, FR-COMP-2, FR-COMP-3; TODO W-01, W-04.
+
+**D-118 The premade packs: their text in git, their files beside it** · Accepted · Claude (the user: "its your call") · 2026-11-24
+Luna and Yuri ship with the app, whole: persona, about, traits, voice clip and transcript, VRM, and later their pet sheets. In the private repo: `waifu.yaml` (with the transcript), `persona.md`, `prompt.md`, the README. Out of git, per invariant 5: `model.vrm`, `voice/ref.wav` and pet sheets; `assets/premade/ASSETS.sha256` (in git) lists each with its SHA-256 so a build knows it has the right ones. A backup of those files off this PC is the user's (proposed: a release on the private GitHub repo). The installer bundles each pack in the app-only packed format (D-087, K7-09). Amends D-041's `.gitignore` rule, which let `.vrm` and `.wav` in. Closes open question 4.
 
 
 ## Superseded

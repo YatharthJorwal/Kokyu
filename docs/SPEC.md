@@ -8,6 +8,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 - Version: **spec v1.1**, 2026-11-17, amended 2026-11-18 (D-097). A decision that amends a row is rewritten into the row, with its D-ID; `DECISIONS.md` says why.
 
 **Changelog v1.0 → v1.1**
+- Changed (2026-11-24): FR-VP-1, FR-VP-5 the voice a buyer hears (D-115); FR-WIZ-2, 3, FR-COMP-2, 3 setup cards and the required embedder (D-117).
 - Folded in: D-059 (one API endpoint), D-064 (effort data), D-065, D-071 (VRAM checks), D-066 (failure card), D-067, D-070, D-073 (Settings, settings.json, appearance), D-068 (window layout), D-072 (one chat model in memory).
 - Added: FR-MODE (D-074, D-075); FR-M-12 model names (D-084).
 - Added: FR-MODE-12 a roleplay's Memory; changed: FR-C-4 the story tray, FR-S-1 her chip in a roleplay (D-101).
@@ -187,8 +188,8 @@ D-080: small setup modules, one per component the app installs itself; no generi
 | ID | Requirement | Phase |
 |---|---|---|
 | FR-COMP-1 | The kernel MUST detect and health-check each component (Ollama, llama.cpp server, GPT-SoVITS backend, STT model) and report its state, version and size. | K1 (Doctor), W |
-| FR-COMP-2 | **Automatic setup at first run** for GPT-SoVITS and the STT model: each has a pinned manifest (URLs, SHA-256, sizes, versions), shows progress, is cancellable and resumable, needs no terminal, and writes only inside the app-data directory. | W |
-| FR-COMP-3 | **Ollama** is installed through its official installer, which the app opens with the user's consent. Components the app starts are children under the Job Object; externally managed ones (Ollama as a service) are only monitored. | W |
+| FR-COMP-2 | **Automatic setup at first run** for what the setup cards picked (D-117): local models, GPT-SoVITS, the STT model and the memory embedder. Each has a pinned manifest (URLs, SHA-256, sizes, versions), shows progress, is cancellable and resumable, needs no terminal, and writes only inside the app-data directory. | W |
+| FR-COMP-3 | **Ollama** is installed through its official installer, which the app opens with the user's consent; every install needs it for the memory embedder (D-117). Components the app starts are children under the Job Object; externally managed ones (Ollama as a service) are only monitored. | W |
 | FR-COMP-4 | Everything else is detected and repaired through Doctor: every problem maps to a plain-language message with one primary action (*Open the installer*, *Start*, *Retry*). | W |
 | FR-COMP-5 | The Doctor panel (FR-SET-3) is the UI for components. Development keeps the existing GPT-SoVITS install (D-042). | K1, W |
 
@@ -197,8 +198,8 @@ D-080: small setup modules, one per component the app installs itself; no generi
 | ID | Requirement | Phase |
 |---|---|---|
 | FR-WIZ-1 | First launch MUST open a short graphical first-run flow; it can be re-run from Settings. | W |
-| FR-WIZ-2 | Steps: model or key → companion (premade or create) → setup (FR-COMP-2, 3) → done. | W |
-| FR-WIZ-3 | Only a working **model** is mandatory. Voice setup shows progress and can be skipped or finished later; a first text conversation never waits for it. | W |
+| FR-WIZ-2 | Steps: age (FR-WIZ-8) → setup cards (D-117): **Select the brain** (local open-source models through Ollama with size and fit, or an API key), **Select the voice** (GPT-SoVITS, ElevenLabs or none), **Speech to text** (optional), **Memory** (`nomic-embed-text`, required) → companion (premade or create) → done. No account or login. | W |
+| FR-WIZ-3 | Only a working **model** (local or API) and the memory embedder are mandatory. Each download shows progress and can be cancelled, resumed or finished later; a first text conversation never waits for voice or speech to text. | W |
 | FR-WIZ-4 | The model step reports GPU, VRAM and RAM and recommends API-only, a small local model or full local. It never blocks. | W |
 | FR-WIZ-5 | The key step explains what a key is and what it costs, links to the provider's key page, has a **Test key** button, and stores the key in the Credential Manager. | W |
 | FR-WIZ-6 | No terminal and no manual file editing anywhere in the first run. | W |
@@ -209,11 +210,11 @@ D-080: small setup modules, one per component the app installs itself; no generi
 
 | ID | Requirement | Phase |
 |---|---|---|
-| FR-VP-1 | Voice MUST go through a provider interface `synthesize(text, voice) → audio stream` with providers `builtin`, `gpt_sovits` and `elevenlabs` (D-036). | K2 |
+| FR-VP-1 | Voice MUST go through a provider interface `synthesize(text, voice) → audio stream` with providers `gpt_sovits` (on this PC) and `elevenlabs` (the user's own key) (D-036, D-115). | K2 |
 | FR-VP-2 | A companion's `voice` block names its provider and that provider's parameters; no other field changes (FR-W-3 holds). | K0, K2 |
 | FR-VP-3 | Cloud providers are **opt-in**; choosing one is consent for the spoken text to leave the machine, shown with a cloud badge. Mic audio and camera frames never leave (FR-R-3). | K2 |
 | FR-VP-4 | Provider failure shows a message and continues text-only (FR-V-7). | K2 |
-| FR-VP-5 | The default provider on a fresh install is `builtin`, so the first conversation never waits for a download; its model is chosen in a K2 spike (license, quality, CPU latency). How buyers get the premades' voices is open (ties to D-080). | K2 |
+| FR-VP-5 | No voice is required: with none set up she is text only and the first conversation never waits (D-115). GPT-SoVITS is offered where this PC can run it (K2 spike: NVIDIA, CPU only, AMD, Intel), always with a note that a local voice needs this PC's hardware. ElevenLabs offers an in-app picker of the voices on the user's account, each with a preview, chosen per companion. | K2 |
 
 ### 2.17 Screen companions (FR-SC) — D-048
 

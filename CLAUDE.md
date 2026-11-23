@@ -87,7 +87,7 @@ src/app/              React window: store.ts, chat-state.ts, ui/ components, the
 src/net/              typed socket (kernel.ts, protocol.ts)
 src/engine/           three.js avatar code for K2
 src-tauri/            Rust: window, tray, child processes (Job Object), API keys (Credential Manager)
-assets/premade/       Luna and Yuri packs (untracked user assets; open question 4)
+assets/premade/       Luna and Yuri packs: text in git; VRM and WAV out of git, listed in ASSETS.sha256 (D-118)
 config/               config.example.yaml, models.example.yaml, secrets.example.yaml
 scripts/              dev, doctor, check, clean, test-frontend, build_premade.py
 tests-fe/             frontend pure-logic tests (Node test runner)
@@ -135,6 +135,7 @@ npm run check           # tsc --noEmit + test:fe + build + cargo check + pytest 
 - **Tests patch the module that owns the name** (`turns.send_speak`, `companions.system_message`, `boot.check_chat_model`, `hub.driver`, `vram.gpu_memory`, `llm.<fn>`). Call through the module; never `from llm import x`. A fixture or local named like a module (`boot`, `tools`) shadows it.
 - **Where things live:** a message handler is `Session.on_<type>`; adding a message type means a `protocol/` model, a `CLIENT_TYPES` entry, `src/net/protocol.ts` and one `on_<type>` (a test checks the handler exists). `turns.run_turn` must never mention a waifu (a test enforces it).
 - **Edits:** single-match replacements in a Python script (`assert s.count(old) == 1`, normalize CRLF). **Never bulk-replace** (it once replaced every "a" with "w" in five files). The Bash tool refuses some heredocs with `${…}` or triple quotes: write the script to a file, then run it.
+- **Computer use sees a blank screen here.** Drive the desktop window through WebView2's debugging port instead (`HANDOFF.md` traps).
 - **Vite can keep a stale transform** of a briefly empty file: restart the preview.
 - **Bare CSS class names collide:** `.waking` is the loading strip and `.warn` the model chip's round badge, so a modifier with either name on another element inherits their size and colour. Check `grep -n '^\.name' src/app/*.css` before naming one.
 - **The model popover's lists are CSS grids with subgrid rows** (check, name, meta, fit, badges); a new row element must keep the five cells.

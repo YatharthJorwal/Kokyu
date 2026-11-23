@@ -29,6 +29,7 @@ Not planned: agent mode. Deferred long term: VR (D-079).
 
 - [x] Docs reset (D-076) `5e82558`: SCOPE, PRODUCT, README, SPEC v1.1, ARCHITECTURE, DECISIONS compacted, CLAUDE.md, RULES, TODO, STATE, HANDOFF; old notes in `docs/archive/`
 - [ ] C-1b Delete `KASANE/vrm/` (the user): byte-identical copies of the pack VRMs, read by nothing
+- [ ] C-2 Back up the premades' VRM and WAV files off this PC (the user; D-118 proposes a release on the private repo), so a fresh clone can be built
 - [ ] The open questions in `DECISIONS.md` (the user will come back to them)
 
 ## Phase UI-1: Chat app polish
@@ -50,7 +51,7 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 - [x] UI1-14 A speaker on each of her messages reads it aloud on request, Read aloud on or off (D-099, FR-V-10) `d65feec`
 - [x] UI1-15 A message's ⋯ card on the c.ai model (D-100): Copy, Edit, Rewind to here, Pin (roleplay only, FR-MODE-11), New chat from here; Regenerate with swipes under her latest reply; the speaker by her name (FR-V-10); the sidebar's hide button and All / Chats / Roleplays filter (FR-C-6, FR-C-9) `cd872b5`
 - [x] UI1-16 A roleplay keeps its character (FR-S-1); the story tray, a book: History, New chat, Memory (FR-C-4, FR-MODE-12); the Read aloud switch says Off or On; D-100's review fixes (D-101) `9597652`
-- **Checkpoint UI-1:** the user uses the app for a while in the desktop window with a local model and signs off the look.
+- [x] **Checkpoint UI-1** (2026-11-24): the user went through the app in the desktop window: "it seems working fine to me"
 
 ## Phase UI-2: Design standard (D-086)
 
@@ -68,7 +69,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] UI2-00k (`ff520be, 783e39b`) Round swatches, five more theme presets; the Stage speaks by default with paced, fading captions (D-113)
 - [x] AUD-01 The repo audit's bugs fixed (D-114): `781cd84` turns, sends, regenerate, delete, memory passes; `af5b98a` shutdown and Host checks, stale PID, settings.json, voice, dictation, pet saves; `62ec66f` the window's turn, asides, Markdown speed, offline notice, links, focus, Esc, caps, labels; `38768de` decay, the profile card, looks, speech, smaller races
 - [x] AUD-03 (`684eb1d`) The audit's lean items: `chunking.extract_ready_chunks` and its tests, `conversation.thread_summary`, `router._MODEL_FALLBACKS`, the duplicate `public/vrm-animations/vrma/` (608 KB per build). Kept on the user's word: `audio/voice.py`, `audio/vad.py`, `src/engine/mic-stream.ts` and the arbiter's barge-in states, groundwork for K2's push-to-talk and hands-free voice (FR-V-6)
-- [ ] AUD-02 Check the audit fixes in the desktop app (`STATE.md` §5): a link opens the browser; Esc and focus in Settings; the offline notice; a scenario card survives Esc
+- [x] AUD-02 The audit fixes checked in the desktop app on 2026-11-24, driven by Claude through WebView2's debugging port: a link opens the browser and `file:`, `javascript:` and spaced URLs are refused; Ctrl+, moves focus into Settings, typing stays out of the message box, Esc returns focus; a half-filled New roleplay card survives Esc; Esc in Take her picture closes only the viewer; with the engine stopped a send says it is not connected and keeps the text, Reconnect brings it back in about 2 s and the note goes
 - [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
 - [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
@@ -88,10 +89,10 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 
 - [ ] K2-01 Stage view: auto-framing, backdrop, spring bones, idle motion, look-at, expression hooks (FR-ST-1..3, 5, 7)
 - [ ] K2-02 Lip-sync from played audio; captions; docked input; chat log slide-over; Chat | Stage toggle in the top bar (FR-ST-3, 4, FR-C-7, FR-S-4)
-- [ ] K2-03 The 1.0 voice for buyers (open question 2): a voice provider interface and a small `builtin` voice spike (licence, quality, CPU latency) (FR-VP-1, 5; D-036)
+- [ ] K2-03 GPT-SoVITS hardware spike (D-115): does it run, and how fast, on NVIDIA, CPU only, AMD and Intel; the provider interface (FR-VP-1); the "needs this PC's hardware" note wherever it is offered (FR-VP-5)
 - [ ] K2-04 Barge-in (FR-V-5); clause pipelining while she writes, for Live (FR-V-3). Done in UI1-12: `speakable` and one-ahead synthesis of a finished reply (D-097)
 - [ ] K2-05 TTS pre-warm on switch (FR-S-3) checked against real audio. Done in UI1-12: the starting chip for the 47 s cold start and the failure chip (D-097)
-- [ ] K2-06 `elevenlabs` provider: voice ID plus key, cloud badge, opt-in (FR-VP-3)
+- [ ] K2-06 ElevenLabs with the user's own key (D-115, FR-VP-3, 5): key in the Credential Manager, an in-app picker of their account's voices with previews, per companion; the cloud badge
 - [ ] K2-07 Voice input beyond dictation (UI1-12 shipped the mic button and F9, D-097): a system-wide key, VAD, push-to-talk, hands-free live voice (FR-V-6); keep STT off the asyncio loop
 - [ ] K2-08 Camera and paste-image into the tray as working items (FR-C-4, FR-R-3, 4)
 - [ ] K2-09 Live (Stage plus voice) per window, from the modes work (FR-MODE-10)
@@ -112,10 +113,10 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 
 ## Phase W: First run and automatic setup (D-080)
 
-- [ ] W-01 Setup modules with pinned manifests (URLs, SHA-256, sizes, versions), progress, cancel and resume: GPT-SoVITS and the STT model, run at first start (FR-COMP)
+- [ ] W-01 Setup modules with pinned manifests (URLs, SHA-256, sizes, versions), progress, cancel and resume: local models, GPT-SoVITS, the STT model and `nomic-embed-text` (FR-COMP-2, D-117)
 - [ ] W-02 Ollama through its official installer; model pull with progress
 - [ ] W-03 Doctor checks grow fix actions (open the installer, start, retry) (FR-COMP-4, 5)
-- [ ] W-04 First run: model or key (with Test key), companion (premade or create), setup, first conversation (FR-WIZ)
+- [ ] W-04 The setup screen (D-117, FR-WIZ-2): after the age check, cards for Select the brain (local models with size and fit, or an API key with Test key), Select the voice, Speech to text, and Memory (required); then companion, then the first conversation; no account
 - [ ] W-05 Premade companions as built-in read-only packs (D-039; open questions 3 and 4)
 - [ ] W-06 Age check as the first step of the first run; under 18 stops (FR-WIZ-8, D-090)
 - **Checkpoint W:** on a clean machine, installer to first reply on the API path and on the local path; voice set up with no terminal; every failure shows a plain message.
@@ -169,7 +170,7 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 - [ ] B-7 Website, checkout, downloads, support
 - [ ] B-8 Privacy policy, terms (audience age), refunds
 - [x] B-9 Research for D-088: age-rating norms, laws, payment-provider rules, age-gate options; report `docs/research-age-content-2026-11.md`; the user chose 18+ (D-090)
-- [ ] B-10 Premade personas explicit or not (open question 3); then ask Paddle and FastSpring in writing whether they accept the app as described (Lemon Squeezy is closing, Gumroad bans chatbots)
+- [ ] B-10 The premades are explicit (D-116); deferred until before K7: find a payment provider that accepts an explicit 18+ app in writing (all those checked ban sexual products; Lemon Squeezy is closing, Gumroad bans chatbots)
 - [ ] B-11 UK: ask Ofcom's checker whether a local-only app is in scope of the Online Safety Act; block UK sales until then
 - [ ] B-12 A lawyer's read on California SB 243 (and New York's companion law) for a bring-your-own-model desktop app: AI disclosure, crisis referral
 - [ ] B-9 Marketing plan

@@ -91,9 +91,9 @@ Everything else was adopted or adapted into the sections above.
 
 The user will come back to these.
 
-1. **The 1.0 voice for buyers.** The premades ship their clips and transcripts and GPT-SoVITS is set up automatically (D-080, D-087); a buyer without an NVIDIA GPU is still open (D-036).
-2. **Premade content and payment fit.** 18+ is decided (D-090). Open: explicit premades or not, a written yes from Paddle or FastSpring, UK sales, a legal read on SB 243 (TODO B-10..12).
-3. **Premade packs in git.** Recommendation: version `persona.md`, `waifu.yaml` and the transcripts in the private repo; VRM and WAV stay out of git with a separate backup.
+1. **The 1.0 voice for buyers.** Decided (D-115): GPT-SoVITS on the buyer's PC where it runs, or ElevenLabs with their own key; otherwise text only. Open: which GPUs GPT-SoVITS runs on (K2 spike).
+2. **Premade content and payment fit.** 18+ (D-090) and explicit premades (D-116). Deferred: a payment provider that accepts it (every one checked bans sexual products), UK sales, a legal read on SB 243 and New York Art. 47 (TODO B-3, B-10..12).
+3. **Premade packs.** Closed (D-118): text in git, VRM and WAV beside it with checksums, all bundled in the installer.
 4. **An API key for testing the API path** (path A has never run on the development PC).
 5. **Price and trial.** $14.99 launch and $19.99 standard were discussed; whether a limited demo exists.
 6. **Code signing.** Unsigned installers trigger SmartScreen warnings; certificate cost and eligibility for an individual publisher are unresearched.
