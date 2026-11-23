@@ -8,6 +8,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 - Version: **spec v1.1**, 2026-11-17, amended 2026-11-18 (D-097). A decision that amends a row is rewritten into the row, with its D-ID; `DECISIONS.md` says why.
 
 **Changelog v1.0 → v1.1**
+- Added (2026-11-24): FR-C-11 the AI note (D-119).
 - Changed (2026-11-24): FR-VP-1, FR-VP-5 the voice a buyer hears (D-115); FR-WIZ-2, 3, FR-COMP-2, 3 setup cards and the required embedder (D-117).
 - Folded in: D-059 (one API endpoint), D-064 (effort data), D-065, D-071 (VRAM checks), D-066 (failure card), D-067, D-070, D-073 (Settings, settings.json, appearance), D-068 (window layout), D-072 (one chat model in memory).
 - Added: FR-MODE (D-074, D-075); FR-M-12 model names (D-084).
@@ -60,6 +61,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | FR-C-8 | Replies MUST render Markdown, parsed in-house, never as HTML (D-055): tables, nested lists, and code blocks with a header (language, Copy) and in-house colouring (D-093). Her **emotion tags** (`[angry]`, `[teasing]`: a bracketed word or few) stay in the text, because the Luna and Yuri shells drive her expressions from them, and show muted and italic like a roleplay action, in every mode; a link `[x](url)` is never a tag (D-097). What is *spoken* is `speakable`'s cut (FR-V-2). | K1, UI-1 |
 | FR-C-9 | Each message SHOULD have a ⋯ beside its bubble (on the user's left) opening a card with its time (and a reply's model): *Copy*; *Edit* on the last user line, which replaces it and its reply (`regenerate {text}`; not a line sent with a file, D-092); *Rewind to here*, not on the newest message, which asks, then deletes every later message; *Pin* in a roleplay (FR-MODE-11); *New chat from here*, a new thread of the same mode (a roleplay keeps its card) with the messages up to it (D-100). Under her latest reply: *Regenerate* (run in the kernel, D-055) and arrows through the replies it has written (*swipes*): Regenerate keeps the old replies, the shown one is what the model sees next; an edited line starts over. No like, dislike or report (D-100). | K1, UI-1 |
 | FR-C-10 | Messages MUST record: speaker waifu id and name snapshot, model ref, effort, timestamps, token counts where known. | K1 |
+| FR-C-11 | Under the message box, in every mode and never hidden, a note MUST say the companion is an AI, not a real person; in a chat, that what she says can be wrong and is no basis for facts or advice; in a roleplay, that it is fiction (D-119). | UI-2 |
 
 ### 2.3 Companion switcher (FR-S)
 
