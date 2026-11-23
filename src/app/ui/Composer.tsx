@@ -190,6 +190,10 @@ export function Composer() {
         </div>
         <ModelChip />
       </div>
+      <p className="ai-note">
+        {companion ?? "This companion"} is an AI, not a real person.{" "}
+        {roleplay ? "Treat everything in this roleplay as fiction." : "What she says can be wrong: don't rely on it for facts or advice."}
+      </p>
     </div>
   );
 }
