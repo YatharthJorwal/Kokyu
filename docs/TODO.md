@@ -59,13 +59,15 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [ ] UI2-00 The user's first references (D-102): Settings restyled to `settings-general.png` and `settings-models.png`; the chat title centred on the top bar
 - [ ] UI2-00b Her pet (D-103; first numbered UI2-01 in 5e679a8's message): chibi her walking above the input box in chat and roleplay; the cat button; Settings → Pet with behaviour, size and Create pet (prompt, upload a 4×3 sheet, check the poses, save) (FR-P-1..4)
 - [ ] UI2-00d The Stage, the user's "VR mode" (D-104): Yuri's shell, the Chat | Stage switch, captions, lip-sync from the played voice, her mood from the emotion tag (FR-ST-1..3, 5, 7; K2-01, most of K2-02); Create pet's Take her picture opens her model full-body or bust, turned with the mouse, to copy or save a see-through PNG. Not yet: the chat log slide-over (FR-ST-4), the frame-rate check (FR-ST-6)
-- [ ] UI2-00e Pet, round two (D-107): she walks on the window's bottom, a step-synced walk, carried and dropped (held, fall, land); saved poses fit a box per kind; Make a new pet for any character. Upload limits and formats in the window and the kernel (D-106). Picking an Ollama model starts Ollama (D-105)
-- [ ] UI2-00f Pet sizes (D-108): each pose drawn at its own size; the size checker matches her head to idle's; the picture viewer's note on the picture and Save as
-- [ ] UI2-00g The cat button (D-109): blue while the pet is shown, greyed on the Stage, Pet settings on hover
-- [ ] UI2-00h Pet settings (D-110): the hover menu closes when used and is absent on the Stage; Switch character in Settings → Pet
-- [ ] UI2-00i The Stage caption from Yuri (D-111): words pop in with her voice, the said word glows; Caption glow in Appearance
-- [ ] UI2-00j Readable accent text on any theme; her voice's starting and failed notes with Set up (D-112)
-- [ ] UI2-00k Round swatches, five more theme presets; the Stage speaks by default with paced, fading captions (D-113)
+- [x] UI2-00e (`fb8e7fa`) Pet, round two (D-107): she walks on the window's bottom, a step-synced walk, carried and dropped (held, fall, land); saved poses fit a box per kind; Make a new pet for any character. Upload limits and formats in the window and the kernel (D-106). Picking an Ollama model starts Ollama (D-105)
+- [x] UI2-00f (`0611ebe`) Pet sizes (D-108): each pose drawn at its own size; the size checker matches her head to idle's; the picture viewer's note on the picture and Save as
+- [x] UI2-00g (`0611ebe`) The cat button (D-109): blue while the pet is shown, greyed on the Stage, Pet settings on hover
+- [x] UI2-00h (`9bd3a65`) Pet settings (D-110): the hover menu closes when used and is absent on the Stage; Switch character in Settings → Pet
+- [x] UI2-00i (`f82cf8e`) The Stage caption from Yuri (D-111): words pop in with her voice, the said word glows; Caption glow in Appearance
+- [x] UI2-00j (`c653031`) Readable accent text on any theme; her voice's starting and failed notes with Set up (D-112)
+- [x] UI2-00k (`ff520be, 783e39b`) Round swatches, five more theme presets; the Stage speaks by default with paced, fading captions (D-113)
+- [x] AUD-01 The repo audit's bugs fixed (D-114): `781cd84` turns, sends, regenerate, delete, memory passes; `af5b98a` shutdown and Host checks, stale PID, settings.json, voice, dictation, pet saves; `62ec66f` the window's turn, asides, Markdown speed, offline notice, links, focus, Esc, caps, labels; `38768de` decay, the profile card, looks, speech, smaller races
+- [ ] AUD-02 Check the audit fixes in the desktop app (`STATE.md` §5): a link opens the browser; Esc and focus in Settings; the offline notice; a scenario card survives Esc
 - [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
 - [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
 - [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
@@ -172,6 +174,9 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 - [ ] B-9 Marketing plan
 
 ## Backlog (parked, not approved)
+
+- AUD-03 Lean, from the audit (2026-11-23), not done because only bugs were asked for: delete `KASANE/audio/voice.py`, `audio/vad.py` and their tests and the arbiter's voice-mode states (~480 lines nothing runs since D-097); `conversation.thread_summary`, `router._MODEL_FALLBACKS`; the byte-identical `public/vrm-animations/vrma/` copies and two stale READMEs (1.2 MB in every build); `chunking.extract_ready_chunks` (tests only)
+- AUD-04 From the audit, not fixed: `context_budget.fit_messages` can drop a user line but keep the reply after it; `forget`'s trigger fires on "dont forget …"; the camera tool's `camera_request` is not wired in the window (K2-08)
 
 - K1c follow-ups (D-075), none blocking:
   - a reply quoted only with U+201D speaks its narration;

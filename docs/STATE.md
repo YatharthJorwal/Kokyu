@@ -2,10 +2,10 @@
 
 **What is true right now.** Rewritten at the end of every session (CLAUDE.md §2). If this file and reality disagree, tell the user first. The plan is `TODO.md`; the narrative is `HANDOFF.md`.
 
-- **Last updated:** 2026-11-18, session 7 (UI1-15: a message's ⋯ card, swipes, roleplay pins, rewind, New chat from here, the sidebar's hide and filter, D-100; UI1-16: a roleplay keeps its character, the story tray with History, New chat and Memory, the Read aloud switch, D-101). Session 6: UI1-12..14 (D-097..D-099).
+- **Last updated:** 2026-11-24, session 8 (the user's UI notes, D-105..D-113: the pet's second round and sizes, the cat button, Pet settings, the Stage caption from Yuri with its glow, readable accent text, the voice's start and fail notes, round swatches, five theme presets, the Stage speaking by default with paced fading captions, the sidebar badge on a switch; then a whole-repo audit and its bug fixes, D-114). Session 7: UI1-15, UI1-16 (D-100, D-101).
 - **Phase:** K0, K1 and K1c are code-complete. The user ran and tested the K1c build on their PC (2026-11-17, "I've ran and tested on them my pc"); item-level results were not given, so the checkpoint below stays open. **UI-1 in progress:** UI1-01 model names (`883f4f7`), UI1-02 working controls and the disconnect banner (`a412120`, `c575b72`) UI1-03 unpriced models under the cap (`3e552e7`) and UI1-06 her face and profile (`04e0296`, `e62374f`, D-091) are done, and so are UI1-07 the message list (`0fac211`, D-092), UI1-08 Markdown (`12af2b8`, D-093), UI1-09 the shell (`cb24949`, D-094) and UI1-10 the keyboard (`77af8c0`, D-095), built in autonomous mode on Assumed answers, and the user's notes of 2026-11-18 (D-096: Tauri versions, the slider, thinking beside her face, typed replies, the loading strip). The user tested UI-1 on their PC on 2026-11-18 and everything listed passed (npm, the slider drag, the loading strip, edit/resend/regenerate, pin/rename/delete, shortcuts, window buttons, code and table formatting). **UI1-12** (D-097, session 6, autonomous, on a branch): voice mode replaced by Read aloud and dictation, `speakable`, tags shown, three polish notes. **UI1-13** (D-098, the user's task 10 relayed by a sibling session): Chat memory. **UI1-14** (D-099): a message read aloud on request. **UI1-15** (D-100) and **UI1-16** (D-101), session 7, the user's c.ai-style notes. **UI-1 is code-complete; next is Checkpoint UI-1** for the UI1-12..16 items (the user, in the desktop app). The design standard is its own phase, UI-2, planned from references before it is built (D-086).
 - **Repo:** `github.com/YatharthJorwal/Kokyu`, private (D-040). Session 6's branch is merged; `main` holds everything through session 7 and is pushed to `origin/main` (`HANDOFF.md` names the last commit).
-- **Last green run (the user's PC, 2026-11-18, at `9597652`):** `npm run check`: tsc, frontend tests 195, vite build, cargo check, pytest 1346.
+- **Last green run (the user's PC, 2026-11-24, after `38768de` plus the offline-note fix):** `npm run check`: tsc, frontend tests 219, vite build, cargo check, pytest 1387.
 - **Seed:** Yuri `e32af4f`, copied verbatim in `0cd2d20` (D-002).
 
 ## 1. What exists
@@ -52,6 +52,10 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 | New roleplay dialog, Roleplay badge, `*action*` and `(OOC …)` rendering | T, B (injected state) |
 | Persona-only `persona.md` and a drafted About for Luna and Yuri | Written; packs load; untracked (open question 4); the About drafts await the user |
 | App icon | Not looked at in the taskbar or tray |
+| Session 8 UI notes: the pet on the window's bottom, carried and dropped, poses at their own size by head matching; the cat button's states; Pet settings' Switch character; Take her picture's note and Save as; upload limits; Ollama started with its model (D-105..D-110) | T; B (injected state, synthetic pointer events); real mouse drag, Save as and Ollama's start not seen in the desktop app |
+| The Stage: Yuri's caption (words pop with her voice, the said word glows in Caption glow); Read aloud on while the Stage is open; without her voice the finished reply paced a sentence at a time, then faded (D-111, D-113) | T (word timing, sentences); B (the silent pacing, injected); never heard with her real voice |
+| Themes: eight presets held to 7:1 text and 3:1 accent contrast by a test; round swatches; accent text readable on any theme; the voice's starting and failed notes with Set up (D-112, D-113) | T, B |
+| The audit's fixes (D-114): a turn survives memory errors; no dropped send after a mid-reply switch; regenerate saves first; driver-only delete; rewound replies never become memory; /shutdown and Host checks; stale-PID guard; settings.json kept when broken; one voice server; dictation on its own thread; safe pet save; the window keeps a started turn; asides; Markdown speed; offline note; links through the shell; Settings focus; Esc and dirty dialogs; input caps; switch labels; decay, the card, looks, clock times, smaller races | T for each (new tests named in the commits); B for Settings focus and the offline note; **none seen in the desktop app** (open_link, Esc, focus there are untested) |
 
 ## 2. Environment
 
@@ -82,6 +86,9 @@ Levels (R-21): **T** = tests; **B** = seen in the browser pane (with a scratch k
 
 ## 4. Known issues and risks
 
+- **The audit's lean findings are not done** (TODO AUD-03): ~480 lines of the old voice mode nothing runs, duplicate animation files (1.2 MB per build), a few unused helpers. AUD-04 lists the three small issues left as they are.
+- **Links open through `rundll32 url.dll`** (the new `open_link` shell command): untested in the desktop app; if it fails, nothing opens and nothing is said.
+- **A send arriving while a finished turn still applies a companion switch now waits for it** (`Session.settled`): the window's other messages queue behind that short wait.
 - **The UI feels like a localhost shell** (the review of 2026-11-17): no design tokens, eleven font sizes down to 9 px, letter avatars, emoji glyphs. Names, dead controls and developer words are fixed (UI1-01, UI1-02); the look is phase UI-2 (D-086).
 - **Premade personas carry explicit sexual instructions**, and every payment provider checked bans sexual products even for an 18+ app (D-090; the B-9 report): to resolve before release.
 - **Reconnect cannot revive a hung engine:** `restart_kernel` starts one only when the process has exited; a running process that stopped answering needs tray Quit and a restart.
@@ -112,6 +119,8 @@ This one list replaces the three stacked manual gates (K0, K1, K1c) (D-076). In 
 - [ ] A roleplay (D-101): her chip opens her profile (no switching); the book tray: History lists your roleplays with her and opens one, New chat starts the story again, Memory saves a note she then follows, and lists pins with Unpin; Settings → Voice's switch says Off and On
 - [ ] The sidebar's hide button and the top bar's button to bring it back (still hidden after a restart); All / Chats / Roleplays
 - [ ] Chat memory on the 9B: drag it in the picker, watch the loading strip as it reloads, see the warning appear past the mark, and check whether a reply still works at a large value
+- [ ] The audit (D-114): a link in a reply opens your browser; Ctrl+, then typing does not reach the message box; Esc in Take her picture closes only the viewer; a half-filled New roleplay card survives Esc; with the engine stopped, a click says it is not connected and the note goes when it is back
+- [ ] The Stage (D-111, D-113): Read aloud turns on by itself; her words pop in with her voice and fade after each line; with Read aloud off the reply appears a sentence at a time and fades
 - [ ] The UI1-12 polish: her `[tags]` muted and italic; the thinking word's slow lift; no dark dots at the slider's ends; the ⋯ hover in the conversation list
 - [ ] Change model, effort and companion mid-thread, each without changing the others
 - [ ] A forced failure (Ollama stopped, or later a wrong API key) shows the failure card with Retry / Switch model
