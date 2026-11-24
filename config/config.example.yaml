@@ -403,8 +403,8 @@ story:
 # ─────────────────────────────────────────────────────────────────────────────
 safety:
   enabled: true
-  similarity_floor: 0.72    # the meaning check: how alike a help-needed example must be
-  similarity_margin: 0.04   # and how much closer than the nearest look-alike
+  similarity_floor: 0.80    # the meaning check: how alike a help-needed example must be
+  similarity_margin: 0.10   # and how much closer than the nearest look-alike (scripts/calibrate_safety.py)
   embed_timeout_s: 3        # past it, the patterns decide alone
   examples_timeout_s: 15
 

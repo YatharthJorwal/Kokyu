@@ -393,8 +393,9 @@ class SafetyConfig:
     `similarity_floor` alike and `similarity_margin` closer than the nearest look-alike."""
 
     enabled: bool = True
-    similarity_floor: float = 0.72
-    similarity_margin: float = 0.04
+    # SAFE-02: from scripts/calibrate_safety.py on nomic-embed-text, 2026-11-24
+    similarity_floor: float = 0.80
+    similarity_margin: float = 0.10
     embed_timeout_s: float = 3.0       # the line's vector; past it, patterns decide alone
     examples_timeout_s: float = 15.0   # the examples' vectors, made once per run
 
