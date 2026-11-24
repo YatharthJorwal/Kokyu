@@ -2399,6 +2399,50 @@ button:disabled {
   color: var(--text);
 }
 
+/* Edit list, Key and ↻ sit together: only the first takes the free space */
+.list-head .refresh + .refresh {
+  margin-left: 0;
+}
+
+/* D-127: the API section's sort and company filter */
+.model-tools {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 6px;
+  margin: 0 8px 6px;
+}
+
+.model-sort {
+  padding: 3px 6px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--bg);
+  color: var(--text);
+  font: inherit;
+  font-size: 12px;
+}
+
+.model-companies {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+}
+
+.model-companies button {
+  padding: 2px 9px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.model-companies button[aria-pressed="true"] {
+  border-color: var(--accent);
+  color: var(--text);
+}
+
 /* the Key button sits before ↻, so only the first one takes the free space */
 .list-head .refresh.again {
   margin-left: 0;

@@ -113,6 +113,17 @@ def test_popular_sets_match_ids_with_or_without_the_vendor():
     assert "Strongest" not in found                                  # a set the endpoint has nothing of is left out
 
 
+def test_a_new_release_replaces_the_older_one_in_its_set_on_any_endpoint():
+    # D-127: families, not fixed ids, so the sets follow what the providers ship
+    old = ["anthropic/claude-sonnet-5.5", "openai/gpt-5.4-mini"]
+    assert popular_in(old)["Popular"] == ["anthropic/claude-sonnet-5.5"]
+    new = old + ["anthropic/claude-sonnet-6", "anthropic/claude-sonnet-6-fast", "anthropic/claude-sonnet-6-preview", "openai/gpt-5.6-mini"]
+    assert popular_in(new)["Popular"] == ["anthropic/claude-sonnet-6"]            # not its speed tier or preview
+    assert popular_in(new)["Budget"] == ["openai/gpt-5.6-mini"]
+    # OpenRouter-style ids and a bare DeepSeek id both count; 4 is newer than 3.8
+    assert popular_in(["qwen/qwen3.8-max", "qwen/qwen4-max"])["Strongest"] == ["qwen/qwen4-max"]
+
+
 def test_the_picker_lists_the_popular_models_then_the_users_own(tmp_path, monkeypatch):
     cat = catalog(tmp_path, [ModelInfo("anthropic/claude-sonnet-5.5"), ModelInfo("vendor/odd-1"), ModelInfo("vendor/odd-2")])
     rows = listing.api_rows(cat, key_present=True)

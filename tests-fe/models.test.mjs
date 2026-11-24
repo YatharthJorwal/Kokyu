@@ -19,9 +19,13 @@ import {
   WAKING_STEP_S,
   awakeLine,
   badgesFor,
+  companiesOf,
   effortLabel,
   failedLine,
+  filterCompanies,
   filterRows,
+  parsePickerPrefs,
+  sortRows,
   formatElapsed,
   formatSize,
   isLocalRef,
@@ -259,4 +263,21 @@ test("the hover details: full id searchable, facts in one muted line (D-084, FR-
   assert.equal(filterRows([row], "bartowski").length, 1);
   const api = { ...row, detail: "200k context", size_bytes: null, price_in: 3, price_out: 15, note: "needs an API key" };
   assert.equal(modelFacts(api), "200k context · $3.00 / $15.00 per 1M · needs an API key");
+});
+
+test("the picker sorts by company, name or price and shows only the companies picked (D-127)", () => {
+  const r = (label, group, price_in, price_out) => ({ ref: `api:x/${label}`, label, group, kind: "api", price_in, price_out });
+  const rows = [r("Opus", "Anthropic", 5, 25), r("Haiku", "Anthropic", 1, 5), r("Flash", "Google", 0.3, 2.5), r("Mystery", "Vendor", null, null)];
+  assert.deepEqual(sortRows(rows, "company"), rows);                                  // the kernel's order
+  assert.deepEqual(sortRows(rows, "name").map((x) => x.label), ["Flash", "Haiku", "Mystery", "Opus"]);
+  assert.deepEqual(sortRows(rows, "cheap").map((x) => x.label), ["Flash", "Haiku", "Opus", "Mystery"]); // no price: last
+  assert.deepEqual(sortRows(rows, "pricey").map((x) => x.label), ["Opus", "Haiku", "Flash", "Mystery"]);
+  assert.deepEqual(sortRows([r("Model 10", "A", 1, 1), r("Model 9", "A", 1, 1)], "name").map((x) => x.label), ["Model 9", "Model 10"]);
+  assert.deepEqual(companiesOf(rows), ["Anthropic", "Google", "Vendor"]);
+  assert.deepEqual(filterCompanies(rows, ["Google"]).map((x) => x.label), ["Flash"]);
+  assert.deepEqual(filterCompanies(rows, []), rows);
+  assert.deepEqual(filterCompanies(rows, ["Gone"]), rows);                            // a stale pick never empties the list
+  assert.deepEqual(parsePickerPrefs('{"order":"cheap","companies":["Google",3],"all":true}'), { order: "cheap", companies: ["Google"], all: true });
+  assert.deepEqual(parsePickerPrefs("not json"), { order: "company", companies: [], all: false });
+  assert.deepEqual(parsePickerPrefs('{"order":"random","all":"yes"}'), { order: "company", companies: [], all: false });
 });

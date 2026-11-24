@@ -45,30 +45,52 @@ API_PRESETS: dict[str, dict[str, str]] = {
     },
 }
 
-# D-126: one-click sets for the picker's list, matched on the id after the vendor, so
-# "anthropic/claude-sonnet-5.5" and a bare "deepseek-chat" both count. Only the ones the
-# endpoint has are offered. shortcut: hand-kept; refresh when the big vendors ship.
-POPULAR_MODELS: dict[str, tuple[str, ...]] = {
+# D-126, D-127: one-click sets for the picker's list. Each rule is a model *family*
+# (matched on the id after the vendor, so "anthropic/claude-sonnet-5.5" on AI Router or
+# OpenRouter and a bare "deepseek-chat" on DeepSeek all count), and a set takes the
+# newest version of each family the endpoint lists today: when claude-sonnet-6 ships,
+# it replaces 5.5 at the next catalog refresh. Speed tiers, previews, dated snapshots
+# and side variants are never picked. shortcut: a new family (a new maker or a renamed
+# line) still needs a rule here.
+POPULAR_FAMILIES: dict[str, tuple[str, ...]] = {
     "Popular": (
-        "claude-sonnet-5.5", "claude-haiku-5.5", "gpt-5.5", "gemini-3.8-flash", "deepseek-v4.1-flash",
-        "qwen3.8-max", "grok-4.7", "kimi-k3", "glm-5.3", "mistral-large-4", "deepseek-chat",
+        r"claude-sonnet-[\d.]+", r"gpt-[\d.]+(-(sol|terra|astra|luna))?", r"gemini-[\d.]+-flash",
+        r"deepseek-v[\d.]+-flash", r"qwen[\d.]+-max", r"grok-[\d.]+", r"kimi-k[\d.]+", r"glm-[\d.]+",
+        r"mistral-large-[\d.]+", r"deepseek-chat",
     ),
     "Budget": (
-        "qwen-3-14b", "deepseek-v4.1-flash", "gemini-3.8-flash", "gpt-5.4-mini", "claude-haiku-5.5",
-        "mistral-small", "llama-3.3-70b", "gpt-oss-120b", "deepseek-chat",
+        r"claude-haiku-[\d.]+", r"gpt-[\d.]+-mini", r"gemini-[\d.]+-flash-lite", r"deepseek-v[\d.]+-flash",
+        r"qwen[\d.]+-flash", r"glm-[\d.]+-flash", r"mistral-small(-[\d.]+)?", r"llama-[\d.]+-\d+b", r"deepseek-chat",
     ),
     "Strongest": (
-        "claude-fable-5.2", "claude-opus-5.5", "gpt-6.2-sol", "gpt-5.5-pro", "qwen4-max",
-        "kimi-k3.1-pro", "deepseek-v4-pro", "deepseek-reasoner",
+        r"claude-fable-[\d.]+", r"claude-opus-[\d.]+", r"gpt-[\d.]+-pro", r"gemini-[\d.]+-pro", r"qwen[\d.]+-max",
+        r"kimi-k[\d.]+-pro", r"deepseek-v[\d.]+-pro", r"grok-[\d.]+", r"deepseek-reasoner",
     ),
 }
 
 
+def _version(name: str) -> tuple[int, ...]:
+    """claude-sonnet-5.5 -> (5, 5); qwen4-max -> (4,), newer than qwen3.8-max's (3, 8)."""
+    return tuple(int(n) for n in re.findall(r"\d+", name))
+
+
+def newest(model_ids: list[str], family: str) -> str | None:
+    """The endpoint's newest model of `family` (a regex over the whole id after the vendor)."""
+    rule = re.compile(family)
+    found = [m for m in model_ids if rule.fullmatch(m.rpartition("/")[2])]
+    # the highest version; between equals (gpt-6.2-sol, gpt-6.2-astra) the A–Z first
+    return max(found, key=lambda m: (_version(m.rpartition("/")[2]), [-ord(c) for c in m]), default=None)
+
+
 def popular_in(model_ids: list[str]) -> dict[str, list[str]]:
-    """Each popular set, as the endpoint's own ids, in the set's order; empty sets left out."""
-    by_name = {model_id.rpartition("/")[2]: model_id for model_id in model_ids}
-    found = {label: [by_name[name] for name in names if name in by_name] for label, names in POPULAR_MODELS.items()}
-    return {label: ids for label, ids in found.items() if ids}
+    """Each set as the endpoint's own ids, one per family, in the set's order; empty sets left out."""
+    found: dict[str, list[str]] = {}
+    for label, families in POPULAR_FAMILIES.items():
+        picks = [newest(model_ids, family) for family in families]
+        ids = list(dict.fromkeys(m for m in picks if m))
+        if ids:
+            found[label] = ids
+    return found
 
 
 # Fields that describe *where* the endpoint is; everything else in the config slot

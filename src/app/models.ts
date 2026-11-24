@@ -25,6 +25,74 @@ export function filterRows(rows: ModelRow[], query: string): ModelRow[] {
   });
 }
 
+// D-127: the picker's order and companies, kept by this window like Appearance (D-073).
+export type ModelOrder = "company" | "name" | "cheap" | "pricey";
+
+export const MODEL_ORDERS: { id: ModelOrder; label: string }[] = [
+  { id: "company", label: "By company" },
+  { id: "name", label: "Name A–Z" },
+  { id: "cheap", label: "Cheapest first" },
+  { id: "pricey", label: "Priciest first" },
+];
+
+export interface PickerPrefs {
+  order: ModelOrder;
+  /** Companies to show; empty = all. */
+  companies: string[];
+  /** Every model the endpoint has, not only the user's list: an older version stays one click away. */
+  all: boolean;
+}
+
+export const DEFAULT_PICKER_PREFS: PickerPrefs = { order: "company", companies: [], all: false };
+
+/** A stored value, checked field by field: anything unknown falls back to the default. */
+export function parsePickerPrefs(raw: string | null): PickerPrefs {
+  let data: unknown;
+  try {
+    data = raw ? JSON.parse(raw) : null;
+  } catch {
+    data = null;
+  }
+  const d = (data && typeof data === "object" ? data : {}) as Record<string, unknown>;
+  const order = MODEL_ORDERS.some((o) => o.id === d.order) ? (d.order as ModelOrder) : DEFAULT_PICKER_PREFS.order;
+  const companies = Array.isArray(d.companies) ? d.companies.filter((c): c is string => typeof c === "string").slice(0, 100) : [];
+  return { order, companies, all: d.all === true };
+}
+
+/** Input plus output, per 1M tokens: one number to compare by; null when the catalog has no price. */
+function blendedPrice(r: ModelRow): number | null {
+  return r.price_in || r.price_out ? (r.price_in ?? 0) + (r.price_out ?? 0) : null;
+}
+
+const byName = (a: ModelRow, b: ModelRow) => a.label.localeCompare(b.label, undefined, { numeric: true, sensitivity: "base" });
+
+/** Rows in the chosen order. "company" keeps the kernel's order (sorted by id, so a
+ * company's models sit together); priced orders put models with no price last. */
+export function sortRows(rows: ModelRow[], order: ModelOrder): ModelRow[] {
+  if (order === "company") return rows;
+  if (order === "name") return [...rows].sort(byName);
+  const sign = order === "cheap" ? 1 : -1;
+  return [...rows].sort((a, b) => {
+    const pa = blendedPrice(a);
+    const pb = blendedPrice(b);
+    if (pa === null || pb === null) return pa === pb ? byName(a, b) : pa === null ? 1 : -1;
+    return (pa - pb) * sign || byName(a, b);
+  });
+}
+
+/** The companies the rows come from, A–Z. */
+export function companiesOf(rows: ModelRow[]): string[] {
+  return [...new Set(rows.map((r) => r.group).filter((g): g is string => !!g))].sort((a, b) => a.localeCompare(b));
+}
+
+/** Only the picked companies' rows; with none picked, or none of them in the list any
+ * more, every row (a filter that hides everything would look like an empty list). */
+export function filterCompanies(rows: ModelRow[], picked: string[]): ModelRow[] {
+  const present = new Set(companiesOf(rows));
+  const live = picked.filter((c) => present.has(c));
+  return live.length ? rows.filter((r) => r.group && live.includes(r.group)) : rows;
+}
+
 export function formatSize(bytes: number | null | undefined): string | null {
   if (bytes === null || bytes === undefined || !Number.isFinite(bytes) || bytes <= 0) return null;
   const gb = bytes / 1e9;

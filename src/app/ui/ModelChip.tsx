@@ -33,7 +33,22 @@ import {
   shownEffort as chipEffort,
 } from "../chat-state";
 import { glowFor } from "../effort-slider";
-import { badgesFor, effortLabel, filterRows, formatSize, formatUsd, isLocalRef, modelFacts } from "../models";
+import {
+  MODEL_ORDERS,
+  badgesFor,
+  companiesOf,
+  effortLabel,
+  filterCompanies,
+  filterRows,
+  formatSize,
+  formatUsd,
+  isLocalRef,
+  modelFacts,
+  parsePickerPrefs,
+  sortRows,
+  type ModelOrder,
+  type PickerPrefs,
+} from "../models";
 import { actions, useChat } from "../store";
 import { ContextSlider } from "./ContextSlider";
 import { EffortSlider } from "./EffortSlider";
@@ -311,17 +326,41 @@ function ApiKeyForm({ models }: { models: ModelListData }) {
   );
 }
 
+const PICKER_PREFS_KEY = "kokyu.picker";
+
+function loadPickerPrefs(): PickerPrefs {
+  try {
+    return parsePickerPrefs(localStorage.getItem(PICKER_PREFS_KEY));
+  } catch {
+    return parsePickerPrefs(null);
+  }
+}
+
 function ModelPopover({ current }: { current: string | null }) {
   const models = useChat((s) => s.models);
   const efforts = useChat(currentEfforts);
   const effort = useChat(currentEffort);
   const [keyOpen, setKeyOpen] = useState(false);
   const [query, setQuery] = useState("");
+  // D-127: the order and the companies shown, kept between sessions
+  const [prefs, setPrefs] = useState<PickerPrefs>(loadPickerPrefs);
+  const changePrefs = (patch: Partial<PickerPrefs>) => {
+    const next = { ...prefs, ...patch };
+    setPrefs(next);
+    try {
+      localStorage.setItem(PICKER_PREFS_KEY, JSON.stringify(next));
+    } catch {
+      // storage full or off: the choice lasts until the picker closes
+    }
+  };
   const [active, setActive] = useState(0);
   const search = useRef<HTMLInputElement>(null);
+  const popover = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     search.current?.focus();
+    // D-127: keep the opening height, so filtering never moves the controls under the pointer
+    if (popover.current) popover.current.style.minHeight = `${popover.current.offsetHeight}px`;
   }, []);
 
   // Chat memory (D-098): the thread's model's row, for its context range and fit point
@@ -329,12 +368,24 @@ function ModelPopover({ current }: { current: string | null }) {
     () => [...(models?.local ?? []), ...(models?.api ?? [])].find((r) => r.ref === current) ?? null,
     [models, current],
   );
-  const local = useMemo(() => filterRows(models?.local ?? [], query), [models, query]);
-  // D-126: the API models chosen in Settings, and the thread's own even if it is not one of them
-  const api = useMemo(
-    () => filterRows((models?.api ?? []).filter((r) => r.listed !== false || r.ref === current), query),
-    [models, query, current],
+  // D-127: local models have no price; only A–Z reorders them
+  const local = useMemo(
+    () => sortRows(filterRows(models?.local ?? [], query), prefs.order === "name" ? "name" : "company"),
+    [models, query, prefs.order],
   );
+  // D-126: the API models chosen in Settings, and the thread's own even if it is not one of them.
+  // D-127: "All models", or a search, reaches every model the endpoint has (an older version too).
+  const everyApi = models?.api ?? [];
+  const chosen = useMemo(() => everyApi.filter((r) => r.listed !== false || r.ref === current), [everyApi, current]);
+  const pool = prefs.all || query ? everyApi : chosen;
+  const companies = useMemo(() => companiesOf(pool), [pool]);
+  const api = useMemo(
+    () => sortRows(filterCompanies(filterRows(pool, query), prefs.companies), prefs.order),
+    [pool, query, prefs],
+  );
+  const toggleCompany = (name: string) =>
+    changePrefs({ companies: prefs.companies.includes(name) ? prefs.companies.filter((c) => c !== name) : [...prefs.companies, name] });
+  const picked = prefs.companies.filter((c) => companies.includes(c));
   // Keyboard order follows the list; rows that cannot be picked are skipped.
   const pickable = useMemo(() => [...local, ...api].filter((r) => r.available), [local, api]);
   const activeRef = pickable[Math.min(active, pickable.length - 1)]?.ref ?? null;
@@ -383,7 +434,7 @@ function ModelPopover({ current }: { current: string | null }) {
   const spend = models?.spend ?? null;
 
   return (
-    <div className="model-popover" role="dialog" aria-label="Choose a model">
+    <div className="model-popover" ref={popover} role="dialog" aria-label="Choose a model">
       <input
         ref={search}
         className="model-search"
@@ -453,6 +504,45 @@ function ModelPopover({ current }: { current: string | null }) {
                 ↻
               </button>
             </h3>
+            {everyApi.length > 1 ? (
+              <div className="model-tools">
+                {everyApi.length > chosen.length ? (
+                  <select
+                    className="model-sort"
+                    value={prefs.all ? "all" : "list"}
+                    aria-label="Which API models"
+                    onChange={(e) => changePrefs({ all: e.target.value === "all" })}
+                  >
+                    <option value="list">My list ({chosen.length})</option>
+                    <option value="all">All models ({everyApi.length})</option>
+                  </select>
+                ) : null}
+                <select
+                  className="model-sort"
+                  value={prefs.order}
+                  aria-label="Sort API models"
+                  onChange={(e) => changePrefs({ order: e.target.value as ModelOrder })}
+                >
+                  {MODEL_ORDERS.map((o) => (
+                    <option key={o.id} value={o.id}>
+                      {o.label}
+                    </option>
+                  ))}
+                </select>
+                {companies.length > 1 ? (
+                  <div className="model-companies" role="group" aria-label="Show these companies">
+                    <button type="button" aria-pressed={picked.length === 0} onClick={() => changePrefs({ companies: [] })}>
+                      All
+                    </button>
+                    {companies.map((c) => (
+                      <button key={c} type="button" aria-pressed={picked.includes(c)} onClick={() => toggleCompany(c)}>
+                        {c}
+                      </button>
+                    ))}
+                  </div>
+                ) : null}
+              </div>
+            ) : null}
             {/* A failed refresh is said out loud even when the cached list is still shown. */}
             {models.api_error && models.api.length > 0 ? (
               <p className="list-hint">Couldn't refresh the list ({models.api_error}); showing the cached one.</p>
@@ -460,7 +550,7 @@ function ModelPopover({ current }: { current: string | null }) {
             {api.length === 0 ? (
               <p className="list-hint">
                 {query && models.api.length
-                  ? "No API model in your list matches. Edit list adds more."
+                  ? "No API model matches."
                   : models.api_key
                     ? models.api_error
                       ? `Couldn't fetch the list: ${models.api_error}`
@@ -474,7 +564,7 @@ function ModelPopover({ current }: { current: string | null }) {
               {api.map((r, i) => (
                 <Fragment key={r.ref}>
                   {/* FR-M-4: grouped by provider; the rows come sorted by id, so a new vendor starts a group */}
-                  {r.group && r.group !== api[i - 1]?.group ? (
+                  {prefs.order === "company" && r.group && r.group !== api[i - 1]?.group ? (
                     <li className="list-hint" role="presentation">
                       {r.group}
                     </li>
