@@ -175,9 +175,10 @@ export const actions = {
 
   /** Regenerate the last reply, or Retry a failed turn (FR-C-9): the kernel replaces
    * the last exchange, so the user line is not stored twice. */
-  regenerate(): void {
+  /** Retry or Regenerate; with `modelRef`, that model answers this once (D-125's fallback). */
+  regenerate(modelRef?: string): void {
     const state = useChat.getState();
-    if (!canRegenerate(state) || !socket.send("regenerate", {})) return;
+    if (!canRegenerate(state) || !socket.send("regenerate", modelRef ? { model_ref: modelRef } : {})) return;
     muted = false;
     voice.stop();
     dispatch({ kind: "regenerating" });

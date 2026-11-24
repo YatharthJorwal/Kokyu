@@ -113,6 +113,30 @@ def _budget_exhausted(budget: BudgetConfig, state: RouterState) -> bool:
     return False
 
 
+def _usd(value: float) -> str:
+    return f"${value:.2f}" if value >= 0.01 else f"${value:.4f}"
+
+
+def budget_message(budget: BudgetConfig, spent: tuple[float, float, float], estimate: float) -> str:
+    """Which cap stops the call, and whether it is used up or this one reply
+    would pass it (FR-R-5): the estimate assumes the longest reply, thinking
+    included, so a cap can stop a model long before it is spent."""
+    caps = (("hourly", budget.hourly_usd), ("daily", budget.daily_usd), ("monthly", budget.monthly_usd))
+    for (name, cap), used in zip(caps, spent):
+        if cap < 0:
+            continue
+        if cap == 0:
+            return f"Your {name} spending cap is $0, so API models can't run. Raise it in Settings → Models, or switch model."
+        if used >= cap:
+            return f"Your {name} spending cap ({_usd(cap)}) is used up. Raise it in Settings → Models, or switch model."
+        if used + estimate > cap:
+            return (
+                f"A reply from this model can cost up to {_usd(estimate)}, more than the {_usd(cap - used)} left "
+                f"in your {name} cap. Raise the cap in Settings → Models, or switch model."
+            )
+    return "Your spending cap is reached. Raise it in Settings → Models, or switch model."
+
+
 def _price_unknown(budget: BudgetConfig, state: RouterState) -> bool:
     """A cap is on, but the catalog has no price for the model (D-058)."""
     caps = (budget.hourly_usd, budget.daily_usd, budget.monthly_usd)

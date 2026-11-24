@@ -29,7 +29,7 @@ import context_fit
 import llm
 import vram
 from config import CONFIG, Config, LlamaCppConfig
-from provider_presets import API_PRESETS
+from provider_presets import API_PRESETS, popular_in
 from router import capabilities, names
 from router import model_ref as model_refs
 from router.decision import LOCAL_PROVIDER, model_for
@@ -45,9 +45,33 @@ def default_ref(cfg: Config | None = None) -> str:
     """The model a thread without a choice uses, as an explicit reference:
     `chat.default_model_ref`, else the local Ollama chat model (D-050)."""
     cfg = cfg or CONFIG
-    if cfg.chat.default_model_ref:
-        return cfg.chat.default_model_ref
+    return cfg.chat.default_model_ref or local_ref(cfg)
+
+
+def local_ref(cfg: Config | None = None) -> str:
+    """The local Ollama chat model in `llm.model`, as a reference."""
+    cfg = cfg or CONFIG
     return f"local:ollama/{model_for(LOCAL_PROVIDER, 'chat', cfg.models)}"
+
+
+def fallback_ref(failed: str | None, cfg: Config | None = None) -> str | None:
+    """D-125: the model that may answer when `failed` (a thread's ref, None = the
+    default) can't: Settings' choice, else the local chat model. None when it is the
+    same model, which could only fail again."""
+    cfg = cfg or CONFIG
+    fallback = cfg.chat.fallback_model_ref or local_ref(cfg)
+    return None if fallback == effective_ref(failed, cfg) else fallback
+
+
+def listed_ids(model_ids: list[str], backend: str, cfg: Config | None = None) -> set[str]:
+    """D-126: the endpoint's models the picker shows: the user's list for it, else the
+    popular ones it has, else all (a custom endpoint the sets do not know)."""
+    cfg = cfg or CONFIG
+    chosen = cfg.chat.api_models.get(backend)
+    if isinstance(chosen, (list, tuple)):
+        return set(chosen) & set(model_ids)
+    popular = {model_id for ids in popular_in(model_ids).values() for model_id in ids}
+    return popular or set(model_ids)
 
 
 def effective_ref(thread_ref: str | None, cfg: Config | None = None) -> str:
@@ -168,16 +192,21 @@ def llamacpp_rows(cfg: LlamaCppConfig) -> list[dict[str, Any]]:
     return rows
 
 
-def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter", caps_on: bool = False) -> list[dict[str, Any]]:
+def api_rows(
+    catalog: Any, *, key_present: bool, backend: str = "airouter", caps_on: bool = False, cfg: Config | None = None
+) -> list[dict[str, Any]]:
     """Chat models from the provider catalog. Without a key they are listed but
     not selectable: picking one would only be refused (CLOUD_DISABLED)."""
     if catalog is None or not catalog.available:
         return []
     rows = []
-    for model_id in catalog.model_ids():
+    chat_ids = [
+        model_id for model_id in catalog.model_ids()
+        if (info := catalog.info(model_id)) is not None and info.kind in ("language", "", "chat", "text")
+    ]
+    listed = listed_ids(chat_ids, backend, cfg)
+    for model_id in chat_ids:
         info = catalog.info(model_id)
-        if info is None or info.kind not in ("language", "", "chat", "text"):
-            continue
         detail = [f"{info.context_length // 1000}k context"] if info.context_length else []
         unpriced = caps_on and not info.priced
         if unpriced:
@@ -194,6 +223,7 @@ def api_rows(catalog: Any, *, key_present: bool, backend: str = "airouter", caps
                 "detail": " · ".join(detail) or None,
                 "size_bytes": None,
                 "available": key_present,
+                "listed": model_id in listed,   # D-126: in the picker; every row is in Settings' chooser
                 "note": None if key_present else "needs an API key",
                 "fits": None,
                 "price_in": info.price_in or None,
@@ -405,7 +435,8 @@ async def model_list(
     status = rt.api_status() if hasattr(rt, "api_status") else None
     caps = (cfg.budget.hourly_usd, cfg.budget.daily_usd, cfg.budget.monthly_usd)
     caps_on = cfg.budget.enabled and any(cap >= 0 for cap in caps)
-    api = api_rows(catalog, key_present=key_present, backend=status["id"] if status else "airouter", caps_on=caps_on)
+    api = api_rows(catalog, key_present=key_present, backend=status["id"] if status else "airouter", caps_on=caps_on, cfg=cfg)
+    popular = popular_in([row["full"] for row in api])   # D-126: Settings' one-click sets
 
     spend = None
     ledger = getattr(rt, "ledger", None)
@@ -426,6 +457,8 @@ async def model_list(
 
     return {
         "default_ref": default_ref(cfg),
+        # D-125: the model that answers when the chosen one can't
+        "fallback_ref": cfg.chat.fallback_model_ref or local_ref(cfg),
         "local": local,
         "api": api,
         "local_error": local_error,
@@ -438,5 +471,8 @@ async def model_list(
         # D-059: the one active endpoint and the ones a key can be saved for. Never a key.
         "api_provider": status,
         "api_presets": _key_targets(cfg),
+        # D-126: Settings' one-click sets, and whether the list is the user's own
+        "api_popular": popular,
+        "api_own_list": isinstance(cfg.chat.api_models.get(status["id"] if status else "airouter"), (list, tuple)),
         "spend": spend,
     }

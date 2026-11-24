@@ -45,6 +45,32 @@ API_PRESETS: dict[str, dict[str, str]] = {
     },
 }
 
+# D-126: one-click sets for the picker's list, matched on the id after the vendor, so
+# "anthropic/claude-sonnet-5.5" and a bare "deepseek-chat" both count. Only the ones the
+# endpoint has are offered. shortcut: hand-kept; refresh when the big vendors ship.
+POPULAR_MODELS: dict[str, tuple[str, ...]] = {
+    "Popular": (
+        "claude-sonnet-5.5", "claude-haiku-5.5", "gpt-5.5", "gemini-3.8-flash", "deepseek-v4.1-flash",
+        "qwen3.8-max", "grok-4.7", "kimi-k3", "glm-5.3", "mistral-large-4", "deepseek-chat",
+    ),
+    "Budget": (
+        "qwen-3-14b", "deepseek-v4.1-flash", "gemini-3.8-flash", "gpt-5.4-mini", "claude-haiku-5.5",
+        "mistral-small", "llama-3.3-70b", "gpt-oss-120b", "deepseek-chat",
+    ),
+    "Strongest": (
+        "claude-fable-5.2", "claude-opus-5.5", "gpt-6.2-sol", "gpt-5.5-pro", "qwen4-max",
+        "kimi-k3.1-pro", "deepseek-v4-pro", "deepseek-reasoner",
+    ),
+}
+
+
+def popular_in(model_ids: list[str]) -> dict[str, list[str]]:
+    """Each popular set, as the endpoint's own ids, in the set's order; empty sets left out."""
+    by_name = {model_id.rpartition("/")[2]: model_id for model_id in model_ids}
+    found = {label: [by_name[name] for name in names if name in by_name] for label, names in POPULAR_MODELS.items()}
+    return {label: ids for label, ids in found.items() if ids}
+
+
 # Fields that describe *where* the endpoint is; everything else in the config slot
 # (timeouts, refresh hours, zdr) applies to whichever endpoint is active.
 ENDPOINT_FIELDS = ("label", "base_url", "models_url", "price_unit", "api_key_env", "models_cache")

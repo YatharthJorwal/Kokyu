@@ -409,7 +409,9 @@ def test_a_blocked_api_model_shows_retry_and_switch_and_nothing_answers_instead(
         _, rest = _until(ws, "turn_done")
     data = err["data"]
     assert data["code"] == "model_blocked" and data["reason"] == d.CLOUD_DISABLED
-    assert data["actions"] == ["retry", "switch_model"] and data["model_ref"] == API
+    # D-125: the local model is offered, never run without a click
+    assert data["actions"] == ["retry", "switch_model", "fallback"] and data["model_ref"] == API
+    assert data["fallback"] == model_listing.local_ref()
     tokens = [m for m in seen + rest if m["type"] == "token"]
     assert tokens == []                                        # no other model replied
     assert len(calls) == 1

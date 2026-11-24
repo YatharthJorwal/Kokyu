@@ -131,6 +131,8 @@ async def test_the_cap_frees_up_once_its_window_has_passed(tmp_path):
     with pytest.raises(RouteBlockedError) as blocked:
         await drain(router, ask())
     assert blocked.value.reason == d.BUDGET_EXHAUSTED
+    # not "reached": $0.001 is left, one reply could pass it
+    assert "can cost up to" in blocked.value.message and "$0.0010 left in your hourly cap" in blocked.value.message
     now["t"] += 2 * 3600
     await drain(router, ask())                                  # used to stay blocked until a restart
 

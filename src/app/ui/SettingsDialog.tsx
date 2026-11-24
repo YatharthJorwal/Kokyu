@@ -9,15 +9,15 @@
 // behaviour and size (the page's) and Create pet (D-103). Waifus, Scenes and Advanced
 // arrive with their phases.
 
-import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
+import { Fragment, Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
-import { FACT_MAX, URL_MAX, type BudgetCaps, type DoctorCheck, type MemoryFact, type ModelRow, type ServerData, type SettingsChange, type SettingsData } from "../../net/protocol";
+import { FACT_MAX, URL_MAX, type BudgetCaps, type DoctorCheck, type MemoryFact, type ModelListData, type ModelRow, type ServerData, type SettingsChange, type SettingsData } from "../../net/protocol";
 import { currentMode, modelLabel, uploadProblem, type Companion, type SettingsSection } from "../chat-state";
 import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
 import { PICTURE_ACCEPT } from "../file-upload";
 import { setDictationKey, useDictationKey } from "../dictation-key";
 import { VOICE_START_S } from "../read-aloud";
-import { formatSize, formatUsd } from "../models";
+import { filterRows, formatSize, formatUsd } from "../models";
 import { PET_SIZE_MAX, PET_SIZE_MIN, POSES, petPrompt, type Pose } from "../pet-brain";
 import { actions, setPetPrefs, useChat, usePetPrefs } from "../store";
 import { ACCENTS, DEFAULT_GLOW, GLOWS, PRESETS, applyTheme, loadTheme, saveTheme, type Preset, type Theme } from "../theme";
@@ -116,7 +116,7 @@ function spent(value: number | null | undefined, cap: number | null | undefined)
   return cap == null ? `${used} (no cap)` : `${used} of ${formatUsd(cap)}`;
 }
 
-type FormName = "ollama" | "custom" | "budget" | "screen";
+type FormName = "ollama" | "custom" | "budget" | "screen" | "fallback" | "api_models";
 
 /** Which form was saved last and whether its answer is back: the kernel's `settings`
  * frame answers every save, with `problem` set when it refused the change. */
@@ -250,6 +250,20 @@ function ModelsSection() {
       </div>
       <FormStatus text={editing === null ? saving.status("custom") : null} failed={saving.failed("custom")} />
 
+      {models && models.api.length > 0 ? (
+        <>
+          <h4>API models in the picker</h4>
+          <ApiListForm key={models.api.filter((r) => r.listed).map((r) => r.ref).join(" ")} models={models} saving={saving} />
+        </>
+      ) : null}
+
+      {models && prefs ? (
+        <>
+          <h4>When the chosen model can't answer</h4>
+          <FallbackForm prefs={prefs} models={models} saving={saving} />
+        </>
+      ) : null}
+
       <h4>Budget</h4>
       {spend ? (
         <p className="muted">
@@ -334,6 +348,138 @@ function CustomApiForm({ prefs, saving }: { prefs: SettingsData; saving: Saving 
         cost is not counted against your spending cap.
       </p>
     </form>
+  );
+}
+
+/** D-126: which of the endpoint's models the picker shows: popular sets in one click,
+ * or a searchable checklist with Select all. Saved with Save; Restore defaults goes
+ * back to the popular ones. */
+function ApiListForm({ models, saving }: { models: ModelListData; saving: Saving }) {
+  const endpoint = models.api_provider?.id ?? "airouter";
+  const idOf = (r: ModelRow) => r.full ?? r.ref;
+  const saved = models.api.filter((r) => r.listed).map(idOf);
+  const [draft, setDraft] = useState<string[]>(saved);
+  const [choosing, setChoosing] = useState(false);
+  const [query, setQuery] = useState("");
+  const chosen = new Set(draft);
+  const byId = new Map(models.api.map((r) => [idOf(r), r]));
+  const changed = draft.length !== saved.length || saved.some((id) => !chosen.has(id));
+  const add = (ids: string[]) => setDraft([...draft, ...ids.filter((id) => !chosen.has(id))]);
+  const drop = (ids: string[]) => setDraft(draft.filter((id) => !ids.includes(id)));
+  const shown = filterRows(models.api, query);
+  const shownIds = shown.map(idOf);
+  const label = (id: string) => byId.get(id)?.label ?? id;
+  return (
+    <div className="settings-form">
+      <p className="muted settings-hint">
+        The model picker lists only these. {models.api_provider?.label ?? "The endpoint"} has {models.api.length} models.
+      </p>
+      {draft.length > 0 ? (
+        <ul className="api-chosen">
+          {draft.map((id) => (
+            <li key={id} title={id}>
+              <span>{label(id)}</span>
+              <button type="button" className="ghost" aria-label={`Remove ${label(id)}`} onClick={() => drop([id])}>
+                ✕
+              </button>
+            </li>
+          ))}
+        </ul>
+      ) : (
+        <p className="muted">None chosen: the picker shows no API models.</p>
+      )}
+      <div className="settings-choices">
+        {Object.entries(models.api_popular ?? {}).map(([name, ids]) => (
+          <button key={name} type="button" title={ids.map(label).join(", ")} onClick={() => add(ids)}>
+            + {name}
+          </button>
+        ))}
+        <button type="button" aria-expanded={choosing} onClick={() => setChoosing((c) => !c)}>
+          {choosing ? "Hide the full list" : "Choose from all models…"}
+        </button>
+      </div>
+      {choosing ? (
+        <div className="api-chooser">
+          <div className="settings-row">
+            <label className="settings-field">
+              <span className="sr-only">Search models</span>
+              <input type="search" value={query} placeholder="Search models" maxLength={100} onChange={(e) => setQuery(e.target.value)} />
+            </label>
+            <button type="button" onClick={() => add(shownIds)} disabled={shownIds.every((id) => chosen.has(id))}>
+              {query ? "Select all shown" : "Select all"}
+            </button>
+            <button type="button" onClick={() => drop(shownIds)} disabled={!shownIds.some((id) => chosen.has(id))}>
+              {query ? "Clear shown" : "Clear all"}
+            </button>
+          </div>
+          <ul className="api-checklist">
+            {shown.map((r, i) => (
+              <Fragment key={r.ref}>
+                {r.group && r.group !== shown[i - 1]?.group ? <li className="list-hint">{r.group}</li> : null}
+                <li>
+                  <label>
+                    <input type="checkbox" checked={chosen.has(idOf(r))} onChange={(e) => (e.target.checked ? add([idOf(r)]) : drop([idOf(r)]))} />
+                    <span>{r.label}</span>
+                    <span className="muted">{idOf(r)}</span>
+                  </label>
+                </li>
+              </Fragment>
+            ))}
+            {shown.length === 0 ? <li className="list-hint">No model matches.</li> : null}
+          </ul>
+        </div>
+      ) : null}
+      <div className="settings-actions">
+        <button type="button" disabled={!changed} onClick={() => saving.save("api_models", { api_models: { endpoint, models: draft } })}>
+          Save
+        </button>
+        {models.api_own_list ? (
+          <button type="button" className="ghost" onClick={() => saving.save("api_models", { api_models: { endpoint, models: null } })}>
+            Restore defaults
+          </button>
+        ) : null}
+        <FormStatus text={saving.status("api_models")} failed={saving.failed("api_models")} />
+      </div>
+    </div>
+  );
+}
+
+/** D-125: when the chosen model can't answer, the failure card offers this model
+ * ("ask"), or it answers at once and the reply says so ("auto"). Saved on change. */
+function FallbackForm({ prefs, models, saving }: { prefs: SettingsData; models: ModelListData; saving: Saving }) {
+  const current = prefs.fallback ?? { model_ref: null, mode: "ask" as const };
+  const local = useChat((s) => modelLabel(s, current.model_ref === null ? (models.fallback_ref ?? null) : null));
+  const options = [...models.local, ...models.api.filter((r) => r.listed || r.ref === current.model_ref)].filter((r) => r.available || r.ref === current.model_ref);
+  const save = (next: typeof current) => saving.save("fallback", { fallback: next });
+  return (
+    <div className="settings-form">
+      <div className="settings-choices" role="group" aria-label="When the chosen model can't answer">
+        <button type="button" aria-pressed={current.mode === "ask"} onClick={() => save({ ...current, mode: "ask" })}>
+          Ask me
+        </button>
+        <button type="button" aria-pressed={current.mode === "auto"} onClick={() => save({ ...current, mode: "auto" })}>
+          Answer by itself
+        </button>
+      </div>
+      <label className="settings-field">
+        <span>Fallback model</span>
+        <select value={current.model_ref ?? ""} onChange={(e) => save({ ...current, model_ref: e.target.value || null })}>
+          <option value="">{current.model_ref === null ? `This PC's chat model (${local})` : "This PC's chat model"}</option>
+          {options.map((r) => (
+            <option key={r.ref} value={r.ref}>
+              {r.kind === "api" ? `${r.label} (API)` : r.label}
+            </option>
+          ))}
+        </select>
+      </label>
+      <p className="muted settings-hint">
+        {current.mode === "ask"
+          ? "A reply that fails offers “Answer with …”: one click and this model answers instead."
+          : "This model answers at once, and the reply says which model wrote it."}{" "}
+        The chat keeps its own model for the next message.
+      </p>
+      <FormStatus text={saving.status("fallback")} failed={saving.failed("fallback")} />
+    </div>
   );
 }
 
@@ -967,7 +1113,7 @@ function AppearanceSection() {
           </div>
           <div className="theme-cards" role="group" aria-label="Theme">
             {(Object.keys(PRESETS) as Preset[]).map((id) => (
-              <button key={id} type="button" aria-pressed={theme.preset === id} onClick={() => change({ preset: id })}>
+              <button key={id} type="button" aria-pressed={theme.preset === id} onClick={() => change({ preset: id, accent: null })}>
                 <span className="theme-sample" style={{ background: PRESETS[id].vars["--bg"], borderColor: PRESETS[id].vars["--line"] }}>
                   <span style={{ background: PRESETS[id].vars["--panel"] }} />
                   <span style={{ background: PRESETS[id].vars["--accent"] }} />

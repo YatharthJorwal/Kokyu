@@ -330,7 +330,11 @@ function ModelPopover({ current }: { current: string | null }) {
     [models, current],
   );
   const local = useMemo(() => filterRows(models?.local ?? [], query), [models, query]);
-  const api = useMemo(() => filterRows(models?.api ?? [], query), [models, query]);
+  // D-126: the API models chosen in Settings, and the thread's own even if it is not one of them
+  const api = useMemo(
+    () => filterRows((models?.api ?? []).filter((r) => r.listed !== false || r.ref === current), query),
+    [models, query, current],
+  );
   // Keyboard order follows the list; rows that cannot be picked are skipped.
   const pickable = useMemo(() => [...local, ...api].filter((r) => r.available), [local, api]);
   const activeRef = pickable[Math.min(active, pickable.length - 1)]?.ref ?? null;
@@ -427,6 +431,9 @@ function ModelPopover({ current }: { current: string | null }) {
               API{models.api_provider ? ` · ${models.api_provider.label}` : ""}
               {models.api.some((r) => r.price_in || r.price_out) ? <span className="per">$ per 1M in / out</span> : null}
               {models.api_stale ? <span className="badge stale">cached</span> : null}
+              <button type="button" className="refresh key" title="Choose which API models show here" onClick={() => actions.openSettings("models")}>
+                Edit list
+              </button>
               <button
                 type="button"
                 className="refresh key"
@@ -453,11 +460,13 @@ function ModelPopover({ current }: { current: string | null }) {
             {api.length === 0 ? (
               <p className="list-hint">
                 {query && models.api.length
-                  ? "No API model matches."
+                  ? "No API model in your list matches. Edit list adds more."
                   : models.api_key
                     ? models.api_error
                       ? `Couldn't fetch the list: ${models.api_error}`
-                      : "No API models listed."
+                      : models.api.length
+                        ? "None chosen. Edit list adds some."
+                        : "No API models listed."
                     : "No API key yet. Add one with Key above."}
               </p>
             ) : null}

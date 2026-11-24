@@ -84,9 +84,10 @@ def llm_failure_line(exc: Exception) -> str:
     return LLM_UNREACHABLE_LINE
 
 
-def failure_frame(exc: Exception, thread_id: str | None) -> dict[str, Any]:
+def failure_frame(exc: Exception, thread_id: str | None, fallback: str | None = None) -> dict[str, Any]:
     """The `error` frame for a failed turn: the router's typed failure when there is
-    one, else a plain one. Either way the chat offers Retry and Switch model."""
+    one, else a plain one. Either way the chat offers Retry and Switch model, and
+    the fallback model when there is one (D-125)."""
     failure = protocol.model_failure(exc) or {
         "code": "model_failed",
         "reason": type(exc).__name__,
@@ -95,7 +96,17 @@ def failure_frame(exc: Exception, thread_id: str | None) -> dict[str, Any]:
         "actions": ["retry", "switch_model"],
         "reply_to": None,
     }
+    if fallback:
+        failure = {**failure, "actions": [*failure["actions"], "fallback"], "fallback": fallback}
     return protocol.frame("error", failure, thread=thread_id)
+
+
+def fallback_line(failed: str | None, fallback: str, exc: Exception) -> str:
+    """D-125: what the window says when the fallback model takes the turn by itself."""
+    failure = protocol.model_failure(exc)
+    why = (failure["message"] if failure else llm_failure_line(exc)).split(". ")[0].rstrip(".")
+    old = model_listing.label_for(model_listing.effective_ref(failed, CONFIG))
+    return f"{old} couldn't answer: {why}. {model_listing.label_for(fallback)} is answering instead."
 
 
 # Phase 4 -- how many rounds of "model calls a tool, gets a result, tries
@@ -334,6 +345,7 @@ async def run_turn(
     story: str | None = None,
     pins: list[str] | None = None,
     note: str | None = None,
+    fallback_from: str | None = None,
 ) -> str:
     """The actual agent turn: append user_text to history, stream the LLM
     reply, commit (or roll back) history. Returns the reply to read aloud
@@ -354,6 +366,9 @@ async def run_turn(
     time (Session.saver) for where it actually gets used. None
     means "don't bother" (there's nowhere to track it, or this call site
     doesn't care) -- every real call site passes a real list.
+
+    fallback_from: the thread's model when `model_ref` answers in its place (D-125):
+    the failure card's fallback button. Set here too when "auto" hands the turn over.
 
     mode: the thread's conversation mode (FR-MODE-1, D-074), from the THREAD only.
     A roleplay turn reads only the profile card, runs no forget, Task Guide or look
@@ -509,105 +524,136 @@ async def run_turn(
     # D-098: the history budget follows this model's Chat memory, the same value its requests use.
     chat_memory = context_fit.context_for(model_listing.effective_ref(model_ref, CONFIG))
     try:
-        for _ in range(MAX_TOOL_ROUNDS):
-            saw_tool_call = False
-            # K1-00c (D-025): the conversation runs as the `chat` role on the
-            # thread's chosen model and effort. A camera/screen capture this
-            # turn is ambient content and may only go to a local model.
-            stream = router.stream_with_tools(
-                "chat",
-                fit_for_llm(messages_for_llm, offered_tools, tool_messages, num_ctx=chat_memory) + tool_messages,
-                offered_tools,
-                model_ref=model_ref,
-                effort=effort,
-                ambient=bool(look_hint),
-            )
-            async for event in stream:
-                if event["type"] == "tool_calls":
-                    saw_tool_call = True
-                    # Dispatched and appended one at a time, in order --
-                    # if the model asked for more than one tool in the
-                    # same turn (untested whether qwen3.5:9b actually
-                    # does this), each one's result needs to already be
-                    # in tool_messages before the next round re-calls the
-                    # model, same as a real multi-tool exchange would.
-                    for call in event["calls"]:
-                        result_text = await tools.dispatch_tool_call(
-                            call["name"], call["arguments"], websocket=websocket, offered=offered_names
-                        )
-                        tool_messages.append(
-                            {
-                                "role": "assistant",
-                                "content": "",
-                                "tool_calls": [
+        while True:
+            try:
+                for _ in range(MAX_TOOL_ROUNDS):
+                    saw_tool_call = False
+                    # K1-00c (D-025): the conversation runs as the `chat` role on the
+                    # thread's chosen model and effort. A camera/screen capture this
+                    # turn is ambient content and may only go to a local model.
+                    stream = router.stream_with_tools(
+                        "chat",
+                        fit_for_llm(messages_for_llm, offered_tools, tool_messages, num_ctx=chat_memory) + tool_messages,
+                        offered_tools,
+                        model_ref=model_ref,
+                        effort=effort,
+                        ambient=bool(look_hint),
+                    )
+                    async for event in stream:
+                        if event["type"] == "tool_calls":
+                            saw_tool_call = True
+                            # Dispatched and appended one at a time, in order --
+                            # if the model asked for more than one tool in the
+                            # same turn (untested whether qwen3.5:9b actually
+                            # does this), each one's result needs to already be
+                            # in tool_messages before the next round re-calls the
+                            # model, same as a real multi-tool exchange would.
+                            for call in event["calls"]:
+                                result_text = await tools.dispatch_tool_call(
+                                    call["name"], call["arguments"], websocket=websocket, offered=offered_names
+                                )
+                                tool_messages.append(
                                     {
-                                        "function": {
-                                            "name": call["name"],
-                                            "arguments": call["arguments"],
-                                        }
+                                        "role": "assistant",
+                                        "content": "",
+                                        "tool_calls": [
+                                            {
+                                                "function": {
+                                                    "name": call["name"],
+                                                    "arguments": call["arguments"],
+                                                }
+                                            }
+                                        ],
                                     }
-                                ],
-                            }
-                        )
-                        tool_messages.append({"role": "tool", "content": result_text})
-                    if raw_text and not raw_text[-1].isspace():
-                        raw_text += "\n\n"   # what she said before the tool and after it stay apart
-                    break  # re-enter the outer for-loop with results appended
-                if event["type"] == "usage":
-                    usage = event
-                    continue
-                if event["type"] == "notice":
-                    notice = {"code": "price_unknown", "message": event["text"], "reply_to": None}
-                    await websocket.send_json(protocol.frame("error", notice, thread=thread_id))
-                    continue
-                raw_text += event["text"]
-                if guard.hit(raw_text):
-                    harmful = True   # checked before the token is shown
-                    break
-                cut = echo.start(raw_text)
-                if cut is not None:
-                    raw_text = raw_text[:cut].rstrip()
-                    echoed = True
-                    break
-                if event["text"]:
-                    await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
-                timings.mark("first_token")
-            if echoed:
-                with contextlib.suppress(Exception):
-                    await stream.aclose()   # what she said before it stands; turn_done carries it
-            if harmful:
-                with contextlib.suppress(Exception):
-                    await stream.aclose()   # the model stops writing now
-                raw_text = ""
-                with contextlib.suppress(Exception):
-                    await websocket.send_json(protocol.frame("safety", {"where": "reply"}, thread=thread_id))
-                break
-            if not saw_tool_call:
-                # A normal reply, not another tool call -- stream's fully
-                # done now, not mid-flight, so this is the only safe point
-                # to check for a trailing [emotion] tag (see
-                # extract_emotion_tag()'s own docstring on why mid-stream
-                # would risk a false match).
-                detected_emotion = extract_emotion_tag(raw_text)[1]
-                to_speak = reply_text(raw_text)
-                if not to_speak:
-                    # The model ended without a word (often a thinking model out of
-                    # room): say so, never a silent turn (FR-R-5, D-064).
+                                )
+                                tool_messages.append({"role": "tool", "content": result_text})
+                            if raw_text and not raw_text[-1].isspace():
+                                raw_text += "\n\n"   # what she said before the tool and after it stay apart
+                            break  # re-enter the outer for-loop with results appended
+                        if event["type"] == "usage":
+                            usage = event
+                            continue
+                        if event["type"] == "notice":
+                            notice = {"code": "price_unknown", "message": event["text"], "reply_to": None}
+                            await websocket.send_json(protocol.frame("error", notice, thread=thread_id))
+                            continue
+                        raw_text += event["text"]
+                        if guard.hit(raw_text):
+                            harmful = True   # checked before the token is shown
+                            break
+                        cut = echo.start(raw_text)
+                        if cut is not None:
+                            raw_text = raw_text[:cut].rstrip()
+                            echoed = True
+                            break
+                        if event["text"]:
+                            await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
+                        timings.mark("first_token")
+                    if echoed:
+                        with contextlib.suppress(Exception):
+                            await stream.aclose()   # what she said before it stands; turn_done carries it
+                    if harmful:
+                        with contextlib.suppress(Exception):
+                            await stream.aclose()   # the model stops writing now
+                        raw_text = ""
+                        with contextlib.suppress(Exception):
+                            await websocket.send_json(protocol.frame("safety", {"where": "reply"}, thread=thread_id))
+                        break
+                    if not saw_tool_call:
+                        # A normal reply, not another tool call -- stream's fully
+                        # done now, not mid-flight, so this is the only safe point
+                        # to check for a trailing [emotion] tag (see
+                        # extract_emotion_tag()'s own docstring on why mid-stream
+                        # would risk a false match).
+                        detected_emotion = extract_emotion_tag(raw_text)[1]
+                        to_speak = reply_text(raw_text)
+                        if not to_speak:
+                            # The model ended without a word (often a thinking model out of
+                            # room): say so, never a silent turn (FR-R-5, D-064).
+                            with contextlib.suppress(Exception):
+                                failure = {"code": "model_failed", "reason": "EMPTY_REPLY", "message": EMPTY_REPLY_LINE,
+                                           "model_ref": model_ref, "actions": ["retry", "switch_model"], "reply_to": None}
+                                await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
+                        break
+                else:
+                    # Used up every round still calling tools, never landed on an
+                    # actual reply -- a model stuck re-calling a tool (or hitting
+                    # one that keeps failing) shouldn't hang the turn forever.
+                    # Distinct from LLMUnreachableError below: the server itself
+                    # is fine, she just never got to a real answer.
                     with contextlib.suppress(Exception):
-                        failure = {"code": "model_failed", "reason": "EMPTY_REPLY", "message": EMPTY_REPLY_LINE,
-                                   "model_ref": model_ref, "actions": ["retry", "switch_model"], "reply_to": None}
+                        failure = {"code": "model_failed", "reason": "TOOL_LOOP", "message": TOOL_STUCK_LINE,
+                                   "model_ref": None, "actions": ["retry"], "reply_to": None}
                         await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
                 break
-        else:
-            # Used up every round still calling tools, never landed on an
-            # actual reply -- a model stuck re-calling a tool (or hitting
-            # one that keeps failing) shouldn't hang the turn forever.
-            # Distinct from LLMUnreachableError below: the server itself
-            # is fine, she just never got to a real answer.
-            with contextlib.suppress(Exception):
-                failure = {"code": "model_failed", "reason": "TOOL_LOOP", "message": TOOL_STUCK_LINE,
-                           "model_ref": None, "actions": ["retry"], "reply_to": None}
-                await websocket.send_json(protocol.frame("error", failure, thread=thread_id))
+            except llm.LLMUnreachableError as exc:
+                # D-125: on "auto", a model that failed before saying anything hands the
+                # turn to the fallback model, once, and the window says why. A file never
+                # moves to an API model this way: it was not sent there (FR-R-7).
+                switch = (
+                    model_listing.fallback_ref(model_ref, CONFIG)
+                    if CONFIG.chat.on_model_failure == "auto" and fallback_from is None and not raw_text and not tool_messages
+                    else None
+                )
+                if switch is not None and attachment and not is_local_ref(switch):
+                    switch = None
+                if switch is None:
+                    raise
+                log.warning(f"chat model failed ({type(exc).__name__}: {exc}); {switch} answers instead (D-125)")
+                with contextlib.suppress(Exception):
+                    note_frame = {"code": "model_fallback", "message": fallback_line(model_ref, switch, exc), "reply_to": None}
+                    await websocket.send_json(protocol.frame("error", note_frame, thread=thread_id))
+                fallback_from = model_listing.effective_ref(model_ref, CONFIG)
+                model_ref, effort = switch, None
+                local_model = is_local_ref(model_ref)
+                if local_model:
+                    sent_to = None
+                offered_tools = [] if roleplay else tools.offered_schemas(already_looked=bool(look_hint), local_model=local_model)
+                offered_names = {schema["function"]["name"] for schema in offered_tools}
+                chat_memory = context_fit.context_for(model_ref)
+                pending_load = model_loader.LOADER.request(model_ref)
+                if pending_load is not None:
+                    await asyncio.wait({pending_load})
     except llm.LLMUnreachableError as exc:
         # Logged: this branch used to swallow the exception completely, so a
         # 400/500 or a timeout from a server that was running looked exactly
@@ -617,7 +663,8 @@ async def run_turn(
         # typed error the chat view turns into Retry / Switch model; never
         # quietly answer from another model.
         with contextlib.suppress(Exception):
-            await websocket.send_json(failure_frame(exc, thread_id))
+            fallback = None if fallback_from else model_listing.fallback_ref(model_ref, CONFIG)
+            await websocket.send_json(failure_frame(exc, thread_id, fallback))
         # Half a reply is still what she said: it is kept (below), but not read aloud.
     except Exception:  # noqa: BLE001 -- deliberate catch-all, see below
         # Anything else (a TTS failure, a socket error, a plain bug) used to
@@ -684,7 +731,10 @@ async def run_turn(
                 try:
                     meta = {"log_id": log_id, "attachment": attachment, "sent_to": sent_to,
                             "tokens_in": usage.get("tokens_in"), "tokens_out": usage.get("tokens_out"),
-                            "safety": "reply" if harmful else None}
+                            "safety": "reply" if harmful else None,
+                            # D-125: which model answered in the thread's model's place
+                            "answered_by": model_listing.effective_ref(model_ref, CONFIG) if fallback_from else None,
+                            "instead_of": fallback_from}
                     await on_finished(user_text, final_text, stopped, {k: v for k, v in meta.items() if v is not None})
                 except Exception as exc:  # noqa: BLE001 -- a storage hiccup must not end the turn
                     log.warning(f"could not save the exchange to the thread: {exc}")

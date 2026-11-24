@@ -104,6 +104,7 @@ export const ERROR_CODES = [
   "picture_unreadable",
   "unknown_message",
   "pin_limit",
+  "model_fallback",
 ] as const;
 
 /** D-097: Read aloud (each finished reply spoken), kept by the engine in settings.json,
@@ -212,6 +213,8 @@ export interface ModelRow {
   size_bytes: number | null;
   /** False: listed but not usable now (no key, missing file); `note` says why. */
   available: boolean;
+  /** D-126: API rows only: false = not in the picker, only in Settings' chooser. */
+  listed?: boolean;
   note: string | null;
   /** Fits in VRAM? Null until the VRAM manager (K1-09). */
   fits: boolean | null;
@@ -262,6 +265,11 @@ export interface ModelListData {
   api_provider?: { id: string; label: string; key: "app" | "developer" | null } | null;
   /** Endpoints a key can be saved for (D-059). */
   api_presets?: { id: string; label: string }[];
+  /** D-125: the model that answers when the chosen one can't. */
+  fallback_ref?: string;
+  /** D-126: one-click sets of this endpoint's ids, and whether the picker's list is the user's own. */
+  api_popular?: Record<string, string[]>;
+  api_own_list?: boolean;
 }
 
 export type ModelLoadState = "idle" | "loading" | "ready" | "failed";
@@ -297,7 +305,9 @@ export interface ServerData {
     /** What the provider itself said (FR-R-5), for a "Details" disclosure. */
     detail?: string | null;
     model_ref?: string | null;
-    actions?: ("retry" | "switch_model")[];
+    actions?: ("retry" | "switch_model" | "fallback")[];
+    /** D-125: the model the "fallback" action asks to answer instead. */
+    fallback?: string | null;
   };
   model_list: ModelListData;
   model_status: ModelStatus;
@@ -338,9 +348,16 @@ export interface SettingsData {
   budget: BudgetCaps;
   custom_api: { id: string; label: string; base_url: string } | null;
   screen: { task_guide: boolean; ocr_watch: boolean };
-  saved: ("ollama_url" | "budget" | "custom_api" | "screen")[];
+  /** D-125: model_ref null = this PC's chat model. */
+  fallback?: FallbackPrefs;
+  saved: ("ollama_url" | "budget" | "custom_api" | "screen" | "fallback")[];
   file: string;
   problem: string | null;
+}
+
+export interface FallbackPrefs {
+  model_ref: string | null;
+  mode: "ask" | "auto";
 }
 
 /** A null cap is no cap (FR-M-7). */
@@ -357,6 +374,9 @@ export interface SettingsChange {
   budget?: BudgetCaps;
   custom_api?: { label: string; base_url: string } | null;
   screen?: Partial<SettingsData["screen"]>;
+  fallback?: FallbackPrefs;
+  /** D-126: the picker's API list for one endpoint; null = its popular models again. */
+  api_models?: { endpoint: string; models: string[] | null };
 }
 
 /** K1-13 (FR-SET-3): one component's state and how to fix it. */
@@ -419,7 +439,8 @@ export interface ClientData {
   model_load: Record<string, never>;
   model_unload: { ref: string };
   /** With `text`, the last user line is edited first (UI1-07, D-092). */
-  regenerate: { text?: string };
+  /** With `model_ref`, that model answers this once (D-125); the thread keeps its own. */
+  regenerate: { text?: string; model_ref?: string };
   screen_companion: { mode: "task_guide" | "ocr_watch"; on: boolean; task?: string };
   typing: Record<string, never>;
   read_aloud: { on: boolean };

@@ -171,11 +171,25 @@ class SendText(_Data):
     text: str = Field(min_length=1, max_length=TEXT_MAX)
 
 
+def _model_ref(value: str | None) -> str | None:
+    if value is None or value == "":
+        return None
+    try:
+        return str(model_refs.parse(value))
+    except model_refs.ModelRefError as exc:
+        raise ValueError(str(exc)) from None
+
+
 class Regenerate(_Data):
     """K1-04 (FR-C-9): run the last exchange again. With `text`, the user line is
-    edited first and the exchange runs with the new words (UI1-07, FR-C-9, D-092)."""
+    edited first and the exchange runs with the new words (UI1-07, FR-C-9, D-092).
+    With `model_ref`, that model answers this once (D-125: the failure card's
+    fallback); the thread keeps its own."""
 
     text: str | None = Field(default=None, min_length=1, max_length=TEXT_MAX)
+    model_ref: str | None = Field(default=None, max_length=300)
+
+    _valid_ref = field_validator("model_ref")(_model_ref)
 
 
 class SendFile(_Data):
@@ -222,15 +236,7 @@ class CameraFrame(_Data):
 class SetModel(_Data):
     model_ref: str | None = None      # null = the local default model
 
-    @field_validator("model_ref")
-    @classmethod
-    def _valid_ref(cls, value: str | None) -> str | None:
-        if value is None or value == "":
-            return None
-        try:
-            return str(model_refs.parse(value))
-        except model_refs.ModelRefError as exc:
-            raise ValueError(str(exc)) from None
+    _valid_ref = field_validator("model_ref")(_model_ref)
 
 
 class SetEffort(_Data):
@@ -293,6 +299,24 @@ class ScreenAtStart(_Data):
     ocr_watch: bool | None = None
 
 
+class FallbackSettings(_Data):
+    """D-125: the model that answers when the chosen one can't (None: the local chat
+    model), and whether the failure card asks first or it answers at once."""
+
+    model_ref: str | None = Field(default=None, max_length=300)
+    mode: Literal["ask", "auto"] = "ask"
+
+    _valid_ref = field_validator("model_ref")(_model_ref)
+
+
+class ApiModels(_Data):
+    """D-126: the API models the picker lists for one endpoint; None goes back to the
+    popular ones. Ids are checked in settings_file.change."""
+
+    endpoint: str = Field(min_length=1, max_length=32)
+    models: list[str] | None = Field(default=None, max_length=2000)
+
+
 class SettingsChange(_Data):
     """K1-13b (FR-SET-2, D-070): only the keys sent change. `ollama_url` "" or null
     and `custom_api` null go back to config.yaml's value."""
@@ -301,6 +325,8 @@ class SettingsChange(_Data):
     budget: BudgetSettings | None = None
     custom_api: CustomApi | None = None
     screen: ScreenAtStart | None = None
+    fallback: FallbackSettings | None = None
+    api_models: ApiModels | None = None
 
 
 # Client -> kernel, versioned. The data model for each type.
@@ -401,6 +427,7 @@ ERROR_CODES: tuple[str, ...] = (
     "picture_unreadable",   # D-091: a chosen picture that is not an image
     "unknown_message",      # D-100: a message action on a message that is gone
     "pin_limit",            # D-100: a story already has its most pins
+    "model_fallback",       # D-125: the chosen model failed; the fallback is answering
 )
 
 

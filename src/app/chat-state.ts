@@ -51,6 +51,8 @@ export interface ChatMessage {
   ts?: number;
   /** The model that wrote a reply (UI1-07: shown on hover). */
   model?: string | null;
+  /** D-125: the thread's model this reply was written in place of (the fallback answered). */
+  insteadOf?: string;
   /** The line came from a file: the engine words it, so it cannot be edited. */
   file?: boolean;
   /** A screen remark or a roleplay's opening: no exchange's part, as the kernel's _aside. */
@@ -69,8 +71,10 @@ export interface ChatMessage {
 export interface Notice {
   code: ErrorCode | "client";
   text: string;
-  actions: ("retry" | "switch_model")[];
+  actions: ("retry" | "switch_model" | "fallback")[];
   detail?: string | null;
+  /** D-125: the model "Answer with …" asks. */
+  fallback?: string | null;
 }
 
 /** A short confirmation that fades by itself (UI1-09): "Pinned", "Conversation deleted". */
@@ -298,6 +302,7 @@ export function fromStored(m: ThreadMessage): ChatMessage {
     sentTo: typeof m.meta?.sent_to === "string" ? m.meta.sent_to : undefined,
     ts: m.ts,
     model: m.role === "assistant" ? m.model_ref : null,
+    insteadOf: m.role === "assistant" && typeof m.meta?.instead_of === "string" ? m.meta.instead_of : undefined,
     file: m.meta?.attachment ? true : undefined,
     aside: m.meta?.ambient || m.meta?.opening ? true : undefined,
     safety: m.meta?.safety === "user" || m.meta?.safety === "reply" ? m.meta.safety : undefined,
@@ -340,9 +345,10 @@ export function turnFailure(state: ChatState): Notice | null {
   return n && (n.code === "model_failed" || n.code === "model_blocked") ? n : null;
 }
 
-/** Everything else the user must see (a refused send, a lost connection): the bar. */
+/** Everything else the user must see (a refused send, a lost connection): the bar.
+ *  On the Stage, which has no turn list, a failed turn too (RULES: no silent failure). */
 export function barNotice(state: ChatState): Notice | null {
-  return turnFailure(state) ? null : state.notice;
+  return turnFailure(state) && state.view !== "stage" ? null : state.notice;
 }
 
 /** Regenerate and Retry need a saved thread with a line in it (the kernel replaces its last exchange). */
@@ -415,6 +421,11 @@ export function modelRow(state: ChatState, ref: string | null): ModelRow | undef
 }
 
 /** The chip's name for a model: the picker's label, else the load status's, else the id. */
+/** D-125: "Answer with <this>" on a failure that offers the fallback model, else null. */
+export function fallbackLabel(state: ChatState, notice: Notice | null): string | null {
+  return notice?.actions.includes("fallback") && notice.fallback ? modelLabel(state, notice.fallback) : null;
+}
+
 export function modelLabel(state: ChatState, ref: string | null): string {
   if (!ref) return "Default model";
   const row = modelRow(state, ref);
@@ -619,7 +630,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
     }
     case "error": {
       const data = frame.data as ServerData["error"];
-      const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null };
+      const notice: Notice = { code: data.code, text: data.message, actions: data.actions ?? [], detail: data.detail ?? null, fallback: data.fallback ?? null };
       const failedTurn = data.code === "model_blocked" || data.code === "model_failed";
       // A failed turn still ends with turn_done; turn_running, a screen-companion refusal
       // and the unpriced-model notice (D-083) do not stop the turn. Anything else refused the send.
@@ -629,6 +640,7 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         data.code === "turn_running" ||
         data.code === "vision_unavailable" ||
         data.code === "price_unknown" ||
+        data.code === "model_fallback" ||
         data.code === "picture_unreadable" ||
         data.code === "pin_limit" ||
         data.code === "unknown_message";

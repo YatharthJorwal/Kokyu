@@ -415,18 +415,21 @@ class Session:
 
         async def save(user_text: str, reply: str, stopped: bool, meta: dict[str, Any]) -> None:
             meta = {**dict(meta), **(line_meta or {})}
+            # D-125: a fallback's reply records the model that wrote it, and whose place it took
+            answered_by, instead_of = meta.pop("answered_by", None), meta.pop("instead_of", None)
+            on_reply = {**(reply_meta or {}), **({"instead_of": instead_of} if instead_of else {})}
             user, saved = await self.manager.record_exchange(
                 thread.id,
                 user_text,
                 reply,
                 speaker=companions.speaker_record(self.ws),
-                model_ref=thread.model_ref or CONFIG.chat.default_model_ref,
+                model_ref=answered_by or thread.model_ref or CONFIG.chat.default_model_ref,
                 effort=thread.effort or CONFIG.chat.default_effort,
                 stopped=stopped,
                 tokens_in=meta.pop("tokens_in", None),
                 tokens_out=meta.pop("tokens_out", None),
                 meta=meta,
-                reply_meta=reply_meta,
+                reply_meta=on_reply or None,
             )
             if (line_meta or (reply_meta and reply_meta.get("pinned"))) and self.thread_id == thread.id:
                 await self.load_pins()   # a pin carried over now quotes the new text
@@ -475,12 +478,19 @@ class Session:
 
         return replace
 
-    async def start_turn(self, user_text: str, *, on_finished: Saver | None, attachment: Any = None) -> None:
+    async def start_turn(
+        self, user_text: str, *, on_finished: Saver | None, attachment: Any = None, model_ref: str | None = None
+    ) -> None:
         """Runs a turn as its own task. A companion switch asked for during it applies
         the moment it ends, so the chip and the divider do not wait for the next message.
-        The last reply stops being read aloud first (D-097)."""
+        The last reply stops being read aloud first (D-097). `model_ref` answers this
+        turn in the thread's model's place (D-125); the thread keeps its own."""
         await self.hush()
         mode = self.thread_mode()
+        choice: dict[str, Any] = self.thread_model()
+        own = model_listing.effective_ref(choice["model_ref"], CONFIG)
+        if model_ref and model_ref != own:
+            choice = {"model_ref": model_ref, "effort": None, "fallback_from": own}
         turn = turns.run_turn(
             self.ws,
             self.history,
@@ -491,7 +501,7 @@ class Session:
             thread_id=self.thread_id,
             unprompted=self.unprompted,
             **({"attachment": attachment} if attachment is not None else {}),
-            **self.thread_model(),
+            **choice,
             mode=mode,
             story=self.turn_story(),
             pins=self.pins if mode == "roleplay" else None,
@@ -613,6 +623,7 @@ class Session:
                 old_ids, old_log_id if isinstance(old_log_id, int) else None, reply_meta or None, line_meta
             ),
             attachment=old_meta.get("attachment"),
+            model_ref=msg.data.model_ref,
         )
 
     # ── message actions (D-100): rewind, swipe, pin, a new chat from here ──

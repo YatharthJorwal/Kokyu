@@ -20,6 +20,7 @@ import {
   canSend,
   currentMode,
   editableKey,
+  fallbackLabel,
   lastExchange,
   modelLabel,
   startsGroup,
@@ -239,6 +240,8 @@ function Message({
   typing?: boolean;
 }) {
   const sentTo = useChat((s) => (m.sentTo ? modelLabel(s, m.sentTo) : null));
+  // D-125: a reply the fallback model wrote says so
+  const insteadOf = useChat((s) => (m.insteadOf ? `${modelLabel(s, m.model ?? null)} answered: ${modelLabel(s, m.insteadOf)} couldn't` : null));
   const [editing, setEditing] = useState(false);
   if (m.role === "divider") {
     return (
@@ -281,6 +284,7 @@ function Message({
       )}
       {m.stopped ? <div className="meta">Stopped</div> : null}
       {m.failed ? <div className="meta">Not answered</div> : null}
+      {insteadOf ? <div className="meta">{insteadOf}</div> : null}
       {m.sentTo ? (
         <div className="meta" title="This attachment left your PC for the chosen API model">
           Sent to {sentTo}
@@ -329,6 +333,7 @@ function TurnFailure() {
   const failure = useChat(turnFailure);
   const canPick = useChat(canPickModel);
   const canRetry = useChat(canRegenerate);
+  const fallback = useChat((s) => fallbackLabel(s, turnFailure(s)));
   if (!failure) return null;
   return (
     <div className="turn-failure" role="alert">
@@ -348,6 +353,11 @@ function TurnFailure() {
         {failure.actions.includes("switch_model") && canPick ? (
           <button type="button" onClick={() => actions.openPicker()}>
             Switch model
+          </button>
+        ) : null}
+        {fallback && failure.fallback && canRetry ? (
+          <button type="button" onClick={() => actions.regenerate(failure.fallback ?? undefined)}>
+            Answer with {fallback}
           </button>
         ) : null}
         <button type="button" className="ghost" aria-label="Dismiss" onClick={() => actions.dismissNotice()}>

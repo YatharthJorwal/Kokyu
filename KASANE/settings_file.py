@@ -22,7 +22,7 @@ from urllib.parse import urlsplit
 
 import config
 import paths
-from provider_presets import API_PRESETS, url_problem
+from provider_presets import API_PRESETS, PROVIDER_ID, url_problem
 
 log = logging.getLogger(__name__)
 
@@ -209,6 +209,36 @@ def change(saved: dict[str, Any], request: dict[str, Any]) -> dict[str, Any]:
         else:
             _drop(out, "llm", "context_by_model")
 
+    if "fallback" in request:
+        # D-125: no model = the local chat model; the mode is always written.
+        asked = request["fallback"] or {}
+        _drop(out, "chat", "fallback_model_ref")
+        if asked.get("model_ref"):
+            out.setdefault("chat", {})["fallback_model_ref"] = str(asked["model_ref"])
+        mode = asked.get("mode") or "ask"
+        if mode not in ("ask", "auto"):
+            raise SettingsError("Choose Ask me or Answer by itself.")
+        out.setdefault("chat", {})["on_model_failure"] = mode
+
+    if "api_models" in request:
+        # D-126: the picker's API list for one endpoint; None = its popular models again.
+        asked = request["api_models"] or {}
+        endpoint = str(asked.get("endpoint") or "")
+        if not PROVIDER_ID.match(endpoint):
+            raise SettingsError("That endpoint is unknown.")
+        lists = dict((out.get("chat") or {}).get("api_models") or {})
+        models = asked.get("models")
+        if models is None:
+            lists.pop(endpoint, None)
+        else:
+            ids = list(dict.fromkeys(str(m).strip() for m in models if str(m).strip()))
+            if any(len(m) > 200 for m in ids):
+                raise SettingsError("A model id is too long.")
+            lists[endpoint] = ids
+        _drop(out, "chat", "api_models")
+        if lists:
+            out.setdefault("chat", {})["api_models"] = lists
+
     if "read_aloud" in request:
         # D-097: the composer's Read aloud, kept between restarts.
         out.setdefault("tts", {})["read_aloud"] = bool(request["read_aloud"])
@@ -268,12 +298,15 @@ def view(cfg: config.Config, saved: dict[str, Any], problem: str | None = None) 
         },
         "custom_api": custom,
         "screen": {"task_guide": cfg.task_guide.on_at_start, "ocr_watch": cfg.ocr_watch.on_at_start},
+        # D-125: None = the local chat model (model_list's fallback_ref names it)
+        "fallback": {"model_ref": cfg.chat.fallback_model_ref, "mode": cfg.chat.on_model_failure},
         "saved": sorted(
             name for name, here in (
                 ("ollama_url", "base_url" in (saved.get("llm") or {})),
                 ("budget", "budget" in saved),
                 ("custom_api", "preset" in (providers.get("airouter") or {})),
                 ("screen", any("on_at_start" in (saved.get(mode) or {}) for mode in SCREEN)),
+                ("fallback", "on_model_failure" in (saved.get("chat") or {})),
             ) if here
         ),
         "file": str(path()),

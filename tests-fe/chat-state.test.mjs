@@ -8,6 +8,7 @@ import {
   canStartThread,
   currentMode,
   editableKey,
+  fallbackLabel,
   fromStored,
   MAX_TOASTS,
   initialState,
@@ -123,6 +124,8 @@ test("a failed model is shown with Retry and Switch model, never silently swappe
   // K1-12, FR-R-5: inline on the turn, not in the bar
   assert.equal(turnFailure(s), s.notice);
   assert.equal(barNotice(s), null);
+  // the Stage draws no turns: there the bar says it, or the failure would be silent
+  assert.equal(barNotice({ ...s, view: "stage" }), s.notice);
   assert.equal(s.messages.at(-1).failed, true);
   assert.equal(s.messages.filter((m) => m.role === "assistant").length, 0); // no fake reply
 
@@ -737,4 +740,29 @@ test("the not-connected notice goes once the engine is back (audit)", () => {
   assert.equal(s.notice.text, NOT_CONNECTED);
   s = reduce(s, online);
   assert.equal(s.notice, null);
+});
+
+test("the fallback is offered on the card, said while it answers, and named on its reply (D-125)", () => {
+  let s = run(online, { kind: "sent", text: "hi" }, frame("turn_start", { user_text: "hi" }));
+  const failed = reduce(
+    s,
+    frame("error", {
+      code: "model_blocked",
+      message: "Your hourly spending cap ($0.25) is used up.",
+      reply_to: null,
+      actions: ["retry", "switch_model", "fallback"],
+      fallback: "local:ollama/qwen3.5:9b",
+    }),
+  );
+  assert.equal(turnFailure(failed).fallback, "local:ollama/qwen3.5:9b");
+  assert.equal(fallbackLabel(failed, turnFailure(failed)), "qwen3.5:9b");
+  // "auto": the note does not end the turn and shows in the bar as information
+  s = reduce(s, frame("error", { code: "model_fallback", message: "Fable 5.2 couldn't answer. Qwen is answering instead.", reply_to: null }));
+  assert.equal(s.turn, "thinking");   // still her turn
+  assert.equal(turnFailure(s), null);
+  assert.equal(barNotice(s).code, "model_fallback");
+  assert.equal(fallbackLabel(s, barNotice(s)), null);
+  const reply = fromStored({ ...stored(2, "assistant", "fine", { instead_of: "api:airouter/anthropic/claude-fable-5.2" }), model_ref: "local:ollama/qwen3.5:9b" });
+  assert.equal(reply.insteadOf, "api:airouter/anthropic/claude-fable-5.2");
+  assert.equal(fromStored(stored(3, "user", "hi", { instead_of: "x" })).insteadOf, undefined);
 });

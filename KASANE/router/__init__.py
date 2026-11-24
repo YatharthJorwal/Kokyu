@@ -428,7 +428,12 @@ class Router:
         decision = self.route(request)
         if decision.blocked:
             await asyncio.to_thread(self._audit_blocked, request, decision)
-            raise RouteBlockedError(decision.reason, blocked_message(decision.reason), request.model_ref)
+            message = blocked_message(decision.reason)
+            if decision.reason == decide_mod.BUDGET_EXHAUSTED:
+                r, s = self._reserved_usd, self.state
+                spent = (s.spend_hour_usd + r, s.spend_day_usd + r, s.spend_month_usd + r)
+                message = decide_mod.budget_message(self.config.budget, spent, decision.est_cost_usd)
+            raise RouteBlockedError(decision.reason, message, request.model_ref)
         if decision.reason == decide_mod.USER_SELECTED_UNPRICED and request.model_ref not in self._told_unpriced:
             self._told_unpriced.add(request.model_ref)
             yield ModelChunk(kind="notice", text=UNPRICED_NOTICE)

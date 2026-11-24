@@ -514,6 +514,14 @@ class ChatConfig:
     # pause, so clicking through old threads does not start a load per click
     # (K1-10, D-054). Picking a model in the chip loads at once.
     load_delay_s: float = 1.5
+    # D-125: the model that may answer when the chosen one can't; None = the local
+    # Ollama chat model. "ask": the failure card offers it; "auto": it answers at
+    # once and the reply says so.
+    fallback_model_ref: str | None = None
+    on_model_failure: str = "ask"
+    # D-126: the API models the picker lists, per endpoint id; an endpoint not here
+    # lists the popular ones it has (all of them when it has none).
+    api_models: Mapping[str, Any] = field(default_factory=dict)
 
 
 @dataclass(frozen=True)
