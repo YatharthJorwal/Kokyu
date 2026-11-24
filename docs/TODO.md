@@ -71,7 +71,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] AUD-03 (`684eb1d`) The audit's lean items: `chunking.extract_ready_chunks` and its tests, `conversation.thread_summary`, `router._MODEL_FALLBACKS`, the duplicate `public/vrm-animations/vrma/` (608 KB per build). Kept on the user's word: `audio/voice.py`, `audio/vad.py`, `src/engine/mic-stream.ts` and the arbiter's barge-in states, groundwork for K2's push-to-talk and hands-free voice (FR-V-6)
 - [x] UI2-00l The AI note under the message box in every mode (D-119, FR-C-11)
 - [x] SAFE-01 The self-harm detector and crisis card (D-121, FR-C-12) `d730ee5`
-- [ ] SAFE-02 Calibrate the detector's meaning check (`safety.similarity_floor`, `similarity_margin`) against the real `nomic-embed-text` on a labelled set; needs the user's OK to use their Ollama (D-121)
+- [x] SAFE-02 Calibrate the detector's meaning check against the real `nomic-embed-text` (0.80 / 0.10; `scripts/calibrate_safety.py`) (D-121) `35453c2`
 - [ ] SAFE-03 The detector in more languages than English, before selling outside English-speaking countries (D-121)
 - [ ] UI2-00m The Stage's top-bar title overlaps the Chat | Stage switch (seen 2026-11-24)
 - [x] AUD-02 The audit fixes checked in the desktop app on 2026-11-24, driven by Claude through WebView2's debugging port: a link opens the browser and `file:`, `javascript:` and spaced URLs are refused; Ctrl+, moves focus into Settings, typing stays out of the message box, Esc returns focus; a half-filled New roleplay card survives Esc; Esc in Take her picture closes only the viewer; with the engine stopped a send says it is not connected and keeps the text, Reconnect brings it back in about 2 s and the note goes
