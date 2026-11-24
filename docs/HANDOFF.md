@@ -19,15 +19,16 @@ A solo developer who wants direct commands, no manual file shuffling, and honest
 6. The self-harm detector (D-121, FR-C-12, SAFE-01): `KASANE/safety.py`, a turn-level stop in `turns.py`, the help card in `ThreadView.tsx`. A labelled set in `tests/test_safety.py` caught six false alarms in the first patterns ("burning myself out", "5 kms", "my brother overdosed" …), fixed. Checked live on scratch data. Then, on the user's yes, SAFE-02 (`35453c2`): the meaning check calibrated on the real embedder with `scripts/calibrate_safety.py` (0.80 / 0.10). All pushed up to `f247309`.
 7. The second audit, on the user's ask ("running a proper frontend and security audit … make sure a user can only access what they are supposed to"): read-only reviewers, findings checked against the code. The key is safe (only `.env`; nothing in git or history). Fixed: D-122 (the VRM route, the persona recital, origins, llama-server's key, Vite's deny list), D-123 (every input's limit, refused sends, hidden upload errors, long words, IME), unused packages (`@pixiv/three-vrm-animation`, `three-mesh-bvh`, Rust `serde`; the animation notes moved out of `public/`, where they shipped in every build). UI-2 closed (D-124): `DESIGN.md`, the top bar, no text under 12 px.
 8. The user's notes on the API path: a fallback model, Ask me or Answer by itself (D-125; the user chose both, default ask), the Stage now shows a failed reply, the cap message names the cap and the cost (Fable 5.2 was blocked by the $0.25 hourly cap: its worst case, thinking included, is about $0.30; nothing was spent); the picker lists the API models chosen in Settings, with popular sets and a checklist with Select all (D-126); a theme pick drops an old accent (`69ec49e`). Checked in a page-only preview only: the user's app held port 8780.
+9. Before the push, on the user's ask: the picker sorts (company, A–Z, cheapest, priciest), filters by company and can show every model ("My list / All models"; search always does), kept in `localStorage`; the popular sets became family rules that take each family's newest model, so they follow new releases on any endpoint (D-127, `416d84c`).
 
 ## 3. Where we stopped
 
-Pushed up to `57cd7ee`. **Not pushed:** `69ec49e` (D-125, D-126) and its docs commit. `npm run check` green (frontend 224, pytest 1474). The popular sets in `provider_presets.POPULAR_MODELS` are Claude's guesses from the AI Router catalog: the user may want to change them. The VRM and WAV are backed up to `D:\AI\Kokyu-premade-backup`. Untracked and staying so: the packs' VRM and WAV, `.claude/`.
+Pushed up to `57cd7ee`. **Not pushed:** `69ec49e` (D-125, D-126), `416d84c` (D-127) and their docs commits. `npm run check` green (frontend 224, pytest 1474). The family rules in `provider_presets.POPULAR_FAMILIES` are Claude's choice of which lines count as Popular, Budget and Strongest: the user may want to change them, and a brand-new model line needs a rule. The VRM and WAV are backed up to `D:\AI\Kokyu-premade-backup`. Untracked and staying so: the packs' VRM and WAV, `.claude/`.
 
 ## 4. Next session: start here
 
 1. `git status`, `git log -8 --oneline`, `npm run check`. Ask whether to push.
-1b. Try D-125 and D-126 in the desktop app: a blocked model's card, Answer with, Answer by itself, saving the picker's list.
+1b. Try D-125, D-126 and D-127 in the desktop app: a blocked model's card, Answer with, Answer by itself, saving the picker's list, the picker's sort and company chips.
 2. The user reads `docs/DESIGN.md` (D-124) and picks the next phase: K1b (installer) is next in order.
 3. SEC-01 (D-057's token) needs a plan the user approves: it touches the shell, the kernel and the window.
 4. Ask before any live API call with the new key: it spends money.

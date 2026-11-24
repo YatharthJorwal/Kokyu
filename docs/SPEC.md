@@ -8,7 +8,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 - Version: **spec v1.1**, 2026-11-17, amended 2026-11-18 (D-097). A decision that amends a row is rewritten into the row, with its D-ID; `DECISIONS.md` says why.
 
 **Changelog v1.0 → v1.1**
-- Changed (2026-11-24): FR-R-5 the fallback model and the Stage's failure bar (D-125); FR-M-4 the picker lists the API models the user chose (D-126).
+- Changed (2026-11-24): FR-R-5 the fallback model and the Stage's failure bar (D-125); FR-M-4 the picker lists the API models the user chose (D-126); FR-M-2 the picker's sort and company filter, and FR-M-4's popular sets follow new releases (D-127).
 - Added (2026-11-24): FR-C-11 the AI note (D-119).
 - Added (2026-11-24): FR-C-12 the self-harm detector and help card (D-121).
 - Changed (2026-11-24): FR-VP-1, FR-VP-5 the voice a buyer hears (D-115); FR-WIZ-2, 3, FR-COMP-2, 3 setup cards and the required embedder (D-117).
@@ -81,7 +81,7 @@ Requirements with stable IDs. TODO items, tests and commits reference these IDs.
 | ID | Requirement | Phase |
 |---|---|---|
 | FR-M-1 | There MUST be **one** model control: a chip under the input box (D-068) showing the model's short name (FR-M-12) and the effort label. | K1 |
-| FR-M-2 | Its popover MUST have a search box and two clearly separated sections, **Local** and **API**, as one list (not a toggle). The current model carries a check mark. Picking a row is the whole action. | K1 |
+| FR-M-2 | Its popover MUST have a search box and two clearly separated sections, **Local** and **API**, as one list (not a toggle). The current model carries a check mark. Picking a row is the whole action. The API section can be sorted (by company, A–Z, cheapest or priciest first) and narrowed to chosen companies, and switched between the user's list and every model the endpoint has; search always covers every model; these choices are kept (D-127). | K1 |
 | FR-M-3 | **Local** lists Ollama models (`GET /api/tags`, minus embedding models) plus the llama.cpp presets from `config.yaml` (`llamacpp.presets`, D-051, D-064). Each row shows size and a *fits / won't fit* hint from the VRAM manager (D-065); unknown shows nothing. | K1 |
 | FR-M-4 | **API** lists the models of the **one active endpoint** (D-059) that the user chose in Settings → Models (D-126: popular sets, or a searchable checklist with Select all; with no choice, the endpoint's popular models, or all of them when none is known), plus the thread's own model, with an *Edit list* link: a preset (AI Router, OpenRouter, DeepSeek) or a custom base URL, through the generic OpenAI-compatible provider (D-037), from its `/models`, with the vendor as a sub-heading, capability badges and a price hint when the catalog has one. The catalog is cached; offline or after a failed refresh it shows the cache marked *cached*. A refresh button re-fetches. Rows without a key are listed greyed with the reason. | K1 |
 | FR-M-5 | The selection is **per thread**; new threads inherit the last selection. It is independent of the companion. | K1 |

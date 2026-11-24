@@ -77,6 +77,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] AUD-05 (`df15e25`, `cdaef1e`, `c831d19`) The second audit (D-122, D-123): access, keys, inputs, unused packages
 - [x] FALL-01 (`69ec49e`) The fallback model, Ask me or Answer by itself; the Stage shows a failed turn; the cap message names the cap (D-125, FR-R-5)
 - [x] API-01 (`69ec49e`) The picker lists the API models chosen in Settings: popular sets, a checklist with Select all (D-126, FR-M-4)
+- [x] PICK-01 (`416d84c`) The picker sorts by company, name or price and shows chosen companies; the popular sets pick each family's newest model (D-127, FR-M-2, FR-M-4)
 - [x] THEME-01 (`69ec49e`) Picking a theme drops an accent chosen before, so New chat follows it (seen with Forest)
 - [ ] SEC-01 A per-launch token for `/ws`, `/shutdown` and the VRM, from the shell to the kernel and the window (D-057, D-122); a plan first, it touches the shell
 - [x] AUD-02 The audit fixes checked in the desktop app on 2026-11-24, driven by Claude through WebView2's debugging port: a link opens the browser and `file:`, `javascript:` and spaced URLs are refused; Ctrl+, moves focus into Settings, typing stays out of the message box, Esc returns focus; a half-filled New roleplay card survives Esc; Esc in Take her picture closes only the viewer; with the engine stopped a send says it is not connected and keeps the text, Reconnect brings it back in about 2 s and the note goes
