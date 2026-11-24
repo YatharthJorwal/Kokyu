@@ -48,7 +48,7 @@ Never traded away for convenience. Full list: `docs/RULES.md`.
 1. **Waifu invariance.** No code branches on a companion id except to pick her prompt, voice parameters, VRM and pet sprites. Tests enforce this.
 2. **One model entry point.** Every model call goes through `router.decide()` with a role.
 3. **Local-only data.** Camera frames, mic audio, screen captures and memory-writer jobs never leave the machine. Roleplay fiction never reaches `memory.db`.
-4. **No silent fallback.** A failed user-chosen model shows the error with *Retry* and *Switch model*.
+4. **No silent fallback.** A failed user-chosen model shows the error with *Retry* and *Switch model* (and the user's fallback, D-125); a fallback that answers by itself always says so.
 5. **No secrets or assets in git.** Keys, `.vrm`, `.wav`, model weights, databases and logs are never committed. Stage explicit paths; never `git add -A`.
 6. **No hard-coded paths.** Use `KASANE/paths.py` (dev: `./data`; packaged: `%APPDATA%\Kokyu`).
 7. **Never block** the kernel's asyncio loop or the render loop.

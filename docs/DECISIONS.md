@@ -388,6 +388,12 @@ A paste over any field's limit is said in a toast (one listener in App for every
 **D-124 UI-2 closes on the look built screen by screen** · Accepted · User ("Yep, tidy it up" to Claude's proposal) · 2026-11-24
 The look was built from the user's references screen by screen (D-102..D-113), so `docs/DESIGN.md` records what exists instead of a mock first. No headless UI library (Radix) and no icon set (lucide): the app's own dialogs, menus and line icons work, and a swap would be churn. Text is never under 12 px; the top bar is three columns so the title never overlaps (UI2-00m).
 
+**D-125 A fallback model, asked for or by itself** · Accepted · User ("need a fallback"; chose "Both, set in Settings") · 2026-11-24 · Amends R-04, FR-R-5
+Settings → Models → *When the chosen model can't answer*: a fallback model (default: this PC's chat model) and *Ask me* (default) or *Answer by itself*. Ask: the failure card adds *Answer with <model>*, which runs that model for this one reply (`regenerate` with `model_ref`). By itself: a model that fails before saying anything hands the turn to the fallback once; the bar says why (`model_fallback`), and the reply carries *X answered: Y couldn't* (`instead_of`). Never twice in a row, never the same model, never a file moved to an API model this way (FR-R-7). The thread keeps its own model. Found with it: on the Stage the failure card was not drawn at all (the bar shows it there now), and a cap that one reply's worst case would pass said "cap is reached" (it now names the cap, the cost and what is left).
+
+**D-126 The picker lists the API models the user chose** · Accepted · User ("give an option to choose a bunch from the endpoint … select all … popular models"; approved the plan) · 2026-11-24 · Amends FR-M-4
+Settings → Models → *API models in the picker*: removable pills, one-click sets (*Popular*, *Budget*, *Strongest*, only the ids the endpoint has; hand-kept in `provider_presets.POPULAR_MODELS`), and *Choose from all models…*: a search with *Select all* / *Clear* and a checklist by vendor. Saved per endpoint in `settings.json` (`chat.api_models`); *Restore defaults* goes back to the popular set. An endpoint with no list shows its popular models, or every model when the sets know none (a custom endpoint). The picker shows the list plus the thread's own model, with *Edit list*.
+
 
 ## Superseded
 

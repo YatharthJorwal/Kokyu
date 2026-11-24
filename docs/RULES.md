@@ -7,7 +7,7 @@ Binding rules for everyone (human or agent) working in this repo. A rule changes
 - **R-01 Waifu invariance.** A companion is a prompt, voice parameters, a VRM (with its portrait, D-091) and pet sprites. No code branches on a companion id for anything else (model, effort, routing, tools, permissions, memory scope, recall, conversation mode). The invariance tests (FR-W-3) stay green.
 - **R-02 Memory is shared.** Never namespace or filter memory by companion. Record the speaker's name in messages and episode summaries (FR-MEM-2).
 - **R-03 One model switcher.** The user sees exactly one chat-model control with Local and API sections. Helper models never appear in it.
-- **R-04 No silent model change.** If a user-selected model fails, show the error with *Retry* and *Switch model*. Never fall back automatically.
+- **R-04 No silent model change.** If a user-selected model fails, show the error with *Retry* and *Switch model*, and *Answer with* the user's fallback model (D-125). A fallback the user set to answer by itself says so on screen and on the reply; nothing else falls back.
 - **R-05 Creation is in-app.** No feature requires hand-editing companion files. The persona box is an ordinary editable box with **Write it for me** (D-077).
 - **R-52 Only working controls.** A control appears only when it works end to end, and lands with its working code. No disabled placeholders, "coming soon" or phase codes, and no internal words ("kernel", "K2") in UI text (D-082).
 
