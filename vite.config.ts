@@ -9,6 +9,12 @@ export default defineConfig({
   server: {
     port: 1420,
     strictPort: true,
+    // Vite serves the repo root: keep the user's data, config, the premade packs and the
+    // kernel's source from being fetched off the dev server (the audit). Vite's own
+    // defaults first, since this list replaces them.
+    fs: {
+      deny: [".env", ".env.*", "*.{crt,pem}", "**/data/**", "**/logs/**", "**/config/*.yaml", "**/assets/**", "**/KASANE/**"],
+    },
     watch: {
       // Only src/ and the pages matter. .venv alone is ~8,000 files, and the kernel
       // writes to data/ and logs/ all the time (D-060).

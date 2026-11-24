@@ -140,10 +140,16 @@ def test_vrm_endpoint_serves_a_known_waifu_and_only_a_known_waifu(registry):
     ok = client.get("/waifus/alpha/vrm", headers={"Origin": "http://localhost:1420"})
     assert ok.status_code == 200 and ok.content == b"glTF-not-really"
     assert ok.headers["access-control-allow-origin"] == "http://localhost:1420"
-    assert client.get("/waifus/nobody/vrm").status_code == 404
-    assert client.get("/waifus/..%2F..%2Fsecret/vrm").status_code == 404
+    window = {"Origin": "http://localhost:1420"}
+    assert client.get("/waifus/nobody/vrm", headers=window).status_code == 404
+    assert client.get("/waifus/..%2F..%2Fsecret/vrm", headers=window).status_code == 404
 
 
 def test_vrm_endpoint_does_not_allow_other_origins(registry):
     resp = TestClient(app.app).get("/waifus/alpha/vrm", headers={"Origin": "http://evil.example"})
-    assert "access-control-allow-origin" not in resp.headers
+    assert resp.status_code == 403 and "access-control-allow-origin" not in resp.headers
+
+
+def test_the_vrm_is_not_handed_out_without_the_windows_origin(registry):
+    # The address bar, a download link or curl: no Origin, no model file.
+    assert TestClient(app.app).get("/waifus/alpha/vrm").status_code == 403

@@ -64,6 +64,16 @@ def test_the_server_command_carries_the_preset(tmp_path):
     assert "--n-cpu-moe 40" in joined and "--port 8090" in joined and "--jinja" in cmd
     assert "--alias big" in joined and "--threads 6" in joined and cmd[-1] == "--mlock"
     assert "--host 127.0.0.1" in joined                       # never listens beyond this PC
+    assert "--no-slots" in cmd and "--api-key" not in cmd    # no key given: none on the line
+
+
+def test_the_server_gets_a_key_of_its_own_and_the_provider_sends_it(tmp_path):
+    provider = lc.LlamaCppProvider(LlamaCppConfig(port=8090))
+    key = provider.server.api_key
+    assert len(key) >= 24 and provider.api_key == key
+    assert lc.LlamaCppServer(LlamaCppConfig()).api_key != key   # a new one each run
+    cmd = lc.server_command(Path("llama-server.exe"), preset(tmp_path), LlamaCppConfig(), key)
+    assert cmd[cmd.index("--api-key") + 1] == key
 
 
 def test_ollamas_bundled_server_gets_its_cuda_folder(tmp_path):
@@ -244,7 +254,8 @@ async def test_the_provider_streams_with_thinking_switched_by_effort(tmp_path, m
         if request.url.path == "/health":
             return httpx.Response(200 if up["ok"] else 503)
         if request.url.path == "/v1/chat/completions":
-            assert "authorization" not in request.headers     # no key, so no "Bearer " header (found live)
+            # this run's own key (the audit); never an empty "Bearer " (found live before keys)
+            assert request.headers["authorization"].startswith("Bearer ") and len(request.headers["authorization"]) > 30
             bodies.append(json.loads(request.content))
             sse = (
                 'data: {"choices":[{"delta":{"content":"Hel"}}]}\n\n'

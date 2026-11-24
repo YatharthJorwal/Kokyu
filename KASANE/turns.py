@@ -497,6 +497,8 @@ async def run_turn(
     usage: dict[str, Any] = {}   # the reply round's token counts, where the backend reports them (FR-C-10)
     guard = safety.ReplyGuard()
     harmful = False   # D-121: her reply encouraged self-harm or gave a method: stopped, dropped
+    echo = prompting.PromptEcho(history[0]["content"] if history and history[0].get("role") == "system" else "")
+    echoed = False    # D-122: she began reciting her instructions: the reply ends before it
     if unprompted and not local_model:
         # Her Task Guide and OCR remarks were written from screen captures: ambient
         # content an API model never sees (FR-SC-3, FR-R-7). `unprompted` holds them by identity.
@@ -562,9 +564,17 @@ async def run_turn(
                 if guard.hit(raw_text):
                     harmful = True   # checked before the token is shown
                     break
+                cut = echo.start(raw_text)
+                if cut is not None:
+                    raw_text = raw_text[:cut].rstrip()
+                    echoed = True
+                    break
                 if event["text"]:
                     await websocket.send_json(protocol.frame("token", {"text": event["text"]}, thread=thread_id))
                 timings.mark("first_token")
+            if echoed:
+                with contextlib.suppress(Exception):
+                    await stream.aclose()   # what she said before it stands; turn_done carries it
             if harmful:
                 with contextlib.suppress(Exception):
                     await stream.aclose()   # the model stops writing now

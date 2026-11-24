@@ -47,14 +47,11 @@ log = logging.getLogger(__name__)
 HOST = "127.0.0.1"
 PORT = 8780
 
-# Kōkyū's own pages: Vite on :1420 in development, the Tauri webview when packaged.
-ALLOWED_ORIGINS = (
-    "http://localhost:1420",
-    "http://127.0.0.1:1420",
-    "tauri://localhost",
-    "http://tauri.localhost",
-    "https://tauri.localhost",
-)
+# Kōkyū's own pages: the Tauri webview, and Vite on :1420 in a developer checkout only
+# (an installed app never loads a page from 1420, and any other dev tool may use it).
+_APP_ORIGINS = ("tauri://localhost", "http://tauri.localhost", "https://tauri.localhost")
+_DEV_ORIGINS = ("http://localhost:1420", "http://127.0.0.1:1420")
+ALLOWED_ORIGINS = _APP_ORIGINS if paths.is_packaged() else _DEV_ORIGINS + _APP_ORIGINS
 
 
 @contextlib.asynccontextmanager
@@ -97,7 +94,10 @@ app.add_middleware(
 # A page that points its own domain at 127.0.0.1 (DNS rebinding) sends its own Host and
 # is refused, so it can neither read her pictures nor post /shutdown. "testserver" is
 # the test client's name; no public domain resolves to it.
-app.add_middleware(TrustedHostMiddleware, allowed_hosts=["127.0.0.1", "localhost", "testserver"])
+app.add_middleware(
+    TrustedHostMiddleware,
+    allowed_hosts=["127.0.0.1", "localhost"] + ([] if paths.is_packaged() else ["testserver"]),
+)
 
 
 @app.websocket("/ws")
@@ -113,9 +113,14 @@ async def ws_endpoint(websocket: WebSocket) -> None:
 
 
 @app.get("/waifus/{waifu_id}/vrm")
-async def waifu_vrm(waifu_id: str) -> FileResponse:
-    """The avatar file of a known companion. The id is looked up in the registry; the
-    path comes from the validated pack, never from the request."""
+async def waifu_vrm(waifu_id: str, request: Request) -> FileResponse:
+    """The avatar file of a known companion, for the window's Stage and picture viewer
+    only. The id is looked up in the registry; the path comes from the validated pack,
+    never from the request."""
+    # The window's loader always sends its Origin; the address bar, a download link or
+    # curl send none, so the model is never handed out as a file (the audit, D-122).
+    if request.headers.get("origin") not in ALLOWED_ORIGINS:
+        raise HTTPException(status_code=403, detail="not allowed")
     waifu = waifus.get_registry().get(waifu_id)
     if waifu is None:
         raise HTTPException(status_code=404, detail="unknown companion")

@@ -19,6 +19,7 @@ import asyncio
 import dataclasses
 import json
 import os
+import secrets
 import shutil
 from pathlib import Path
 from typing import Any, AsyncIterator, Callable
@@ -70,7 +71,7 @@ def server_env(server: Path, base: dict[str, str] | None = None) -> dict[str, st
     return env
 
 
-def server_command(server: Path, preset: LlamaCppPreset, cfg: LlamaCppConfig) -> list[str]:
+def server_command(server: Path, preset: LlamaCppPreset, cfg: LlamaCppConfig, api_key: str | None = None) -> list[str]:
     cmd = [
         str(server),
         "-m", preset.model_path,
@@ -82,7 +83,12 @@ def server_command(server: Path, preset: LlamaCppPreset, cfg: LlamaCppConfig) ->
         "--jinja",
         "--no-webui",
         "--alias", preset.id,
+        # A web page in the user's browser can reach 127.0.0.1 and llama-server allows any
+        # Origin: without a key it could run the model, and /slots shows the last prompt.
+        "--no-slots",
     ]
+    if api_key:
+        cmd += ["--api-key", api_key]
     if preset.n_cpu_moe is not None:
         cmd += ["--n-cpu-moe", str(preset.n_cpu_moe)]
     if preset.threads:
@@ -179,6 +185,7 @@ class LlamaCppServer:
         self._poll_s = poll_s
         self._lock = asyncio.Lock()
         self.process: Any = None
+        self.api_key = secrets.token_urlsafe(24)   # this run's only; the provider sends it
         self.preset_id: str | None = None
         self.preset_ctx: int | None = None   # the -c it runs with: Chat memory may change it (D-098)
         # Set while a started server is still loading its model; None once ready.
@@ -234,7 +241,7 @@ class LlamaCppServer:
             log = open(log_path, "ab")  # noqa: SIM115 -- handed to the child, closed in _stop_locked
             try:
                 self.process = await self._spawn(
-                    *server_command(server, preset, self.cfg),
+                    *server_command(server, preset, self.cfg, self.api_key),
                     env=server_env(server),
                     stdin=asyncio.subprocess.DEVNULL,   # the kernel's stdin carries API keys (D-059)
                     stdout=log,
@@ -302,7 +309,7 @@ class LlamaCppProvider(AirouterProvider):
             api_style="openai",
             request_timeout_s=cfg.request_timeout_s,
         )
-        super().__init__(provider_cfg, None, transport=transport)
+        super().__init__(provider_cfg, self.server.api_key, transport=transport)
         self.llama_cfg = cfg
 
     def _payload(self, request: ModelRequest, model: str) -> dict[str, Any]:
