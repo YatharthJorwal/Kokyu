@@ -16,19 +16,24 @@ A solo developer who wants direct commands, no manual file shuffling, and honest
 3. "do the todo cleanup" (AUD-03, `684eb1d`): unused helpers and the duplicate animation folder deleted. The user chose to **keep the voice input code** (voice.py, vad.py, mic-stream.ts) for K2. Pushed.
 4. The user's answers to the open questions, recorded as D-115..D-118: the voice (GPT-SoVITS on the PC, or ElevenLabs with the user's own key and an in-app voice picker), explicit premades (payment provider deferred), a ComfyUI-like setup screen with cards and no accounts, the packs' text in git with VRM and WAV checksummed beside it. They asked what "UK and California" meant; explained in chat (Ofcom's age-assurance rule for porn-capable chatbots; SB 243 and New York's companion-chatbot duties). Checkpoint UI-1 ticked on their word. AUD-02's checks run in the desktop app, all passed.
 5. The AI note under the message box in every mode (D-119, FR-C-11), checked in the desktop app. The legal stance for launch (D-120): sold as software on the user's PC, not an online service; UK sales held back until Ofcom answers; complying with SB 243 as if an operator; options weighed and nothing built for sale yet (B-13).
-6. The self-harm detector (D-121, FR-C-12, SAFE-01): `KASANE/safety.py`, a turn-level stop in `turns.py`, the help card in `ThreadView.tsx`. A labelled set in `tests/test_safety.py` caught six false alarms in the first patterns ("burning myself out", "5 kms", "my brother overdosed" …), fixed. Checked live on scratch data. Then, on the user's yes, SAFE-02 (`35453c2`): the meaning check calibrated on the real embedder with `scripts/calibrate_safety.py` (0.80 / 0.10). All pushed up to `a7e5886`; `35453c2` and the docs after it are not.
+6. The self-harm detector (D-121, FR-C-12, SAFE-01): `KASANE/safety.py`, a turn-level stop in `turns.py`, the help card in `ThreadView.tsx`. A labelled set in `tests/test_safety.py` caught six false alarms in the first patterns ("burning myself out", "5 kms", "my brother overdosed" …), fixed. Checked live on scratch data. Then, on the user's yes, SAFE-02 (`35453c2`): the meaning check calibrated on the real embedder with `scripts/calibrate_safety.py` (0.80 / 0.10). All pushed up to `f247309`.
+7. The second audit, on the user's ask ("running a proper frontend and security audit … make sure a user can only access what they are supposed to"): read-only reviewers, findings checked against the code. The key is safe (only `.env`; nothing in git or history). Fixed: D-122 (the VRM route, the persona recital, origins, llama-server's key, Vite's deny list), D-123 (every input's limit, refused sends, hidden upload errors, long words, IME), unused packages (`@pixiv/three-vrm-animation`, `three-mesh-bvh`, Rust `serde`; the animation notes moved out of `public/`, where they shipped in every build). UI-2 closed (D-124): `DESIGN.md`, the top bar, no text under 12 px.
 
 ## 3. Where we stopped
 
-`npm run check` green on this PC at `35453c2` (tsc, frontend 221, build, cargo, pytest 1462). Pushed up to `a7e5886` (the AI note, D-119; D-120 and D-121; the detector, `d730ee5`). **Not pushed:** SAFE-02's calibration (`35453c2`) and the docs commit after it. Ollama is stopped, as it was before SAFE-02. The VRM and WAV are backed up to `D:\AI\Kokyu-premade-backup` (checked with sha256sum). Untracked and staying so: the packs' VRM and WAV, `.claude/`.
+The second audit (D-122, D-123) and UI-2's close (D-124) are committed (`df15e25`, `cdaef1e`, `c831d19` and the docs after them), **not pushed**. `npm run check` green (tsc, frontend 223, build, cargo, pytest 1467). The AI Router key is in `.env` only; never used live. Ollama is stopped. The VRM and WAV are backed up to `D:\AI\Kokyu-premade-backup` (checked with sha256sum). Untracked and staying so: the packs' VRM and WAV, `.claude/`.
 
 ## 4. Next session: start here
 
-1. `git status`, `git log -8 --oneline`, `npm run check`. Ask whether to push the unpushed commits.
-2. The user picks the next phase: UI-2's design work (UI2-01 references) or K1b (installer). The setup screen (D-117) is phase W; ElevenLabs is K2-06.
+1. `git status`, `git log -8 --oneline`, `npm run check`. Ask whether to push.
+2. The user reads `docs/DESIGN.md` (D-124) and picks the next phase: K1b (installer) is next in order.
+3. SEC-01 (D-057's token) needs a plan the user approves: it touches the shell, the kernel and the window.
+4. Ask before any live API call with the new key: it spends money.
 
 ## 5. Traps
 
+- **A test run of the app starts Ollama** and loads the chat model (D-105); quit through `/shutdown`, then check `tasklist` for `ollama.exe`.
+- **Vite reloads itself when `vite.config.ts` changes**; a second Vite on the same port fails `strictPort` while the first keeps serving.
 - **Write and Edit refuse paths under `D:\AI\Kokyu.ai`** from this worktree session (a hook): write the file or an edit script in the scratchpad, then copy it in or run the script.
 - **Live checks on scratch data:** `KOKYU_DATA_DIR=<scratch>/live` (with `config/config.yaml` copied in) before `npm run tauri dev` keeps test lines out of the user's threads; the kernel inherits it. Shut down with `POST /shutdown`, then stop the task, `kokyu.exe` and the node process on 1420.
 - **The detector runs in every turn test:** conftest makes its embedder unreachable (patterns only). A test line that matches a pattern ("kill myself") gets no reply; a test that needs the meaning check patches `safety._embed_many`.

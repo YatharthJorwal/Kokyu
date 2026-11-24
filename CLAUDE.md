@@ -89,6 +89,7 @@ src/net/              typed socket (kernel.ts, protocol.ts)
 src/engine/           three.js avatar code for K2
 src-tauri/            Rust: window, tray, child processes (Job Object), API keys (Credential Manager)
 assets/premade/       Luna and Yuri packs: text in git; VRM and WAV out of git, listed in ASSETS.sha256 (D-118)
+assets/vrm-animations/ the animation pack's notes and licences for K2 (not served: `public/` ships in every build)
 config/               config.example.yaml, models.example.yaml, secrets.example.yaml
 scripts/              dev, doctor, check, clean, test-frontend, build_premade.py, calibrate_safety.py (needs Ollama)
 tests-fe/             frontend pure-logic tests (Node test runner)

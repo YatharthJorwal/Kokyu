@@ -57,9 +57,9 @@ Goal: a chat app that feels finished, not a localhost shell. Each item is one co
 
 Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's items get their final look here.
 
-- [ ] UI2-00 The user's first references (D-102): Settings restyled to `settings-general.png` and `settings-models.png`; the chat title centred on the top bar
-- [ ] UI2-00b Her pet (D-103; first numbered UI2-01 in 5e679a8's message): chibi her walking above the input box in chat and roleplay; the cat button; Settings → Pet with behaviour, size and Create pet (prompt, upload a 4×3 sheet, check the poses, save) (FR-P-1..4)
-- [ ] UI2-00d The Stage, the user's "VR mode" (D-104): Yuri's shell, the Chat | Stage switch, captions, lip-sync from the played voice, her mood from the emotion tag (FR-ST-1..3, 5, 7; K2-01, most of K2-02); Create pet's Take her picture opens her model full-body or bust, turned with the mouse, to copy or save a see-through PNG. Not yet: the chat log slide-over (FR-ST-4), the frame-rate check (FR-ST-6)
+- [x] UI2-00 (`5a1c7ae`) The user's first references (D-102): Settings restyled to `settings-general.png` and `settings-models.png`; the chat title centred on the top bar
+- [x] UI2-00b (`5e679a8`) Her pet (D-103; first numbered UI2-01 in 5e679a8's message): chibi her walking above the input box in chat and roleplay; the cat button; Settings → Pet with behaviour, size and Create pet (prompt, upload a 4×3 sheet, check the poses, save) (FR-P-1..4)
+- [x] UI2-00d (`34b0aeb`, `52a3a3b`) The Stage, the user's "VR mode" (D-104): Yuri's shell, the Chat | Stage switch, captions, lip-sync from the played voice, her mood from the emotion tag (FR-ST-1..3, 5, 7; K2-01, most of K2-02); Create pet's Take her picture opens her model full-body or bust, turned with the mouse, to copy or save a see-through PNG. Not yet: the chat log slide-over (FR-ST-4), the frame-rate check (FR-ST-6)
 - [x] UI2-00e (`fb8e7fa`) Pet, round two (D-107): she walks on the window's bottom, a step-synced walk, carried and dropped (held, fall, land); saved poses fit a box per kind; Make a new pet for any character. Upload limits and formats in the window and the kernel (D-106). Picking an Ollama model starts Ollama (D-105)
 - [x] UI2-00f (`0611ebe`) Pet sizes (D-108): each pose drawn at its own size; the size checker matches her head to idle's; the picture viewer's note on the picture and Save as
 - [x] UI2-00g (`0611ebe`) The cat button (D-109): blue while the pet is shown, greyed on the Stage, Pet settings on hover
@@ -73,14 +73,16 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] SAFE-01 The self-harm detector and crisis card (D-121, FR-C-12) `d730ee5`
 - [x] SAFE-02 Calibrate the detector's meaning check against the real `nomic-embed-text` (0.80 / 0.10; `scripts/calibrate_safety.py`) (D-121) `35453c2`
 - [ ] SAFE-03 The detector in more languages than English, before selling outside English-speaking countries (D-121)
-- [ ] UI2-00m The Stage's top-bar title overlaps the Chat | Stage switch (seen 2026-11-24)
+- [x] UI2-00m (`cdaef1e`) The Stage's top-bar title overlapped the Chat | Stage switch: the top bar is three columns (D-124)
+- [x] AUD-05 (`df15e25`, `cdaef1e`, `c831d19`) The second audit (D-122, D-123): access, keys, inputs, unused packages
+- [ ] SEC-01 A per-launch token for `/ws`, `/shutdown` and the VRM, from the shell to the kernel and the window (D-057, D-122); a plan first, it touches the shell
 - [x] AUD-02 The audit fixes checked in the desktop app on 2026-11-24, driven by Claude through WebView2's debugging port: a link opens the browser and `file:`, `javascript:` and spaced URLs are refused; Ctrl+, moves focus into Settings, typing stays out of the message box, Esc returns focus; a half-filled New roleplay card survives Esc; Esc in Take her picture closes only the viewer; with the engine stopped a send says it is not connected and keeps the text, Reconnect brings it back in about 2 s and the note goes
 - [ ] UI2-00c The two premade pets: Luna's and Yuri's sheets made with Create pet's prompt, shipped in their packs' `pet/` (D-103)
-- [ ] UI2-01 References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
-- [ ] UI2-02 `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
-- [ ] UI2-03 Tokens in code; no white flash at startup
-- [ ] UI2-04 Primitives: tooltip, popover, dialog and menus on a headless library (proposed: Radix) and one icon set (proposed: lucide) replacing the emoji and text glyphs; decision first
-- [ ] UI2-05 Apply to every surface: shell, sidebar, message list, composer, picker, settings, dialogs; before and after screenshots in `STATE.md`
+- [x] UI2-01 (D-102..D-113, D-124) References: the user and Claude collect apps and screens to follow (chat apps, character apps, what to avoid) into `docs/reference-images/`, each with a note on what to take from it (open question 1)
+- [x] UI2-02 (D-124; `docs/DESIGN.md` records the look as built, for the user to read) `docs/DESIGN.md` agreed: colour roles, a type scale with nothing under 12 px, a 4 px spacing scale, one bundled UI font, radii, motion, focus rings, light and dark, the copy rule (FR-C-4); a mock of the main window before code
+- [ ] UI2-03 Tokens in code (done: the CSS variables and eight themes); no white flash at startup (not checked)
+- [x] UI2-04 Dropped (D-124): the app's own dialogs, menus and line icons stay. Primitives: tooltip, popover, dialog and menus on a headless library (proposed: Radix) and one icon set (proposed: lucide) replacing the emoji and text glyphs; decision first
+- [x] UI2-05 (D-102..D-113) Apply to every surface: shell, sidebar, message list, composer, picker, settings, dialogs; before and after screenshots in `STATE.md`
 
 ## Phase K1b: Installer walking skeleton (D-035, D-081), time-boxed to about two sessions
 
@@ -136,6 +138,7 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 
 ## Phase K7: Release engineering (1.0)
 
+- [ ] K7-10 Premade packs shipped packed and encrypted, read in memory by the engine; `prompt.md` left out (D-122). Only a deterrent: the window must decode the model to show it
 - [ ] K7-01 Productionize K1b packaging; resource resolver for built-in packs and templates; verified with the repo absent
 - [ ] K7-02 Code signing; SmartScreen behaviour recorded (Track B)
 - [ ] K7-03 Updater: signed updates, static manifest, "update available" (FR-DIST-7)
@@ -182,6 +185,10 @@ A step-by-step panel with simple instructions; the user brings their own keys, m
 - [ ] B-9 Marketing plan
 
 ## Backlog (parked, not approved)
+
+- The sidebar lists the newest 200 conversations and search returns 50, with no note that older ones exist (the audit)
+- A text file cut to 6,000 characters says so to the model but not on the attachment chip (the audit)
+- GPT-SoVITS on 9880 has no authentication: any program on the PC can make her voice say anything (third-party; the audit)
 
 - AUD-04 From the audit, not fixed: `context_budget.fit_messages` can drop a user line but keep the reply after it; `forget`'s trigger fires on "dont forget …"; the camera tool's `camera_request` is not wired in the window (K2-08)
 

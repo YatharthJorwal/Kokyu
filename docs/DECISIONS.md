@@ -14,14 +14,14 @@ The compact decision reference: what holds now, what is open, what was replaced.
 
 | # | Question | Blocks |
 |---|---|---|
-| 1 | Design references: which apps and screens the look follows. The user gives them screen by screen (D-102); Settings and the top bar so far. | UI-2 |
+| 1 | Closed (D-124): UI-2 was built from the user's references screen by screen; `DESIGN.md` records the result. | — |
 | 2 | Decided (D-115): GPT-SoVITS on the PC or ElevenLabs with the user's key. Open: where GPT-SoVITS runs (K2-03 spike); the rights of the premades' ElevenLabs-made clips (D-041). | K2, K7 |
 | 3 | Personas: explicit (D-116). Open, deferred: a payment provider that accepts an explicit 18+ app (all checked ban sexual products); UK sales (Ofcom, B-11); a lawyer's read on California SB 243 and New York Art. 47 (B-12). | K7, B-3 |
 | 4 | Closed (D-118): the packs' text in git, VRM and WAV beside it with checksums; the user backs up those files. | — |
-| 5 | An API key for testing the API path. | K1 checkpoint |
+| 5 | Closed: the user added an AI Router key in `.env` on 2026-11-24 (it resolves; no live API call made yet, since it spends money). | — |
 | 6 | Closed: her face is the VRM's own thumbnail, changeable in her profile (D-091). | — |
 | 7 | D-074's six assumed answers: mode fixed at thread start; Chat replies about 3 to 4 lines; no tools in Roleplay; voice speaks only dialogue in Roleplay; no premade scenario cards; persona-only `persona.md` for Luna and Yuri. | K1c checkpoint |
-| 8 | D-057's per-launch WebSocket token. | K7 |
+| 8 | D-057's per-launch token for `/ws`, `/shutdown` and the VRM (SEC-01): today any program on the PC that sends no Origin can connect. | K7 |
 | 9 | Delete `KASANE/vrm/` (C-1b, the user's action). | Nothing |
 | 10 | Assumed in autonomous mode, to confirm or reverse: D-092..D-095 (UI1-07..10), and D-097's assumed parts (the in-app dictation key, kept by the page; no delivery layer with Read aloud; a reply finished while her voice starts waits for it; Settings → Voice), and D-098's (the name Chat memory, its place under Effort, per model for every thread, Ollama loading past the fit point). | UI-1 checkpoint |
 
@@ -377,6 +377,16 @@ Options weighed. *Explicit content:* (a) explicit text and voice, sold everywher
 
 **D-121 A self-harm detector that stops the turn and points to help** · Accepted · User ("its your job", "build D-121"), design Claude's · 2026-11-24
 Local, in the engine (`safety.py`), in every mode, before the model and while she writes. Layers: patterns for first-person suicide and self-harm talk (with negations, idioms such as "killing it", and other people's or characters' deaths kept out); then a meaning check with the memory embedder (`nomic-embed-text`, required by D-117) against written examples and look-alikes; a line in every prompt as a soft third layer, since weak models follow it unreliably. On the user's message: no reply is written; their line stays; a card under it says they are not alone, with findahelpline.com (every country), 988 (US) and 116 123 (UK and Ireland). Flagged lines never reach memory. On her reply: if it encourages self-harm or gives a method, the stream stops, the partial reply is dropped, and the same card shows. English first; tested on a labelled set with precision and recall floors.
+
+
+**D-122 What a user may reach: the audit's access fixes** · Accepted · User ("make sure a user can only access what they are supposed to … only a persona description") · 2026-11-24
+A premade's model, voice clips, transcript and full persona are never handed out by the app. (1) `GET /waifus/{id}/vrm` answers only the window's own Origin; the address bar, a download link or curl get 403. (2) She never recites her instructions: a reply that copies 12 words in a row from the system prompt ends before them (`prompting.PromptEcho`), and the prompt asks her not to. (3) Vite's port 1420 and the test client's host are allowed only in a developer checkout. (4) llama-server gets a random key per run and `--no-slots`: a web page could otherwise use the model and read the last prompt. (5) Vite in development denies data, config, packs and the kernel. Not yet: the files themselves sit in the install folder; packing the premades encrypted, and leaving `prompt.md` out, is K7's (K7-10). D-057's per-launch token stays open (SEC-01).
+
+**D-123 Inputs never break or lose text** · Accepted · User ("a message exceeding the chatbox limit (applies to every input box)") · 2026-11-24
+A paste over any field's limit is said in a toast (one listener in App for every capped field); the message box shows a counter past 90%; dictation never pushes it past the limit. A send the engine refuses marks its line failed with Retry, and the engine words a too-long field plainly. Upload problems show inside Profile and Settings → Pet, and a pet sheet too big to send is caught first. Enter does not commit while an IME composes; Esc in Rename never saves. Long unbroken words wrap or end in an ellipsis; bubbles follow their text's direction.
+
+**D-124 UI-2 closes on the look built screen by screen** · Accepted · User ("Yep, tidy it up" to Claude's proposal) · 2026-11-24
+The look was built from the user's references screen by screen (D-102..D-113), so `docs/DESIGN.md` records what exists instead of a mock first. No headless UI library (Radix) and no icon set (lucide): the app's own dialogs, menus and line icons work, and a swap would be churn. Text is never under 12 px; the top bar is three columns so the title never overlaps (UI2-00m).
 
 
 ## Superseded
