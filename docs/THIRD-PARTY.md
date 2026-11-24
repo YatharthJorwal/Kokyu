@@ -12,8 +12,6 @@ Last updated: 2026-11-17. The tables list the **direct** dependencies in `packag
 | `zustand` | 5.1.0 | UI state store | MIT |
 | `three` | 0.185.1 | 3D rendering | MIT |
 | `@pixiv/three-vrm` | 3.5.5 | VRM loading, spring bones, expressions | MIT |
-| `@pixiv/three-vrm-animation` | 3.5.5 | VRMA animation clips | MIT |
-| `three-mesh-bvh` | 0.9.18 | Fast raycasting and collision | MIT |
 | `@tauri-apps/api` | 2.12.4 | Shell bridge | Apache-2.0 OR MIT |
 
 Development only (not shipped):
@@ -75,7 +73,7 @@ Installed by the user or by the first-run setup (D-080). Re-check each when the 
 
 ## Animation clips
 
-Luna's open-licensed VRMA pack is documented in `public/vrm-animations/` (`NOTICE.md`, `LICENSES/APACHE-2.0.txt`, `LICENSES/MIT.txt`). The notices are committed; the `.vrma` files are not (gitignored). Decide whether to ship them at K4.
+Luna's open-licensed VRMA pack is documented in `assets/vrm-animations/` (moved out of `public/` so it is not copied into every build) (`NOTICE.md`, `LICENSES/APACHE-2.0.txt`, `LICENSES/MIT.txt`). The notices are committed; the `.vrma` files are not (gitignored). Decide whether to ship them at K4.
 
 ## Shipped assets (the premade companions, D-041)
 
