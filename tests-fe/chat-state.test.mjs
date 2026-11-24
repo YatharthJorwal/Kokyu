@@ -15,6 +15,7 @@ import {
   reduce,
   startsGroup,
   turnFailure,
+  uploadProblem,
   visibleStream,
 } from "../src/app/chat-state.ts";
 import { backoffMs, dispatchRaw } from "../src/net/kernel.ts";
@@ -637,6 +638,17 @@ test("a finished turn takes the stored ids, pins and swipes the engine reports",
     [["m7", 7, "hello", true, 1, 0], ["m8", 8, "Hi there.", false, 2, 1]],
   );
   assert.equal(s.saved, null);
+});
+
+// D-123: a send the engine refuses (too long, no store) shows Retry, never waits forever.
+test("a refused send marks its line failed", () => {
+  let s = run(online, frame("thread_opened", { thread: thread("t1"), messages: [] }));
+  s = reduce(s, { kind: "sent", text: "far too long" });
+  s = reduce(s, frame("error", { code: "bad_message", message: "That is too long: the limit is 20,000 characters.", reply_to: null }));
+  const last = s.messages[s.messages.length - 1];
+  assert.deepEqual([last.pending, last.failed, s.turn], [false, true, "idle"]);
+  assert.equal(uploadProblem(s), "That is too long: the limit is 20,000 characters.");
+  assert.equal(uploadProblem(reduce(s, frame("error", { code: "turn_running", message: "Wait.", reply_to: null }))), null);
 });
 
 // D-121: a line about self-harm gets the help card, never a reply.

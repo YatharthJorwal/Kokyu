@@ -4,7 +4,7 @@
 
 import { useEffect, useRef } from "react";
 
-import { canStartThread, type Companion } from "../chat-state";
+import { canStartThread, uploadProblem, type Companion } from "../chat-state";
 import { PICTURE_ACCEPT } from "../file-upload";
 import { actions, useChat } from "../store";
 import { Portrait } from "./Portrait";
@@ -23,6 +23,7 @@ export function ProfileDialog() {
 function ProfileBody({ companion }: { companion: Companion }) {
   const canChat = useChat(canStartThread);
   const online = useChat((s) => s.connection === "online");
+  const problem = useChat(uploadProblem);
   const file = useRef<HTMLInputElement>(null);
   const chat = useRef<HTMLButtonElement>(null);
 
@@ -90,6 +91,11 @@ function ProfileBody({ companion }: { companion: Companion }) {
           </button>
         ) : null}
       </div>
+      {problem ? (
+        <p className="settings-status failed" role="alert">
+          {problem}
+        </p>
+      ) : null}
     </div>
   );
 }

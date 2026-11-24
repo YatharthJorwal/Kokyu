@@ -42,6 +42,13 @@ def test_only_v1_frames_are_accepted():
     assert protocol.parse_client({"v": 1, "type": "send", "data": {"text": "hi"}}).data.text == "hi"
 
 
+def test_a_field_over_its_limit_is_refused_in_plain_words():
+    # D-123: never pydantic's "send: text: String should have at most ..." in the window.
+    with pytest.raises(protocol.ProtocolError) as info:
+        protocol.parse_client({"v": 1, "type": "send", "data": {"text": "x" * 20_001}})
+    assert (info.value.code, str(info.value)) == ("bad_message", "That is too long: the limit is 20,000 characters.")
+
+
 def test_every_client_message_has_a_session_handler():
     # A new message type is a CLIENT_TYPES entry plus one Session.on_<type> (D-062).
     missing = [t for t in protocol.CLIENT_TYPES if not callable(getattr(session.Session, f"on_{t}", None))]

@@ -141,6 +141,11 @@ export function Composer() {
             {problem}
           </p>
         ) : null}
+        {text.length > TEXT_MAX * 0.9 ? (
+          <p className="composer-count" aria-live="polite">
+            {text.length.toLocaleString("en-US")} / {TEXT_MAX.toLocaleString("en-US")}
+          </p>
+        ) : null}
         <div className="composer-row">
           <Tray onFile={(f) => void attach(f)} disabled={role === "observer"} />
           <textarea
@@ -155,6 +160,7 @@ export function Composer() {
             onPaste={onPaste}
             placeholder={attachment ? "Add a comment (optional)…" : placeholder}
             rows={1}
+            dir="auto"
             aria-label="Message"
             disabled={role === "observer"}
           />
@@ -254,8 +260,12 @@ function useDictation(
     if (heard.error) return setProblem(heard.error);
     if (!heard.text.trim()) return setProblem("Didn't catch anything. Try again, a little closer to the mic.");
     const el = box.current;
+    const now = el?.value ?? "";
+    if (now.length - Math.abs((el?.selectionEnd ?? 0) - (el?.selectionStart ?? 0)) + heard.text.trim().length + 2 > TEXT_MAX) {
+      setProblem(`Only part of what you said fit: a message can be ${TEXT_MAX.toLocaleString("en-US")} characters at most.`);
+    }
     setText((cur) => {
-      const put = insertDictation(cur, heard.text, el?.selectionStart ?? cur.length, el?.selectionEnd ?? cur.length);
+      const put = insertDictation(cur, heard.text, el?.selectionStart ?? cur.length, el?.selectionEnd ?? cur.length, TEXT_MAX);
       caret.current = put.caret;
       return put.value;
     });

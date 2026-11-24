@@ -364,7 +364,7 @@ function ModelPopover({ current }: { current: string | null }) {
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
       setActive((i) => Math.max(0, i - 1));
-    } else if (e.key === "Enter" && activeRef) {
+    } else if (e.key === "Enter" && activeRef && !e.nativeEvent.isComposing) {
       e.preventDefault();
       actions.setModel(activeRef);
     }

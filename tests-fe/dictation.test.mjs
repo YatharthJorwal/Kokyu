@@ -78,6 +78,9 @@ test("dictated words go in at the caret with spaces around them, replacing a sel
   assert.deepEqual(insertDictation("Well, ok", "fine", 0, 4), { value: "fine, ok", caret: 4 });
   assert.deepEqual(insertDictation("abc", "", 1), { value: "abc", caret: 1 }); // nothing heard: unchanged
   assert.deepEqual(insertDictation("abc", "x y", 99), { value: "abc x y", caret: 7 }); // a stale caret
+  // D-123: never past the box's limit; what does not fit of the words is left out
+  assert.deepEqual(insertDictation("abcd", "hello", 4, 4, 8), { value: "abcd hel", caret: 8 });
+  assert.equal(insertDictation("x".repeat(10), "more words", 10, 10, 10).value, "x".repeat(10));
 });
 
 test("the recording time reads m:ss", () => {

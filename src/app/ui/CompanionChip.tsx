@@ -99,7 +99,7 @@ function CompanionPopover({
     if (e.key === "Escape") {
       e.preventDefault();
       onClose();
-    } else if (e.key === "Enter" && shown.length > 0) {
+    } else if (e.key === "Enter" && shown.length > 0 && !e.nativeEvent.isComposing) {
       e.preventDefault();
       onPick(shown[0].id);
     }

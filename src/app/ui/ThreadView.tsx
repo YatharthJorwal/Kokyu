@@ -265,7 +265,7 @@ function Message({
       ) : (
         <>
           <div className="bubble-row">
-            <div className="bubble">{m.role === "assistant" || roleplay ? <Markdown text={m.text} roleplay={roleplay} /> : m.text}</div>
+            <div className="bubble" dir="auto">{m.role === "assistant" || roleplay ? <Markdown text={m.text} roleplay={roleplay} /> : m.text}</div>
             {m.pending || typing ? null : (
               <MessageMenu m={m} last={last} head={her && !!m.speaker} editable={editable} roleplay={roleplay} onEdit={() => setEditing(true)} />
             )}

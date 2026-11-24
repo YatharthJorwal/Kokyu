@@ -552,7 +552,7 @@ class Session:
         filename = data.filename or "uploaded file"
         if data.kind == "text":
             # Capped in the window too (file-upload.ts); capped again rather than trusted.
-            shared = f'(shared a file, "{filename}") {data.content[:6000]}'
+            shared = f'(shared a file, "{filename}") {data.content[:6100]}'   # 6,000 + the window's "truncated" note
         else:
             try:   # D-106: only an allowed picture reaches the vision model
                 await asyncio.to_thread(uploads.check_b64, data.content)

@@ -18,19 +18,23 @@ export function TopBar({ onShowSidebar }: { onShowSidebar?: () => void }) {
   const title = useChat((s) => (s.thread ? s.thread.title || (s.thread.mode === "roleplay" ? "New story" : "New chat") : ""));
   return (
     <header className={desktop ? "top-bar framed" : "top-bar"} data-tauri-drag-region>
-      {onShowSidebar ? (
-        <button type="button" className="sidebar-toggle" aria-label="Show the sidebar" title="Show the sidebar" onClick={onShowSidebar}>
-          <Icon name="sidebar" size={18} />
-        </button>
-      ) : null}
-      <CompanionChip />
-      <PetButton />
+      <div className="top-bar-side" data-tauri-drag-region>
+        {onShowSidebar ? (
+          <button type="button" className="sidebar-toggle" aria-label="Show the sidebar" title="Show the sidebar" onClick={onShowSidebar}>
+            <Icon name="sidebar" size={18} />
+          </button>
+        ) : null}
+        <CompanionChip />
+        <PetButton />
+      </div>
       <span className="top-bar-title" data-tauri-drag-region title={title || undefined}>
         {title}
       </span>
-      <ViewSwitch />
-      <TempSwitch />
-      {desktop ? <WindowControls /> : null}
+      <div className="top-bar-side end" data-tauri-drag-region>
+        <ViewSwitch />
+        <TempSwitch />
+        {desktop ? <WindowControls /> : null}
+      </div>
     </header>
   );
 }

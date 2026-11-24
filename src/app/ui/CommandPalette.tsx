@@ -104,7 +104,7 @@ function Palette() {
       e.preventDefault();
       const step = e.key === "ArrowDown" ? 1 : -1;
       setActive((i) => (items.length ? (i + step + items.length) % items.length : 0));
-    } else if (e.key === "Enter") {
+    } else if (e.key === "Enter" && !e.nativeEvent.isComposing) {
       e.preventDefault();
       pick(active);
     } else if (e.key === "Escape") {

@@ -90,8 +90,14 @@ export function parseDictationKey(raw: string | null | undefined): string {
 
 /** The input box after dictated words replace the selection [start, end): a space
  * keeps them apart from the words around them. `caret` is where they end. */
-export function insertDictation(value: string, words: string, start: number, end: number = start): { value: string; caret: number } {
-  const said = words.trim();
+export function insertDictation(
+  value: string,
+  words: string,
+  start: number,
+  end: number = start,
+  max: number = Infinity,
+): { value: string; caret: number } {
+  let said = words.trim();
   const from = Math.max(0, Math.min(start, value.length));
   const to = Math.max(from, Math.min(end, value.length));
   if (!said) return { value, caret: to };
@@ -99,6 +105,9 @@ export function insertDictation(value: string, words: string, start: number, end
   const after = value.slice(to);
   const lead = before && !/\s$/.test(before) ? " " : "";
   const trail = after && !/^[\s.,;:!?)]/.test(after) ? " " : "";
+  // Never past the box's limit (the audit): what does not fit of the words is left out.
+  said = said.slice(0, Math.max(0, max - before.length - lead.length - trail.length - after.length));
+  if (!said) return { value, caret: to }; // nothing fits: the box stays as it was
   const next = before + lead + said + trail + after;
   return { value: next, caret: (before + lead + said).length };
 }

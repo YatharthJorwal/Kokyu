@@ -10,7 +10,8 @@ import { ConfirmDialog } from "./ui/ConfirmDialog";
 import { ConnectionBanner } from "./ui/ConnectionBanner";
 import { NoticeBar } from "./ui/NoticeBar";
 import { Pet } from "./ui/Pet";
-import { useChat } from "./store";
+import { actions, useChat } from "./store";
+import { usePasteLimitNote } from "./paste";
 import { ProfileDialog } from "./ui/ProfileDialog";
 import { RoleplayDialog } from "./ui/RoleplayDialog";
 import { SettingsDialog } from "./ui/SettingsDialog";
@@ -36,6 +37,7 @@ function sidebarHidden(): boolean {
 }
 
 export function App() {
+  usePasteLimitNote(actions.toast);
   const [hidden, setHidden] = useState(sidebarHidden);
   const view = useChat((s) => s.view);
   const hide = (on: boolean) => {

@@ -12,7 +12,7 @@
 import { Suspense, lazy, useCallback, useEffect, useRef, useState, type FormEvent, type KeyboardEvent, type ReactNode } from "react";
 
 import { FACT_MAX, URL_MAX, type BudgetCaps, type DoctorCheck, type MemoryFact, type ModelRow, type ServerData, type SettingsChange, type SettingsData } from "../../net/protocol";
-import { currentMode, modelLabel, type Companion, type SettingsSection } from "../chat-state";
+import { currentMode, modelLabel, uploadProblem, type Companion, type SettingsSection } from "../chat-state";
 import { DEFAULT_DICTATION_KEY, keyName, keyProblem } from "../dictation";
 import { PICTURE_ACCEPT } from "../file-upload";
 import { setDictationKey, useDictationKey } from "../dictation-key";
@@ -580,7 +580,7 @@ function Fact({ fact }: { fact: MemoryFact }) {
     setDraft(null);
   };
   const onKey = (e: KeyboardEvent<HTMLTextAreaElement>) => {
-    if (e.key === "Enter" && !e.shiftKey) {
+    if (e.key === "Enter" && !e.shiftKey && !e.nativeEvent.isComposing) {
       e.preventDefault();
       save();
     } else if (e.key === "Escape") {
@@ -841,6 +841,7 @@ function CreatePet({ id, name, online, draft, own, has }: {
   own: boolean;
   has: boolean;
 }) {
+  const problem = useChat(uploadProblem);
   const [copied, setCopied] = useState(false);
   const [viewer, setViewer] = useState(false);
   const closeViewer = useCallback(() => setViewer(false), []);
@@ -936,6 +937,7 @@ function CreatePet({ id, name, online, draft, own, has }: {
           </label>
         </li>
       </ol>
+      {problem ? <FormStatus text={problem} failed /> : null}
       {has && own ? (
         <button type="button" className="danger-text" onClick={() => actions.removePet(id)}>
           Remove this pet

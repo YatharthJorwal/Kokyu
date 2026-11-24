@@ -276,6 +276,12 @@ function localKey(): string {
   return `l${localCounter}`;
 }
 
+/** An upload's problem, shown inside the dialog that made it (a notice would sit behind it). */
+export function uploadProblem(s: ChatState): string | null {
+  const code = s.notice?.code;
+  return code === "client" || code === "picture_unreadable" || code === "bad_message" ? s.notice!.text : null;
+}
+
 export function fromStored(m: ThreadMessage): ChatMessage {
   const swipes = Array.isArray(m.meta?.swipes) ? m.meta.swipes.length : 0;
   return {
@@ -638,7 +644,11 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
         notice,
         scenarioSave,
         roleplayStart,
-        messages: failedTurn ? markLastUser(state.messages, { failed: true, pending: false }) : state.messages,
+        // A send the engine refused (too long, no store, observer): the line shows Retry.
+        messages:
+          failedTurn || (!keepsTurn && state.messages[state.messages.length - 1]?.pending)
+            ? markLastUser(state.messages, { failed: true, pending: false })
+            : state.messages,
         turn: keepsTurn ? state.turn : "idle",
       };
     }

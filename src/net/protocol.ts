@@ -513,6 +513,10 @@ export class ReplyAccumulator {
 
 /** The kernel's caps (KASANE/protocol): a longer field is refused, so the window caps it first. */
 export const TEXT_MAX = 20_000;
+/** A resized picture as base64 (protocol FILE_MAX). */
+export const FILE_MAX = 12_000_000;
+/** A message read aloud (SpeakMessage). */
+export const SPEAK_MAX = 40_000;
 export const FACT_MAX = 2_000;
 export const URL_MAX = 300;
 

@@ -8,6 +8,7 @@ import { create } from "zustand";
 
 import { KernelSocket } from "../net/kernel";
 import type { Effort, Scenario, ServerData, SettingsChange } from "../net/protocol";
+import { FILE_MAX, SPEAK_MAX } from "../net/protocol";
 import {
   canPickModel,
   canActOnMessages,
@@ -408,6 +409,10 @@ export const actions = {
       dispatch({ kind: "problem", reason: e instanceof UploadProblem ? e.message : "That file is not a picture Kōkyū can read. Use a PNG of the pose sheet." });
       return;
     }
+    if (image.length > FILE_MAX) {
+      dispatch({ kind: "problem", reason: "That sheet is too detailed to send. Save it as a PNG with a plain background and try again." });
+      return;
+    }
     socket.send("pet_sheet", { waifu_id: id, image_b64: image });
   },
 
@@ -472,7 +477,7 @@ export const actions = {
       readingOver();
       return;
     }
-    if (!socket.send("speak_message", { ref: key, text, speaker_id: speakerId })) return;
+    if (!socket.send("speak_message", { ref: key, text: text.slice(0, SPEAK_MAX), speaker_id: speakerId })) return;
     muted = false;
     readingSent = false;
     dispatch({ kind: "reading", key });

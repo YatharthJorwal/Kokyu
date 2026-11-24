@@ -510,6 +510,9 @@ def parse_client(raw: Any) -> ClientMessage:
         parsed = model.model_validate(data)
     except ValidationError as exc:
         first = exc.errors()[0]
+        limit = (first.get("ctx") or {}).get("max_length")
+        if first.get("type") == "string_too_long" and isinstance(limit, int):
+            raise ProtocolError("bad_message", f"That is too long: the limit is {limit:,} characters.") from None
         where = ".".join(str(p) for p in first.get("loc", ())) or "data"
         raise ProtocolError("bad_message", f"{type_}: {where}: {first.get('msg', 'invalid')}") from None
     msg_id = raw.get("id")

@@ -200,9 +200,10 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
       setMode("view");
     };
     const onKey = (e: KeyboardEvent<HTMLInputElement>) => {
-      if (e.key === "Enter") done(true);
+      if (e.key === "Enter" && !e.nativeEvent.isComposing) done(true);
       else if (e.key === "Escape") {
         e.preventDefault();
+        e.currentTarget.dataset.cancelled = "1";   // the blur that follows must not save
         done(false);
       }
     };
@@ -216,7 +217,7 @@ function ThreadRow({ thread, roster, busy }: { thread: ThreadInfo; roster: Compa
           maxLength={200}
           onChange={(e) => setTitle(e.target.value)}
           onKeyDown={onKey}
-          onBlur={() => done(true)}
+          onBlur={(e) => done(e.currentTarget.dataset.cancelled !== "1")}
         />
       </li>
     );

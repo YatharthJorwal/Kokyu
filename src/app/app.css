@@ -216,7 +216,7 @@ button:disabled {
   height: 24px;
   border-radius: 50%;
   background: var(--line);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 
@@ -507,11 +507,15 @@ button:disabled {
 /* ── top bar (K1-15, D-068) ──────────────────────────────── */
 
 /* UI1-09: one slim row; in the desktop app the window's buttons end it. */
+/* UI2-00m: three columns; the title is centred while both sides fit, and shrinks with an
+   ellipsis instead of running under the sides when they do not. */
 .top-bar {
-  display: flex;
+  display: grid;
+  /* both sides keep their content: at the window's 900 px minimum they fit with the sidebar open */
+  grid-template-columns: minmax(max-content, 1fr) minmax(0, auto) minmax(max-content, 1fr);
   flex: none;
   align-items: center;
-  gap: 14px;
+  column-gap: 14px;
   height: 52px;
   padding: 0 20px 0 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--line) 60%, transparent);
@@ -523,19 +527,19 @@ button:disabled {
 }
 
 /* Centred on the whole bar, not on the space between its sides (the user's note). */
-.top-bar {
-  position: relative;
+.top-bar-side {
+  display: flex;
+  align-items: center;
+  align-self: stretch;
+  gap: 14px;
 }
 
-.top-bar > .switch {
-  margin-left: auto;
+.top-bar-side.end {
+  justify-content: flex-end;
 }
 
 .top-bar-title {
-  position: absolute;
-  left: 50%;
-  max-width: 36%;
-  transform: translateX(-50%);
+  min-width: 0;
   overflow: hidden;
   color: var(--muted);
   font-size: 14px;
@@ -1864,6 +1868,41 @@ button:disabled {
   font-size: 13px;
 }
 
+/* The audit (D-123): a long word, URL or file name wraps or ends in an ellipsis. */
+.confirm-dialog p,
+.notice,
+.story-pin-text,
+.screen-chip,
+.list-hint,
+.palette-empty,
+.muted.small,
+.settings-status {
+  overflow-wrap: anywhere;
+}
+
+.settings-list li > span:first-child {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.attachment {
+  max-width: 100%;
+}
+
+.attachment span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.composer-count {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  text-align: right;
+}
+
 .attachment button {
   padding: 0 6px;
   border: 0;
@@ -1937,7 +1976,7 @@ button:disabled {
 }
 
 .menu-state {
-  font-size: 11px;
+  font-size: 12px;
   opacity: 0.8;
 }
 
@@ -1961,7 +2000,7 @@ button:disabled {
   padding-top: 6px;
   border-top: 1px solid var(--line);
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
 }
 
@@ -2334,7 +2373,7 @@ button:disabled {
   gap: 8px;
   margin: 8px 8px 4px;
   color: var(--muted);
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 600;
   letter-spacing: 0.08em;
   text-transform: uppercase;
@@ -2366,7 +2405,7 @@ button:disabled {
 }
 
 .list-head .refresh.key {
-  font-size: 11px;
+  font-size: 12px;
   letter-spacing: 0.04em;
 }
 
@@ -2391,7 +2430,7 @@ button:disabled {
   padding: 1px 8px;
   border: 0;
   background: var(--panel-2);
-  font-size: 11px;
+  font-size: 12px;
   white-space: nowrap;
 }
 
@@ -3812,18 +3851,13 @@ button:disabled {
 
 /* ── the Stage (D-104) ───────────────────────────────────── */
 
-.top-bar > .view-switch {
+.top-bar .view-switch {
   display: flex;
   flex: none;
   gap: 2px;
-  margin-left: auto;
   padding: 2px;
   border: 1px solid var(--line);
   border-radius: 9px;
-}
-
-.top-bar > .view-switch + .switch {
-  margin-left: 14px;
 }
 
 .view-switch button {
