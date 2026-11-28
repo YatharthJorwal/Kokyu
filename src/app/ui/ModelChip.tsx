@@ -353,7 +353,9 @@ function ModelPopover({ current }: { current: string | null }) {
       // storage full or off: the choice lasts until the picker closes
     }
   };
-  const [active, setActive] = useState(0);
+  // The highlighted row, by ref: sorting, filtering or switching lists never moves it
+  // onto another model (an Enter then loads what is highlighted, nothing else).
+  const [activeKey, setActiveKey] = useState<string | null>(current);
   const search = useRef<HTMLInputElement>(null);
   const popover = useRef<HTMLDivElement>(null);
 
@@ -378,31 +380,36 @@ function ModelPopover({ current }: { current: string | null }) {
   const everyApi = models?.api ?? [];
   const chosen = useMemo(() => everyApi.filter((r) => r.listed !== false || r.ref === current), [everyApi, current]);
   const pool = prefs.all || query ? everyApi : chosen;
-  const companies = useMemo(() => companiesOf(pool), [pool]);
-  const api = useMemo(
-    () => sortRows(filterCompanies(filterRows(pool, query), prefs.companies), prefs.order),
-    [pool, query, prefs],
-  );
+  // the chips name the companies of what is shown, not of the whole endpoint
+  const matched = useMemo(() => filterRows(pool, query), [pool, query]);
+  const companies = useMemo(() => companiesOf(matched), [matched]);
+  const api = useMemo(() => {
+    const kept = new Set(filterCompanies(matched, prefs.companies));
+    // the thread's own model is never filtered away
+    return sortRows(matched.filter((r) => kept.has(r) || r.ref === current), prefs.order);
+  }, [matched, prefs, current]);
   const toggleCompany = (name: string) =>
     changePrefs({ companies: prefs.companies.includes(name) ? prefs.companies.filter((c) => c !== name) : [...prefs.companies, name] });
   const picked = prefs.companies.filter((c) => companies.includes(c));
   // Keyboard order follows the list; rows that cannot be picked are skipped.
   const pickable = useMemo(() => [...local, ...api].filter((r) => r.available), [local, api]);
-  const activeRef = pickable[Math.min(active, pickable.length - 1)]?.ref ?? null;
+  // a search highlights its top match; otherwise the current model, or nothing
+  const activeRef = pickable.some((r) => r.ref === activeKey)
+    ? activeKey
+    : query
+      ? (pickable[0]?.ref ?? null)
+      : (pickable.find((r) => r.ref === current)?.ref ?? null);
   // The row under the mouse, even one that cannot be picked, else the keyboard's.
   const [pointed, setPointed] = useState<ModelRow | null>(null);
   const shown = pointed ?? pickable.find((r) => r.ref === activeRef) ?? null;
 
   // The highlight starts on the current model, not the first row: an Enter
   // straight after opening must not load something else (a two-minute load).
-  const startAtCurrent = (rows: ModelRow[]) => {
-    const i = rows.findIndex((r) => r.ref === current);
-    setActive(i >= 0 ? i : 0);
+  const step = (by: number) => {
+    const i = pickable.findIndex((r) => r.ref === activeRef);
+    const next = pickable[Math.max(0, Math.min(pickable.length - 1, i < 0 ? 0 : i + by))];
+    if (next) setActiveKey(next.ref);
   };
-  useEffect(() => {
-    if (!query) startAtCurrent(pickable);
-    // Only when the list arrives or changes; typing resets to the top match itself.
-  }, [models]);
 
   // The highlighted row stays visible while arrowing through a long list.
   useEffect(() => {
@@ -410,15 +417,12 @@ function ModelPopover({ current }: { current: string | null }) {
   }, [activeRef]);
 
   const onKeyDown = (e: KeyboardEvent<HTMLInputElement>) => {
-    if (e.key === "Escape") {
+    if (e.key === "ArrowDown") {
       e.preventDefault();
-      actions.closePicker();
-    } else if (e.key === "ArrowDown") {
-      e.preventDefault();
-      setActive((i) => Math.min(i + 1, Math.max(0, pickable.length - 1)));
+      step(1);
     } else if (e.key === "ArrowUp") {
       e.preventDefault();
-      setActive((i) => Math.max(0, i - 1));
+      step(-1);
     } else if (e.key === "Enter" && activeRef && !e.nativeEvent.isComposing) {
       e.preventDefault();
       actions.setModel(activeRef);
@@ -427,14 +431,25 @@ function ModelPopover({ current }: { current: string | null }) {
 
   const hover = (row: ModelRow) => () => {
     setPointed(row);
-    const i = pickable.findIndex((r) => r.ref === row.ref);
-    if (i >= 0) setActive(i);
+    if (row.available) setActiveKey(row.ref);
   };
 
   const spend = models?.spend ?? null;
 
   return (
-    <div className="model-popover" ref={popover} role="dialog" aria-label="Choose a model">
+    <div
+      className="model-popover"
+      ref={popover}
+      role="dialog"
+      aria-label="Choose a model"
+      // Esc closes from any control in here, not only the search box (DESIGN.md)
+      onKeyDown={(e) => {
+        if (e.key === "Escape") {
+          e.preventDefault();
+          actions.closePicker();
+        }
+      }}
+    >
       <input
         ref={search}
         className="model-search"
@@ -444,21 +459,15 @@ function ModelPopover({ current }: { current: string | null }) {
         onChange={(e) => {
           const next = e.target.value;
           setQuery(next);
-          if (next) setActive(0);
-          else startAtCurrent([...(models?.local ?? []), ...(models?.api ?? [])].filter((r) => r.available));
+          setActiveKey(next ? null : current);   // typing: the top match; cleared: the current model
         }}
         onKeyDown={onKeyDown}
         aria-label="Search models"
-        aria-controls="model-listbox"
+        aria-controls="model-listbox-local model-listbox-api"
         aria-activedescendant={activeRef ? optionId(activeRef) : undefined}
       />
-      <div
-        className="model-list"
-        role="listbox"
-        id="model-listbox"
-        aria-label="Models"
-        onMouseLeave={() => setPointed(null)}
-      >
+      {/* the rows are the listboxes; the headings and the sort and company controls sit outside them */}
+      <div className="model-list" onMouseLeave={() => setPointed(null)}>
         {models === null ? <p className="list-hint">Looking for models…</p> : null}
 
         {models !== null ? (
@@ -468,7 +477,7 @@ function ModelPopover({ current }: { current: string | null }) {
             {local.length === 0 && !models.local_error ? (
               <p className="list-hint">{query ? "No local model matches." : "No local models found."}</p>
             ) : null}
-            <ul>
+            <ul role="listbox" id="model-listbox-local" aria-label="Local models">
               {local.map((r) => (
                 <Row key={r.ref} row={r} current={r.ref === current} active={r.ref === activeRef} onHover={hover(r)} />
               ))}
@@ -506,7 +515,7 @@ function ModelPopover({ current }: { current: string | null }) {
             </h3>
             {everyApi.length > 1 ? (
               <div className="model-tools">
-                {everyApi.length > chosen.length ? (
+                {everyApi.length > chosen.length && !query ? (
                   <select
                     className="model-sort"
                     value={prefs.all ? "all" : "list"}
@@ -531,11 +540,23 @@ function ModelPopover({ current }: { current: string | null }) {
                 </select>
                 {companies.length > 1 ? (
                   <div className="model-companies" role="group" aria-label="Show these companies">
-                    <button type="button" aria-pressed={picked.length === 0} onClick={() => changePrefs({ companies: [] })}>
+                    {/* a click keeps the focus in the search box, so typing and the arrows go on working */}
+                    <button
+                      type="button"
+                      aria-pressed={picked.length === 0}
+                      onMouseDown={(e) => e.preventDefault()}
+                      onClick={() => changePrefs({ companies: [] })}
+                    >
                       All
                     </button>
                     {companies.map((c) => (
-                      <button key={c} type="button" aria-pressed={picked.includes(c)} onClick={() => toggleCompany(c)}>
+                      <button
+                        key={c}
+                        type="button"
+                        aria-pressed={picked.includes(c)}
+                        onMouseDown={(e) => e.preventDefault()}
+                        onClick={() => toggleCompany(c)}
+                      >
                         {c}
                       </button>
                     ))}
@@ -560,7 +581,7 @@ function ModelPopover({ current }: { current: string | null }) {
                     : "No API key yet. Add one with Key above."}
               </p>
             ) : null}
-            <ul>
+            <ul role="listbox" id="model-listbox-api" aria-label="API models">
               {api.map((r, i) => (
                 <Fragment key={r.ref}>
                   {/* FR-M-4: grouped by provider; the rows come sorted by id, so a new vendor starts a group */}

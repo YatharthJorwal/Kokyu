@@ -270,6 +270,8 @@ export interface ModelListData {
   /** D-126: one-click sets of this endpoint's ids, and whether the picker's list is the user's own. */
   api_popular?: Record<string, string[]>;
   api_own_list?: boolean;
+  /** What Defaults lists: the Popular set, or every model when there is none. */
+  api_defaults?: string[];
 }
 
 export type ModelLoadState = "idle" | "loading" | "ready" | "failed";

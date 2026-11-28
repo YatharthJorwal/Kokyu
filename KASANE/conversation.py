@@ -315,10 +315,12 @@ class ConversationManager:
         chosen = candidates[index]
         candidates[current] = candidate_of(message)
         candidates[index] = None
-        meta = {k: v for k, v in message.meta.items() if k not in ("stopped",)}
+        meta = {k: v for k, v in message.meta.items() if k not in ("stopped", "instead_of")}
         meta.update(swipes=candidates, swipe=index)
         if chosen.get("stopped"):
             meta["stopped"] = True
+        if chosen.get("instead_of"):
+            meta["instead_of"] = chosen["instead_of"]
         fields = {k: chosen.get(k) for k in CANDIDATE_FIELDS}
         return await self._run(self.store.update_message, message.id, **fields, meta=meta)
 
@@ -364,6 +366,8 @@ def candidate_of(message: Message) -> dict[str, Any]:
     out: dict[str, Any] = {k: getattr(message, k) for k in CANDIDATE_FIELDS}
     if message.meta.get("stopped"):
         out["stopped"] = True
+    if message.meta.get("instead_of"):
+        out["instead_of"] = message.meta["instead_of"]   # D-125: the fallback wrote this one
     return out
 
 

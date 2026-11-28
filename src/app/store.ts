@@ -117,6 +117,9 @@ const socket = new KernelSocket({
       if (dictationWait) dictationDone({ text: "", error: "The connection to Kōkyū's engine dropped." });
     }
     dispatch({ kind: "status", status });
+    // Every model name on screen (the chip, Answer with, a reply's note) comes from the list:
+    // ask for it at once, not only when the picker opens (D-125).
+    if (status === "online") socket.send("model_list", {});
     // The New roleplay dialog stayed open across a reconnect: its card list may be stale.
     if (status === "online" && useChat.getState().roleplayOpen) socket.send("scenario_list", {});
     // Settings stayed open across it too: its section asks again (models were cleared).

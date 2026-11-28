@@ -115,7 +115,7 @@ roles:
     max_tokens: 2000
     reasoning_tokens: 6000  # API only: extra cap when the model may think (billed as output)
     temperature: 0.6
-  chat:                   # K1 (D-025): runs on the thread's chosen model; no fallback
+  chat:                   # K1 (D-025): runs on the thread's chosen model; a fallback only as chat.on_model_failure says (D-125)
     chain: [airouter, local_ollama]
     local_only: false
     max_tokens: 1200        # an API reply's cap, and what its cost estimate assumes (D-058)
@@ -419,6 +419,9 @@ chat:
   default_model_ref: null
   default_effort: null      # off | low | medium | high | max (a level the model lacks: its default)
   load_delay_s: 1.5         # opening a thread with another model loads it after this pause
+  fallback_model_ref: null  # D-125: answers when the chosen model can't; null = the local Ollama model in llm.model
+  on_model_failure: 'ask'   # ask (the failure card offers the fallback) | auto (it answers at once, and says so)
+  api_models: {}            # D-126: endpoint id -> the model ids its picker lists; a missing endpoint lists its Popular set
 
 # ─────────────────────────────────────────────────────────────────────────────
 # VRAM manager (K1-09). Reads the GPU through the NVIDIA driver, remembers what

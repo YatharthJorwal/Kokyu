@@ -16,12 +16,18 @@ export function isLocalRef(ref: string | null): boolean {
 }
 
 /** Every word of the query must appear in the label, reference or detail. */
+/** Every word must match. A word of one or two characters matches the start of a word
+ * in the name or id ("c" finds Claude, not every "128k context"); a longer one matches
+ * anywhere, the detail and tags included ("seek" finds DeepSeek, "llama.cpp" a backend). */
 export function filterRows(rows: ModelRow[], query: string): ModelRow[] {
-  const words = query.toLowerCase().split(/\s+/).filter(Boolean);
+  const words = query.toLowerCase().split(/[^a-z0-9.]+/).filter(Boolean);
   if (words.length === 0) return rows;
   return rows.filter((r) => {
-    const hay = `${r.label} ${r.full ?? ""} ${r.ref} ${r.detail ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase();
-    return words.every((w) => hay.includes(w));
+    // the id without "api:airouter/" or "local:ollama/": those words are on every row
+    const name = `${r.label} ${r.full ?? r.ref.replace(/^[a-z]+:[a-z0-9_-]+\//, "")}`.toLowerCase();
+    const starts = name.split(/[^a-z0-9.]+/);
+    const hay = `${name} ${r.detail ?? ""} ${(r.tags ?? []).join(" ")}`.toLowerCase();
+    return words.every((w) => (w.length <= 2 ? starts.some((s) => s.startsWith(w)) : hay.includes(w)));
   });
 }
 

@@ -420,12 +420,16 @@ export function modelRow(state: ChatState, ref: string | null): ModelRow | undef
   return ref && state.models ? [...state.models.local, ...state.models.api].find((r) => r.ref === ref) : undefined;
 }
 
-/** The chip's name for a model: the picker's label, else the load status's, else the id. */
-/** D-125: "Answer with <this>" on a failure that offers the fallback model, else null. */
+/** D-125: "Answer with <this>" on a failure that offers the fallback model, else null.
+ * Not when the model list says it can't run (no such local model, an API row greyed). */
 export function fallbackLabel(state: ChatState, notice: Notice | null): string | null {
-  return notice?.actions.includes("fallback") && notice.fallback ? modelLabel(state, notice.fallback) : null;
+  if (!notice?.actions.includes("fallback") || !notice.fallback) return null;
+  const row = modelRow(state, notice.fallback);
+  if (state.models && !row?.available) return null;
+  return modelLabel(state, notice.fallback);
 }
 
+/** The chip's name for a model: the picker's label, else the load status's, else the id. */
 export function modelLabel(state: ChatState, ref: string | null): string {
   if (!ref) return "Default model";
   const row = modelRow(state, ref);
@@ -581,12 +585,15 @@ function reduceFrame(state: ChatState, frame: Frame): ChatState {
               speakerId: state.companion?.id ?? null,
               stopped: stopped || undefined,
               ts: nowS(),
-              // What the kernel stores with it: the thread's model, else the default.
-              model: currentModelRef(state),
+              // What the kernel stores with it: the thread's model, else the default. After a
+              // fallback answered (D-125) the window does not know which wrote it: no guess.
+              model: state.notice?.code === "model_fallback" ? null : currentModelRef(state),
             },
           ]
         : withLine;
-      return { ...state, messages, beforeRegenerate: null, saved: null, started: false, turn: "idle", streamRaw: "", mood: { emotion: emotion ?? null } };
+      // D-125: "X is answering instead" is done; the reply's own note keeps the record
+      const notice = state.notice?.code === "model_fallback" ? null : state.notice;
+      return { ...state, messages, notice, beforeRegenerate: null, saved: null, started: false, turn: "idle", streamRaw: "", mood: { emotion: emotion ?? null } };
     }
     case "model_list":
       return { ...state, models: frame.data as ModelListData };

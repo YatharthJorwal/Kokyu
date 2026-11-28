@@ -70,7 +70,7 @@ def listed_ids(model_ids: list[str], backend: str, cfg: Config | None = None) ->
     chosen = cfg.chat.api_models.get(backend)
     if isinstance(chosen, (list, tuple)):
         return set(chosen) & set(model_ids)
-    popular = {model_id for ids in popular_in(model_ids).values() for model_id in ids}
+    popular = set(popular_in(model_ids).get("Popular", ()))   # not Budget or Strongest too
     return popular or set(model_ids)
 
 
@@ -474,5 +474,7 @@ async def model_list(
         # D-126: Settings' one-click sets, and whether the list is the user's own
         "api_popular": popular,
         "api_own_list": isinstance(cfg.chat.api_models.get(status["id"] if status else "airouter"), (list, tuple)),
+        # what *Defaults* lists: the Popular set, or every model when the endpoint has none
+        "api_defaults": popular.get("Popular") or [row["full"] for row in api],
         "spend": spend,
     }

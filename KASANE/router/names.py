@@ -36,6 +36,10 @@ VENDORS = {
     "x-ai": "xAI", "mistralai": "Mistral", "deepseek": "DeepSeek", "qwen": "Qwen",
     "microsoft": "Microsoft", "nvidia": "NVIDIA", "cohere": "Cohere", "amazon": "Amazon",
     "moonshotai": "Moonshot AI", "z-ai": "Z.ai", "minimax": "MiniMax", "perplexity": "Perplexity",
+    # AI Router's slugs (D-127: the picker's company chips show these)
+    "spacexai": "xAI", "zai": "Z.ai", "inclusionai": "inclusionAI", "thinkingmachines": "Thinking Machines",
+    "bytedance": "ByteDance", "stepfun": "StepFun", "inference-net": "Inference.net", "elevenlabs": "ElevenLabs",
+    "heygen": "HeyGen", "paperinstruments": "Paper Instruments", "convaiinnovations": "Convai", "mistral": "Mistral",
 }
 
 QUANT = re.compile(r"^(i?q\d+(_[a-z0-9]+)*|ud|f16|bf16|fp16|fp8|f32|mxfp4|awq|gptq|int[48]|\d+bit|qat)$", re.I)
@@ -154,4 +158,6 @@ def label_note(preset_label: str | None) -> str | None:
 
 def vendor(slug: str) -> str:
     """A provider's display name for the picker's group headings."""
-    return VENDORS.get(slug.lower()) or " ".join(w[:1].upper() + w[1:] for w in re.split(r"[-_]", slug) if w)
+    return VENDORS.get(slug.lower()) or " ".join(
+        "AI" if w.lower() == "ai" else w[:1].upper() + w[1:] for w in re.split(r"[-_]", slug) if w
+    )

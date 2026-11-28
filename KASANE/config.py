@@ -891,6 +891,32 @@ def _merge(base: Mapping[str, Any], over: Mapping[str, Any]) -> dict[str, Any]:
     return out
 
 
+def _chat(raw: Mapping[str, Any], warnings: list[str]) -> ChatConfig:
+    """The chat section, with D-125/D-126's keys checked: a hand-edited settings.json
+    or config.yaml with the wrong shape falls back to the default and says so."""
+    data = dict(raw)
+    lists = data.get("api_models")
+    if lists is not None and not isinstance(lists, Mapping):
+        warnings.append("chat.api_models must map an endpoint id to a list of model ids; ignored")
+        data.pop("api_models")
+    elif isinstance(lists, Mapping):
+        data["api_models"] = {
+            str(k): [str(m) for m in v] for k, v in lists.items() if isinstance(v, (list, tuple))
+        }
+    if data.get("on_model_failure") not in (None, "ask", "auto"):
+        warnings.append("chat.on_model_failure must be ask or auto; using ask")
+        data["on_model_failure"] = "ask"
+    ref = data.get("fallback_model_ref")
+    if ref is not None:
+        from router import model_ref as model_refs   # router imports config: not at the top
+        try:
+            model_refs.parse(str(ref))
+        except model_refs.ModelRefError:
+            warnings.append(f"chat.fallback_model_ref {ref!r} is not a model reference; ignored")
+            data["fallback_model_ref"] = None
+    return _build(ChatConfig, data)
+
+
 def load_config(
     path: pathlib.Path | str | None = None,
     *,
@@ -1010,7 +1036,7 @@ def load_config(
         speech=speech,
         latency=latency,
         llamacpp=_derive_llamacpp(raw),
-        chat=_build(ChatConfig, _section(raw, "chat")),
+        chat=_chat(_section(raw, "chat"), warnings),
         vram=_build(VramConfig, _section(raw, "vram")),
         llm=llm,
         tts=_derive_tts(raw),

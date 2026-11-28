@@ -101,6 +101,31 @@ def failure_frame(exc: Exception, thread_id: str | None, fallback: str | None = 
     return protocol.frame("error", failure, thread=thread_id)
 
 
+def usable_fallback(failed: str | None) -> str | None:
+    """D-125: the fallback model for `failed`, or None when it could only be refused:
+    an API model needs a key and the active endpoint (D-059). A local model is not
+    checked here (that would be a call to Ollama on every failure); the window hides
+    *Answer with* for one the model list does not have."""
+    ref = model_listing.fallback_ref(failed, CONFIG)
+    if ref is None or is_local_ref(ref):
+        return ref
+    rt = router._router   # the running router; None before start-up (and in tests)
+    if rt is None:
+        return ref
+    backend = ref.partition(":")[2].partition("/")[0]
+    return ref if rt.api_key_present and backend == rt.api_id else None
+
+
+def both_failed(failed: str, fallback: str | None, frame: dict[str, Any]) -> dict[str, Any]:
+    """D-125: when the fallback fails too, the card names both models, the chosen one
+    first: Retry asks it again."""
+    data = frame["data"]
+    first = model_listing.label_for(failed)
+    second = model_listing.label_for(model_listing.effective_ref(fallback, CONFIG))
+    data["message"] = f"{first} couldn't answer, and neither could {second}. {data['message']}"
+    return frame
+
+
 def fallback_line(failed: str | None, fallback: str, exc: Exception) -> str:
     """D-125: what the window says when the fallback model takes the turn by itself."""
     failure = protocol.model_failure(exc)
@@ -631,7 +656,7 @@ async def run_turn(
                 # turn to the fallback model, once, and the window says why. A file never
                 # moves to an API model this way: it was not sent there (FR-R-7).
                 switch = (
-                    model_listing.fallback_ref(model_ref, CONFIG)
+                    usable_fallback(model_ref)
                     if CONFIG.chat.on_model_failure == "auto" and fallback_from is None and not raw_text and not tool_messages
                     else None
                 )
@@ -648,6 +673,9 @@ async def run_turn(
                 local_model = is_local_ref(model_ref)
                 if local_model:
                     sent_to = None
+                elif unprompted:
+                    # her screen remarks never reach an API model, fallback or not (FR-SC-3, FR-R-7)
+                    messages_for_llm = [m for m in messages_for_llm if not any(m is u for u in unprompted)]
                 offered_tools = [] if roleplay else tools.offered_schemas(already_looked=bool(look_hint), local_model=local_model)
                 offered_names = {schema["function"]["name"] for schema in offered_tools}
                 chat_memory = context_fit.context_for(model_ref)
@@ -663,8 +691,9 @@ async def run_turn(
         # typed error the chat view turns into Retry / Switch model; never
         # quietly answer from another model.
         with contextlib.suppress(Exception):
-            fallback = None if fallback_from else model_listing.fallback_ref(model_ref, CONFIG)
-            await websocket.send_json(failure_frame(exc, thread_id, fallback))
+            fallback = None if fallback_from else usable_fallback(model_ref)
+            frame = failure_frame(exc, thread_id, fallback)
+            await websocket.send_json(both_failed(fallback_from, model_ref, frame) if fallback_from else frame)
         # Half a reply is still what she said: it is kept (below), but not read aloud.
     except Exception:  # noqa: BLE001 -- deliberate catch-all, see below
         # Anything else (a TTS failure, a socket error, a plain bug) used to

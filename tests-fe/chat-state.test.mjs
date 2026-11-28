@@ -765,4 +765,14 @@ test("the fallback is offered on the card, said while it answers, and named on i
   const reply = fromStored({ ...stored(2, "assistant", "fine", { instead_of: "api:airouter/anthropic/claude-fable-5.2" }), model_ref: "local:ollama/qwen3.5:9b" });
   assert.equal(reply.insteadOf, "api:airouter/anthropic/claude-fable-5.2");
   assert.equal(fromStored(stored(3, "user", "hi", { instead_of: "x" })).insteadOf, undefined);
+  // the review's fixes: the bar's "is answering instead" ends with the reply, and no guess at who wrote it
+  const done = reduce(s, frame("turn_done", { text: "fine", stopped: false, emotion: null }));
+  assert.equal(done.notice, null);
+  assert.equal(done.messages.at(-1).model, null);
+  // with the model list in, a fallback it does not have (or greys) is not offered
+  const listed = (rows) => ({ ...failed, models: { local: rows, api: [] } });
+  const row = { ref: "local:ollama/qwen3.5:9b", label: "Qwen3.5 9B Q4_K_M", kind: "local", available: true };
+  assert.equal(fallbackLabel(listed([row]), turnFailure(failed)), "Qwen3.5 9B Q4_K_M");
+  assert.equal(fallbackLabel(listed([]), turnFailure(failed)), null);
+  assert.equal(fallbackLabel(listed([{ ...row, available: false }]), turnFailure(failed)), null);
 });

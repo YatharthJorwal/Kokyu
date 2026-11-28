@@ -129,6 +129,23 @@ test("search matches every word against the label, id, detail and tags", () => {
   assert.deepEqual(filterRows(rows, "qwen llama.cpp").map((r) => r.label), ["Qwen3.6 35B A3B"]);
   assert.deepEqual(filterRows(rows, "REASONING").map((r) => r.label), ["vendor/chat-1"]);
   assert.deepEqual(filterRows(rows, "nothing-like-this"), []);
+  // the user's test: one letter narrows the list at once, never matching "128k context"
+  const api = [
+    { ref: "api:x/anthropic/claude-sonnet-5.5", label: "Claude Sonnet 5.5", full: "anthropic/claude-sonnet-5.5", detail: "200k context" },
+    { ref: "api:x/google/gemini-3.8-flash", label: "Gemini 3.8 Flash", full: "google/gemini-3.8-flash", detail: "1048k context" },
+    { ref: "api:x/deepseek/deepseek-v4-pro", label: "DeepSeek V4 Pro", full: "deepseek/deepseek-v4-pro", detail: "128k context" },
+    { ref: "api:x/openai/gpt-4o", label: "GPT-4o", full: "openai/gpt-4o", detail: "128k context" },
+  ];
+  const labels = (q) => filterRows(api, q).map((r) => r.label);
+  assert.deepEqual(labels("c"), ["Claude Sonnet 5.5"]);
+  assert.deepEqual(labels("cl"), ["Claude Sonnet 5.5"]);
+  assert.deepEqual(labels("g"), ["Gemini 3.8 Flash", "GPT-4o"]);
+  assert.deepEqual(labels("4o"), ["GPT-4o"]);
+  assert.deepEqual(labels("sonnet 5"), ["Claude Sonnet 5.5"]);
+  assert.deepEqual(labels("gpt-4"), ["GPT-4o"]);
+  assert.deepEqual(labels("seek"), ["DeepSeek V4 Pro"]);
+  assert.deepEqual(labels("a"), ["Claude Sonnet 5.5"]);     // anthropic/, not every row's "api:"
+  assert.deepEqual(labels("ai"), []);                       // nor "airouter"
 });
 
 test("the chip shows the thread's model, else the kernel's default, by its label", () => {

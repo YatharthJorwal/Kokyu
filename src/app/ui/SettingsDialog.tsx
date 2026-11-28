@@ -352,31 +352,47 @@ function CustomApiForm({ prefs, saving }: { prefs: SettingsData; saving: Saving 
 }
 
 /** D-126: which of the endpoint's models the picker shows: popular sets in one click,
- * or a searchable checklist with Select all. Saved with Save; Restore defaults goes
- * back to the popular ones. */
+ * or a searchable checklist with Select all. *Defaults* (saved as no list) is the
+ * endpoint's Popular set and follows new releases; an own list stays as chosen. The
+ * draft is null while it is the defaults. Nothing is saved until Save. */
 function ApiListForm({ models, saving }: { models: ModelListData; saving: Saving }) {
   const endpoint = models.api_provider?.id ?? "airouter";
   const idOf = (r: ModelRow) => r.full ?? r.ref;
-  const saved = models.api.filter((r) => r.listed).map(idOf);
-  const [draft, setDraft] = useState<string[]>(saved);
+  const saved = models.api_own_list ? models.api.filter((r) => r.listed).map(idOf) : null;
+  const [draft, setDraft] = useState<string[] | null>(saved);
   const [choosing, setChoosing] = useState(false);
   const [query, setQuery] = useState("");
-  const chosen = new Set(draft);
+  const [preview, setPreview] = useState<string | null>(null);
+  const sets = Object.entries(models.api_popular ?? {});
+  const defaults = models.api_defaults ?? models.api_popular?.Popular ?? models.api.map(idOf);
+  const popularDefaults = Boolean(models.api_popular?.Popular?.length);
+  const shownDraft = draft ?? defaults;
+  const chosen = new Set(shownDraft);
   const byId = new Map(models.api.map((r) => [idOf(r), r]));
-  const changed = draft.length !== saved.length || saved.some((id) => !chosen.has(id));
-  const add = (ids: string[]) => setDraft([...draft, ...ids.filter((id) => !chosen.has(id))]);
-  const drop = (ids: string[]) => setDraft(draft.filter((id) => !ids.includes(id)));
+  const changed = draft === null || saved === null ? draft !== saved : draft.length !== saved.length || saved.some((id) => !chosen.has(id));
+  // any edit turns the defaults into an own list; adding what is already there changes nothing
+  const add = (ids: string[]) => {
+    const fresh = ids.filter((id) => !chosen.has(id));
+    if (fresh.length) setDraft([...shownDraft, ...fresh]);
+  };
+  const drop = (ids: string[]) => setDraft(shownDraft.filter((id) => !ids.includes(id)));
   const shown = filterRows(models.api, query);
   const shownIds = shown.map(idOf);
   const label = (id: string) => byId.get(id)?.label ?? id;
+  const previewIds = preview ? (models.api_popular?.[preview] ?? []) : [];
   return (
     <div className="settings-form">
       <p className="muted settings-hint">
-        The model picker lists only these. {models.api_provider?.label ?? "The endpoint"} has {models.api.length} models.
+        The model picker lists only these. {models.api_provider?.label ?? "The endpoint"} has {models.api.length} models.{" "}
+        {draft === null
+          ? popularDefaults
+            ? "These are the defaults: its popular models, updated as new ones are released."
+            : "These are the defaults: all of its models."
+          : "Your own list: new releases are not added to it. Defaults follows them."}
       </p>
-      {draft.length > 0 ? (
+      {shownDraft.length > 0 ? (
         <ul className="api-chosen">
-          {draft.map((id) => (
+          {shownDraft.map((id) => (
             <li key={id} title={id}>
               <span>{label(id)}</span>
               <button type="button" className="ghost" aria-label={`Remove ${label(id)}`} onClick={() => drop([id])}>
@@ -388,15 +404,54 @@ function ApiListForm({ models, saving }: { models: ModelListData; saving: Saving
       ) : (
         <p className="muted">None chosen: the picker shows no API models.</p>
       )}
-      <div className="settings-choices">
-        {Object.entries(models.api_popular ?? {}).map(([name, ids]) => (
-          <button key={name} type="button" title={ids.map(label).join(", ")} onClick={() => add(ids)}>
+      <div className="api-sets">
+      <div className="settings-choices" onMouseLeave={() => setPreview(null)}>
+        {sets.map(([name, ids]) => (
+          <button
+            key={name}
+            type="button"
+            aria-describedby={preview === name ? "api-set-preview" : undefined}
+            disabled={ids.every((id) => chosen.has(id))}
+            title={ids.every((id) => chosen.has(id)) ? `Every ${name} model is in the list` : undefined}
+            onMouseEnter={() => setPreview(name)}
+            onFocus={() => setPreview(name)}
+            onBlur={() => setPreview(null)}
+            onClick={() => add(ids)}
+          >
             + {name}
           </button>
         ))}
+        <button type="button" disabled={draft === null} onClick={() => setDraft(null)}>
+          Defaults
+        </button>
+        <button type="button" disabled={shownDraft.length === 0} onClick={() => setDraft([])}>
+          Clear
+        </button>
         <button type="button" aria-expanded={choosing} onClick={() => setChoosing((c) => !c)}>
           {choosing ? "Hide the full list" : "Choose from all models…"}
         </button>
+      </div>
+      {preview && previewIds.length ? (
+        // the set's models in a box over what follows: it wraps with the dialog and moves nothing
+        <div className="api-set-preview" id="api-set-preview" role="status">
+          <span className="api-set-preview-head">
+            {preview}: {previewIds.length} {previewIds.length === 1 ? "model" : "models"}
+            {previewIds.some((id) => chosen.has(id))
+              ? previewIds.every((id) => chosen.has(id))
+                ? ", all in the list"
+                : `, ${previewIds.filter((id) => chosen.has(id)).length} in the list (✓)`
+              : ""}
+          </span>
+          <ul>
+            {previewIds.map((id) => (
+              <li key={id} className={chosen.has(id) ? "in-list" : undefined} title={id}>
+                {chosen.has(id) ? <span aria-label="in the list">✓ </span> : null}
+                {label(id)}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
       </div>
       {choosing ? (
         <div className="api-chooser">
@@ -433,11 +488,6 @@ function ApiListForm({ models, saving }: { models: ModelListData; saving: Saving
         <button type="button" disabled={!changed} onClick={() => saving.save("api_models", { api_models: { endpoint, models: draft } })}>
           Save
         </button>
-        {models.api_own_list ? (
-          <button type="button" className="ghost" onClick={() => saving.save("api_models", { api_models: { endpoint, models: null } })}>
-            Restore defaults
-          </button>
-        ) : null}
         <FormStatus text={saving.status("api_models")} failed={saving.failed("api_models")} />
       </div>
     </div>
@@ -450,6 +500,9 @@ function FallbackForm({ prefs, models, saving }: { prefs: SettingsData; models: 
   const current = prefs.fallback ?? { model_ref: null, mode: "ask" as const };
   const local = useChat((s) => modelLabel(s, current.model_ref === null ? (models.fallback_ref ?? null) : null));
   const options = [...models.local, ...models.api.filter((r) => r.listed || r.ref === current.model_ref)].filter((r) => r.available || r.ref === current.model_ref);
+  // a saved model the list no longer has (another endpoint, removed): said, not hidden
+  const missing = current.model_ref !== null && !options.some((r) => r.ref === current.model_ref) ? current.model_ref : null;
+  const missingLabel = useChat((s) => (missing ? modelLabel(s, missing) : null));
   const save = (next: typeof current) => saving.save("fallback", { fallback: next });
   return (
     <div className="settings-form">
@@ -468,8 +521,10 @@ function FallbackForm({ prefs, models, saving }: { prefs: SettingsData; models: 
           {options.map((r) => (
             <option key={r.ref} value={r.ref}>
               {r.kind === "api" ? `${r.label} (API)` : r.label}
+              {r.available ? "" : " (not available now)"}
             </option>
           ))}
+          {missing ? <option value={missing}>{missingLabel} (not available now)</option> : null}
         </select>
       </label>
       <p className="muted settings-hint">

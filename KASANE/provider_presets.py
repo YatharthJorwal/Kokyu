@@ -49,22 +49,29 @@ API_PRESETS: dict[str, dict[str, str]] = {
 # (matched on the id after the vendor, so "anthropic/claude-sonnet-5.5" on AI Router or
 # OpenRouter and a bare "deepseek-chat" on DeepSeek all count), and a set takes the
 # newest version of each family the endpoint lists today: when claude-sonnet-6 ships,
-# it replaces 5.5 at the next catalog refresh. Speed tiers, previews, dated snapshots
-# and side variants are never picked. shortcut: a new family (a new maker or a renamed
+# it replaces 5.5 at the next catalog refresh. Speed tiers, dated snapshots and side
+# variants are never picked; previews only where a maker ships a line that way (Gemini),
+# and a stable release of the same version wins. shortcut: a new family (a new maker or a renamed
 # line) still needs a rule here.
+# A version: one or two numbers ("5", "5.5", "4.20"); never a date (2411, 0731).
+V = r"\d{1,2}(?:\.\d{1,2})?"
+# Some makers name tiers, not sizes: OpenAI's luna < terra < sol < astra, Google's
+# Gemini 4 hydrogen < argon/carbon < neon (by the catalog's prices, 2026-11).
+# A rule starting with ^ is matched on the whole id: "^deepseek-chat" is DeepSeek's
+# own bare id, not OpenRouter's "deepseek/deepseek-chat" (an old V3).
 POPULAR_FAMILIES: dict[str, tuple[str, ...]] = {
     "Popular": (
-        r"claude-sonnet-[\d.]+", r"gpt-[\d.]+(-(sol|terra|astra|luna))?", r"gemini-[\d.]+-flash",
-        r"deepseek-v[\d.]+-flash", r"qwen[\d.]+-max", r"grok-[\d.]+", r"kimi-k[\d.]+", r"glm-[\d.]+",
-        r"mistral-large-[\d.]+", r"deepseek-chat",
+        rf"claude-sonnet-{V}", rf"gpt-{V}(-sol)?", rf"gemini-{V}-(flash|hydrogen)(-preview)?",
+        rf"deepseek-v{V}-flash", rf"qwen{V}-max", rf"grok-{V}", rf"kimi-k{V}", rf"glm-{V}",
+        rf"mistral-large-{V}", r"^deepseek-chat",
     ),
     "Budget": (
-        r"claude-haiku-[\d.]+", r"gpt-[\d.]+-mini", r"gemini-[\d.]+-flash-lite", r"deepseek-v[\d.]+-flash",
-        r"qwen[\d.]+-flash", r"glm-[\d.]+-flash", r"mistral-small(-[\d.]+)?", r"llama-[\d.]+-\d+b", r"deepseek-chat",
+        rf"claude-haiku-{V}", rf"gpt-{V}-(mini|luna)", rf"gemini-{V}-flash-lite", rf"deepseek-v{V}-flash",
+        rf"qwen{V}-flash", rf"glm-{V}-flash", rf"mistral-small(-{V})?", rf"llama-{V}-(\d+b|scout)", r"^deepseek-chat",
     ),
     "Strongest": (
-        r"claude-fable-[\d.]+", r"claude-opus-[\d.]+", r"gpt-[\d.]+-pro", r"gemini-[\d.]+-pro", r"qwen[\d.]+-max",
-        r"kimi-k[\d.]+-pro", r"deepseek-v[\d.]+-pro", r"grok-[\d.]+", r"deepseek-reasoner",
+        rf"claude-fable-{V}", rf"claude-opus-{V}", rf"gpt-{V}-(pro|astra)", rf"gemini-{V}-(pro|neon)(-preview)?",
+        rf"qwen{V}-max", rf"kimi-k{V}-pro", rf"deepseek-v{V}-pro", rf"grok-{V}", r"^deepseek-reasoner",
     ),
 }
 
@@ -77,9 +84,15 @@ def _version(name: str) -> tuple[int, ...]:
 def newest(model_ids: list[str], family: str) -> str | None:
     """The endpoint's newest model of `family` (a regex over the whole id after the vendor)."""
     rule = re.compile(family)
-    found = [m for m in model_ids if rule.fullmatch(m.rpartition("/")[2])]
-    # the highest version; between equals (gpt-6.2-sol, gpt-6.2-astra) the A–Z first
-    return max(found, key=lambda m: (_version(m.rpartition("/")[2]), [-ord(c) for c in m]), default=None)
+    whole = family.startswith("^")   # a bare id only (see POPULAR_FAMILIES)
+    found = [m for m in model_ids if rule.fullmatch(m if whole else m.rpartition("/")[2])]
+    # the highest version; between equals a stable release before a preview, then the
+    # A–Z first (gpt-6.2-astra before gpt-6.2-sol)
+    return max(
+        found,
+        key=lambda m: (_version(m.rpartition("/")[2]), not m.endswith("-preview"), [-ord(c) for c in m]),
+        default=None,
+    )
 
 
 def popular_in(model_ids: list[str]) -> dict[str, list[str]]:
