@@ -77,6 +77,7 @@ Planned before it is built: no code until the user agrees `DESIGN.md`. UI-1's it
 - [x] AUD-05 (`df15e25`, `cdaef1e`, `c831d19`) The second audit (D-122, D-123): access, keys, inputs, unused packages
 - [x] FALL-01 (`69ec49e`) The fallback model, Ask me or Answer by itself; the Stage shows a failed turn; the cap message names the cap (D-125, FR-R-5)
 - [x] API-01 (`69ec49e`) The picker lists the API models chosen in Settings: popular sets, a checklist with Select all (D-126, FR-M-4)
+- [x] FIX-128 (`a4eadaf`) The user's test round (the Stage card, the set preview, live search, Defaults) and the review's 34 findings (D-128)
 - [x] PICK-01 (`416d84c`) The picker sorts by company, name or price and shows chosen companies; the popular sets pick each family's newest model (D-127, FR-M-2, FR-M-4)
 - [x] THEME-01 (`69ec49e`) Picking a theme drops an accent chosen before, so New chat follows it (seen with Forest)
 - [ ] SEC-01 A per-launch token for `/ws`, `/shutdown` and the VRM, from the shell to the kernel and the window (D-057, D-122); a plan first, it touches the shell
